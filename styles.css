@@ -147,6 +147,15 @@ button {
   background: #8f261f;
 }
 
+.audio-record-button {
+  background: #5b4b8a;
+  color: white;
+}
+
+.audio-record-button:active {
+  background: #43356a;
+}
+
 .ghost {
   background: white;
   border-color: var(--line);
@@ -165,7 +174,7 @@ button:disabled {
 .panel-strip {
   padding: 12px;
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(280px, 420px) minmax(300px, auto);
+  grid-template-columns: minmax(190px, 0.8fr) minmax(280px, 410px) minmax(300px, auto) minmax(120px, max-content);
   align-items: end;
   gap: 10px;
 }
@@ -195,7 +204,7 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  justify-content: flex-end;
+  justify-content: flex-start;
   font-size: 14px;
 }
 
@@ -203,6 +212,12 @@ select {
   width: 20px;
   height: 20px;
   accent-color: var(--accent);
+}
+
+.device-sound-toggle {
+  align-self: end;
+  padding: 0 8px 1px;
+  color: var(--ink);
 }
 
 .segmented {

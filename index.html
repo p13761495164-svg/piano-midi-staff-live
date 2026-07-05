@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon.svg">
-  <link rel="stylesheet" href="styles.css?v=21">
+  <link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body>
   <main class="app-shell">
@@ -26,9 +26,12 @@
         </div>
         <div class="actions">
           <button id="connectButton" class="primary" type="button">连接 MIDI</button>
-          <button id="recordButton" class="record-button" type="button">开始录制</button>
-          <button id="stopRecordButton" class="ghost hidden" type="button">停止</button>
+          <button id="recordButton" class="record-button" type="button">录 MIDI</button>
+          <button id="stopRecordButton" class="ghost hidden" type="button">停止 MIDI</button>
           <button id="saveRecordButton" class="ghost" type="button" disabled>保存 MIDI</button>
+          <button id="audioRecordButton" class="audio-record-button" type="button">录音频</button>
+          <button id="audioStopButton" class="ghost hidden" type="button">停止音频</button>
+          <button id="audioSaveButton" class="ghost" type="button" disabled>保存音频</button>
           <button id="installButton" class="ghost hidden" type="button">安装</button>
         </div>
       </div>
@@ -65,6 +68,10 @@
             <button class="mode-option" type="button" data-label-mode="none" aria-pressed="false">都不显示</button>
           </div>
         </div>
+        <label class="toggle device-sound-toggle">
+          <input id="deviceSoundToggle" type="checkbox">
+          <span>设备发声</span>
+        </label>
       </div>
 
       <section class="score-board" aria-label="五线谱">
@@ -78,6 +85,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=21"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>
