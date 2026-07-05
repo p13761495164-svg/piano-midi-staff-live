@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f4ed">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Piano MIDI">
+  <title>Piano MIDI Staff</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+  <link rel="stylesheet" href="styles.css?v=21">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="stage" aria-label="实时钢琴 MIDI 显示">
+      <div class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">♪</span>
+          <div>
+            <h1>Piano MIDI Staff</h1>
+            <p id="statusText">等待连接 MIDI 键盘</p>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="connectButton" class="primary" type="button">连接 MIDI</button>
+          <button id="recordButton" class="record-button" type="button">开始录制</button>
+          <button id="stopRecordButton" class="ghost hidden" type="button">停止</button>
+          <button id="saveRecordButton" class="ghost" type="button" disabled>保存 MIDI</button>
+          <button id="installButton" class="ghost hidden" type="button">安装</button>
+        </div>
+      </div>
+
+      <div class="panel-strip" aria-label="连接设置">
+        <label class="field">
+          <span>MIDI 输入</span>
+          <select id="inputSelect">
+            <option value="">自动选择</option>
+          </select>
+        </label>
+        <div class="field key-field">
+          <span>调号</span>
+          <div class="key-options" role="group" aria-label="调号">
+            <button class="key-option active" type="button" data-key-signature="C" aria-pressed="true">C</button>
+            <button class="key-option" type="button" data-key-signature="Db" aria-pressed="false">Db</button>
+            <button class="key-option" type="button" data-key-signature="D" aria-pressed="false">D</button>
+            <button class="key-option" type="button" data-key-signature="Eb" aria-pressed="false">Eb</button>
+            <button class="key-option" type="button" data-key-signature="E" aria-pressed="false">E</button>
+            <button class="key-option" type="button" data-key-signature="F" aria-pressed="false">F</button>
+            <button class="key-option" type="button" data-key-signature="Gb" aria-pressed="false">Gb</button>
+            <button class="key-option" type="button" data-key-signature="G" aria-pressed="false">G</button>
+            <button class="key-option" type="button" data-key-signature="Ab" aria-pressed="false">Ab</button>
+            <button class="key-option" type="button" data-key-signature="A" aria-pressed="false">A</button>
+            <button class="key-option" type="button" data-key-signature="Bb" aria-pressed="false">Bb</button>
+            <button class="key-option" type="button" data-key-signature="B" aria-pressed="false">B</button>
+          </div>
+        </div>
+        <div class="field mode-field">
+          <span>音符标记</span>
+          <div class="segmented" role="group" aria-label="音符标记">
+            <button class="mode-option active" type="button" data-label-mode="degree" aria-pressed="true">显示级数</button>
+            <button class="mode-option" type="button" data-label-mode="pitch" aria-pressed="false">显示音高字母</button>
+            <button class="mode-option" type="button" data-label-mode="none" aria-pressed="false">都不显示</button>
+          </div>
+        </div>
+      </div>
+
+      <section class="score-board" aria-label="五线谱">
+        <svg id="staffSvg" viewBox="0 0 1100 460" role="img" aria-labelledby="staffTitle">
+          <title id="staffTitle">实时显示弹下的音符</title>
+        </svg>
+      </section>
+
+      <section class="keyboard-board" aria-label="屏幕钢琴键盘">
+        <div id="keyboard" class="keyboard"></div>
+      </section>
+    </section>
+  </main>
+  <script src="app.js?v=21"></script>
+</body>
+</html>
