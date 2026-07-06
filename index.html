@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon.svg">
-  <link rel="stylesheet" href="styles.css?v=23">
+  <link rel="stylesheet" href="styles.css?v=24">
 </head>
 <body>
   <main class="app-shell">
@@ -29,20 +29,27 @@
           <button id="recordButton" class="record-button" type="button">录 MIDI</button>
           <button id="stopRecordButton" class="ghost hidden" type="button">停止 MIDI</button>
           <button id="saveRecordButton" class="ghost" type="button" disabled>保存 MIDI</button>
-          <button id="audioRecordButton" class="audio-record-button" type="button">录音频</button>
-          <button id="audioStopButton" class="ghost hidden" type="button">停止音频</button>
-          <button id="audioSaveButton" class="ghost" type="button" disabled>保存音频</button>
           <button id="installButton" class="ghost hidden" type="button">安装</button>
         </div>
       </div>
 
       <div class="panel-strip" aria-label="连接设置">
-        <label class="field">
-          <span>MIDI 输入</span>
-          <select id="inputSelect">
-            <option value="">自动选择</option>
-          </select>
-        </label>
+        <div class="control-row">
+          <label class="field input-field">
+            <span>MIDI 输入</span>
+            <select id="inputSelect">
+              <option value="">自动选择</option>
+            </select>
+          </label>
+          <div class="field mode-field">
+            <span>音符标记</span>
+            <div class="segmented" role="group" aria-label="音符标记">
+              <button class="mode-option active" type="button" data-label-mode="degree" aria-pressed="true">显示级数</button>
+              <button class="mode-option" type="button" data-label-mode="pitch" aria-pressed="false">显示音高字母</button>
+              <button class="mode-option" type="button" data-label-mode="none" aria-pressed="false">都不显示</button>
+            </div>
+          </div>
+        </div>
         <div class="field key-field">
           <span>调号</span>
           <div class="key-options" role="group" aria-label="调号">
@@ -60,18 +67,6 @@
             <button class="key-option" type="button" data-key-signature="B" aria-pressed="false">B</button>
           </div>
         </div>
-        <div class="field mode-field">
-          <span>音符标记</span>
-          <div class="segmented" role="group" aria-label="音符标记">
-            <button class="mode-option active" type="button" data-label-mode="degree" aria-pressed="true">显示级数</button>
-            <button class="mode-option" type="button" data-label-mode="pitch" aria-pressed="false">显示音高字母</button>
-            <button class="mode-option" type="button" data-label-mode="none" aria-pressed="false">都不显示</button>
-          </div>
-        </div>
-        <label class="toggle device-sound-toggle">
-          <input id="deviceSoundToggle" type="checkbox">
-          <span>设备发声</span>
-        </label>
       </div>
 
       <section class="score-board" aria-label="五线谱">
@@ -85,6 +80,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=23"></script>
+  <script src="app.js?v=24"></script>
 </body>
 </html>

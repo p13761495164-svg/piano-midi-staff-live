@@ -13,8 +13,7 @@ const SETTINGS_FIELD_KEYS = {
   keySignature: "piano-midi-staff-key-signature",
   showDegrees: "piano-midi-staff-show-degrees",
   noteLabelMode: "piano-midi-staff-note-label-mode",
-  selectedInputId: "piano-midi-staff-midi-input",
-  deviceSoundEnabled: "piano-midi-staff-device-sound"
+  selectedInputId: "piano-midi-staff-midi-input"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const MAJOR_KEY_SIGNATURES = {
@@ -54,26 +53,12 @@ const state = {
   sustainDown: false,
   keySignature: "C",
   noteLabelMode: "degree",
-  deviceSoundEnabled: false,
-  audioContext: null,
-  synthNotes: new Map(),
   deferredInstallPrompt: null,
   recording: {
     active: false,
     startedAt: 0,
     events: [],
     lastBlobUrl: "",
-    takeNumber: 1
-  },
-  audioRecording: {
-    active: false,
-    ready: false,
-    recorder: null,
-    stream: null,
-    chunks: [],
-    blobUrl: "",
-    mimeType: "",
-    filename: "",
     takeNumber: 1
   }
 };
@@ -84,12 +69,8 @@ const els = {
   recordButton: document.getElementById("recordButton"),
   stopRecordButton: document.getElementById("stopRecordButton"),
   saveRecordButton: document.getElementById("saveRecordButton"),
-  audioRecordButton: document.getElementById("audioRecordButton"),
-  audioStopButton: document.getElementById("audioStopButton"),
-  audioSaveButton: document.getElementById("audioSaveButton"),
   installButton: document.getElementById("installButton"),
   inputSelect: document.getElementById("inputSelect"),
-  deviceSoundToggle: document.getElementById("deviceSoundToggle"),
   keyButtons: [...document.querySelectorAll("[data-key-signature]")],
   modeButtons: [...document.querySelectorAll("[data-label-mode]")],
   staffSvg: document.getElementById("staffSvg"),
@@ -169,14 +150,10 @@ function readSettings() {
     const showDegrees = window.localStorage.getItem(SETTINGS_FIELD_KEYS.showDegrees);
     const noteLabelMode = window.localStorage.getItem(SETTINGS_FIELD_KEYS.noteLabelMode);
     const selectedInputId = window.localStorage.getItem(SETTINGS_FIELD_KEYS.selectedInputId);
-    const deviceSoundEnabled = window.localStorage.getItem(SETTINGS_FIELD_KEYS.deviceSoundEnabled);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
     if (selectedInputId !== null) settings.selectedInputId = selectedInputId;
-    if (deviceSoundEnabled === "true" || deviceSoundEnabled === "false") {
-      settings.deviceSoundEnabled = deviceSoundEnabled === "true";
-    }
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -187,8 +164,7 @@ function saveSettings() {
   const settings = {
     keySignature: state.keySignature,
     noteLabelMode: state.noteLabelMode,
-    selectedInputId: state.selectedInputId,
-    deviceSoundEnabled: state.deviceSoundEnabled
+    selectedInputId: state.selectedInputId
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -196,7 +172,6 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.showDegrees, String(settings.noteLabelMode === "degree"));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.noteLabelMode, settings.noteLabelMode);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.selectedInputId, settings.selectedInputId);
-    window.localStorage.setItem(SETTINGS_FIELD_KEYS.deviceSoundEnabled, String(settings.deviceSoundEnabled));
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -204,7 +179,6 @@ function saveSettings() {
 
 function syncControlsFromState() {
   els.inputSelect.value = state.selectedInputId;
-  els.deviceSoundToggle.checked = state.deviceSoundEnabled;
   els.keyButtons.forEach((button) => {
     const active = button.dataset.keySignature === state.keySignature;
     button.classList.toggle("active", active);
@@ -223,12 +197,6 @@ function syncRecordingControls() {
   els.saveRecordButton.disabled = state.recording.active || !state.recording.events.length;
 }
 
-function syncAudioRecordingControls() {
-  els.audioRecordButton.classList.toggle("hidden", state.audioRecording.active);
-  els.audioStopButton.classList.toggle("hidden", !state.audioRecording.active);
-  els.audioSaveButton.disabled = state.audioRecording.active || !state.audioRecording.ready;
-}
-
 function applySavedSettings() {
   const settings = readSettings();
   if (MAJOR_KEY_SIGNATURES[settings.keySignature]) {
@@ -241,9 +209,6 @@ function applySavedSettings() {
   }
   if (typeof settings.selectedInputId === "string") {
     state.selectedInputId = settings.selectedInputId;
-  }
-  if (typeof settings.deviceSoundEnabled === "boolean") {
-    state.deviceSoundEnabled = settings.deviceSoundEnabled;
   }
   syncControlsFromState();
 }
@@ -457,7 +422,6 @@ function pressNote(note, velocity = 96, source = "midi") {
   recordMidiEvent("noteon", { note, velocity });
   state.releasedWhileSustained.delete(note);
   state.activeNotes.set(note, { velocity, source, startedAt: performance.now() });
-  startSynthNote(note, velocity);
   updateAll();
 }
 
@@ -469,7 +433,6 @@ function releaseNote(note) {
     state.releasedWhileSustained.add(note);
     return;
   }
-  stopSynthNote(note);
   state.activeNotes.delete(note);
   state.releasedWhileSustained.delete(note);
   updateAll();
@@ -477,90 +440,10 @@ function releaseNote(note) {
 
 function releaseSustainedNotes() {
   state.releasedWhileSustained.forEach((note) => {
-    stopSynthNote(note);
     state.activeNotes.delete(note);
   });
   state.releasedWhileSustained.clear();
   updateAll();
-}
-
-async function ensureAudioContext() {
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return null;
-  if (!state.audioContext) {
-    state.audioContext = new AudioContextClass();
-  }
-  if (state.audioContext.state === "suspended") {
-    await state.audioContext.resume();
-  }
-  return state.audioContext;
-}
-
-function midiToFrequency(note) {
-  return 440 * (2 ** ((note - 69) / 12));
-}
-
-async function startSynthNote(note, velocity = 96) {
-  if (!state.deviceSoundEnabled) return;
-  const context = await ensureAudioContext();
-  if (!context) {
-    setStatus("当前设备不支持网页发声");
-    return;
-  }
-  if (!state.activeNotes.has(note) || !state.deviceSoundEnabled) return;
-
-  stopSynthNote(note, 0.02);
-  const now = context.currentTime;
-  const level = Math.max(0.08, Math.min(0.42, velocity / 127 * 0.36));
-  const output = context.createGain();
-  const lowpass = context.createBiquadFilter();
-  const body = context.createOscillator();
-  const color = context.createOscillator();
-
-  body.type = "triangle";
-  body.frequency.value = midiToFrequency(note);
-  color.type = "sine";
-  color.frequency.value = midiToFrequency(note) * 2.01;
-
-  lowpass.type = "lowpass";
-  lowpass.frequency.setValueAtTime(2600, now);
-  lowpass.frequency.exponentialRampToValueAtTime(900, now + 0.7);
-  output.gain.setValueAtTime(0.0001, now);
-  output.gain.exponentialRampToValueAtTime(level, now + 0.015);
-  output.gain.exponentialRampToValueAtTime(level * 0.62, now + 0.22);
-
-  const colorGain = context.createGain();
-  colorGain.gain.setValueAtTime(level * 0.24, now);
-  colorGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
-
-  body.connect(lowpass);
-  color.connect(colorGain);
-  colorGain.connect(lowpass);
-  lowpass.connect(output);
-  output.connect(context.destination);
-  body.start(now);
-  color.start(now);
-  color.stop(now + 0.2);
-
-  state.synthNotes.set(note, { body, color, output });
-}
-
-function stopSynthNote(note, releaseSeconds = 0.12) {
-  const voice = state.synthNotes.get(note);
-  if (!voice || !state.audioContext) return;
-  const now = state.audioContext.currentTime;
-  voice.output.gain.cancelScheduledValues(now);
-  voice.output.gain.setTargetAtTime(0.0001, now, Math.max(0.01, releaseSeconds));
-  try {
-    voice.body.stop(now + releaseSeconds + 0.08);
-  } catch {
-    // The oscillator may already be stopped by an earlier cleanup.
-  }
-  state.synthNotes.delete(note);
-}
-
-function stopAllSynthNotes() {
-  [...state.synthNotes.keys()].forEach((note) => stopSynthNote(note, 0.04));
 }
 
 function startRecording() {
@@ -626,126 +509,6 @@ function revokeRecordingUrl() {
   if (!state.recording.lastBlobUrl) return;
   URL.revokeObjectURL(state.recording.lastBlobUrl);
   state.recording.lastBlobUrl = "";
-}
-
-async function startAudioRecording() {
-  revokeAudioRecordingUrl();
-  state.audioRecording.ready = false;
-
-  if (window.webkit?.messageHandlers?.midiBridge) {
-    state.audioRecording.active = true;
-    syncAudioRecordingControls();
-    window.webkit.messageHandlers.midiBridge.postMessage({
-      type: "startAudioRecording",
-      filename: nextAudioFilename("m4a")
-    });
-    setStatus("音频录制中...");
-    return;
-  }
-
-  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-    setStatus("当前浏览器不支持网页录音。请用 iOS App 或支持 MediaRecorder 的浏览器。");
-    syncAudioRecordingControls();
-    return;
-  }
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mimeType = chooseAudioMimeType();
-    const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-    state.audioRecording.stream = stream;
-    state.audioRecording.recorder = recorder;
-    state.audioRecording.mimeType = recorder.mimeType || mimeType || "audio/webm";
-    state.audioRecording.chunks = [];
-
-    recorder.addEventListener("dataavailable", (event) => {
-      if (event.data && event.data.size > 0) state.audioRecording.chunks.push(event.data);
-    });
-    recorder.addEventListener("stop", () => {
-      const blob = new Blob(state.audioRecording.chunks, { type: state.audioRecording.mimeType });
-      state.audioRecording.blobUrl = URL.createObjectURL(blob);
-      state.audioRecording.filename = nextAudioFilename(audioExtensionForMimeType(state.audioRecording.mimeType));
-      state.audioRecording.ready = blob.size > 0;
-      state.audioRecording.active = false;
-      stopAudioStream();
-      syncAudioRecordingControls();
-      setStatus(state.audioRecording.ready ? "音频录制完成，点击保存音频" : "音频录制完成：没有录到声音");
-    });
-
-    recorder.start();
-    state.audioRecording.active = true;
-    syncAudioRecordingControls();
-    setStatus("音频录制中...");
-  } catch (error) {
-    state.audioRecording.active = false;
-    syncAudioRecordingControls();
-    setStatus(`无法录音：${error.message || "麦克风权限未开启"}`);
-  }
-}
-
-function stopAudioRecording() {
-  if (window.webkit?.messageHandlers?.midiBridge) {
-    window.webkit.messageHandlers.midiBridge.postMessage({ type: "stopAudioRecording" });
-    return;
-  }
-  if (state.audioRecording.recorder && state.audioRecording.active) {
-    state.audioRecording.recorder.stop();
-  }
-}
-
-function saveAudioRecording() {
-  if (window.webkit?.messageHandlers?.midiBridge) {
-    window.webkit.messageHandlers.midiBridge.postMessage({ type: "saveAudioRecording" });
-    return;
-  }
-  if (!state.audioRecording.ready || !state.audioRecording.blobUrl) return;
-  const anchor = document.createElement("a");
-  anchor.href = state.audioRecording.blobUrl;
-  anchor.download = state.audioRecording.filename || nextAudioFilename(audioExtensionForMimeType(state.audioRecording.mimeType));
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  state.audioRecording.takeNumber += 1;
-  setStatus("音频文件已生成");
-}
-
-function setNativeAudioRecordingState(detail = {}) {
-  state.audioRecording.active = Boolean(detail.active);
-  state.audioRecording.ready = Boolean(detail.ready);
-  if (detail.filename) state.audioRecording.filename = detail.filename;
-  syncAudioRecordingControls();
-}
-
-function revokeAudioRecordingUrl() {
-  if (state.audioRecording.blobUrl) {
-    URL.revokeObjectURL(state.audioRecording.blobUrl);
-    state.audioRecording.blobUrl = "";
-  }
-  state.audioRecording.ready = false;
-  state.audioRecording.chunks = [];
-  stopAudioStream();
-}
-
-function stopAudioStream() {
-  if (!state.audioRecording.stream) return;
-  state.audioRecording.stream.getTracks().forEach((track) => track.stop());
-  state.audioRecording.stream = null;
-  state.audioRecording.recorder = null;
-}
-
-function chooseAudioMimeType() {
-  const choices = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"];
-  return choices.find((type) => MediaRecorder.isTypeSupported(type)) || "";
-}
-
-function audioExtensionForMimeType(mimeType) {
-  if (mimeType.includes("mp4") || mimeType.includes("m4a") || mimeType.includes("aac")) return "m4a";
-  if (mimeType.includes("ogg")) return "ogg";
-  return "webm";
-}
-
-function nextAudioFilename(extension) {
-  return `piano-audio-take-${String(state.audioRecording.takeNumber).padStart(2, "0")}.${extension}`;
 }
 
 function buildMidiFile(events) {
@@ -833,7 +596,6 @@ async function connectMidi() {
   if (window.webkit?.messageHandlers?.midiBridge) {
     setStatus("正在连接 iOS MIDI...");
     window.webkit.messageHandlers.midiBridge.postMessage({ type: "connect" });
-    sendLocalControlPreference();
     return;
   }
 
@@ -848,7 +610,6 @@ async function connectMidi() {
     state.midiAccess.onstatechange = refreshMidiInputs;
     refreshMidiInputs();
     attachSelectedInput();
-    sendLocalControlPreference();
   } catch (error) {
     setStatus(`MIDI 权限未开启：${error.message || "浏览器拒绝访问"}`);
   }
@@ -892,57 +653,6 @@ function attachSelectedInput() {
 
   input.onmidimessage = handleMidiMessage;
   setStatus(`已连接：${input.name || input.manufacturer || "MIDI 输入"}`);
-  sendLocalControlPreference();
-}
-
-function setDeviceSoundEnabled(enabled) {
-  state.deviceSoundEnabled = enabled;
-  syncControlsFromState();
-  saveSettings();
-  if (!enabled) stopAllSynthNotes();
-  sendLocalControlPreference();
-  setStatus(enabled ? "设备发声已开启：正在尝试关闭钢琴本体发声" : "设备发声已关闭：正在恢复钢琴本体发声");
-}
-
-function sendLocalControlPreference() {
-  const localControlOn = !state.deviceSoundEnabled;
-  if (window.webkit?.messageHandlers?.midiBridge) {
-    window.webkit.messageHandlers.midiBridge.postMessage({
-      type: "setLocalControl",
-      enabled: localControlOn
-    });
-    return;
-  }
-  sendWebMidiLocalControl(localControlOn);
-}
-
-function sendWebMidiLocalControl(localControlOn) {
-  if (!state.midiAccess?.outputs?.size) return;
-  const value = localControlOn ? 127 : 0;
-  state.midiAccess.outputs.forEach((output) => {
-    for (let channel = 0; channel < 16; channel += 1) {
-      output.send([0xb0 + channel, 122, value]);
-    }
-  });
-}
-
-function restoreLocalControlOnExit() {
-  if (!state.deviceSoundEnabled) return;
-  if (state.midiAccess?.outputs?.size) {
-    const value = 127;
-    state.midiAccess.outputs.forEach((output) => {
-      for (let channel = 0; channel < 16; channel += 1) {
-        output.send([0xb0 + channel, 122, value]);
-      }
-    });
-  }
-  if (window.webkit?.messageHandlers?.midiBridge) {
-    window.webkit.messageHandlers.midiBridge.postMessage({
-      type: "setLocalControl",
-      enabled: true
-    });
-  }
-  stopAllSynthNotes();
 }
 
 function handleMidiMessage(event) {
@@ -976,9 +686,6 @@ window.PianoMidiNative = {
   },
   setMidiStatus(text) {
     setStatus(text);
-  },
-  setAudioRecordingState(detail) {
-    setNativeAudioRecordingState(detail);
   }
 };
 
@@ -1005,12 +712,6 @@ function setupEvents() {
   els.recordButton.addEventListener("click", startRecording);
   els.stopRecordButton.addEventListener("click", stopRecording);
   els.saveRecordButton.addEventListener("click", saveRecording);
-  els.audioRecordButton.addEventListener("click", startAudioRecording);
-  els.audioStopButton.addEventListener("click", stopAudioRecording);
-  els.audioSaveButton.addEventListener("click", saveAudioRecording);
-  els.deviceSoundToggle.addEventListener("change", () => {
-    setDeviceSoundEnabled(els.deviceSoundToggle.checked);
-  });
   els.inputSelect.addEventListener("change", () => {
     state.selectedInputId = els.inputSelect.value;
     saveSettings();
@@ -1034,19 +735,13 @@ function setupEvents() {
   });
   window.addEventListener("pagehide", () => {
     saveSettings();
-    restoreLocalControlOnExit();
   });
   window.addEventListener("beforeunload", () => {
-    restoreLocalControlOnExit();
     revokeRecordingUrl();
-    revokeAudioRecordingUrl();
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
       saveSettings();
-      restoreLocalControlOnExit();
-    } else if (state.deviceSoundEnabled) {
-      sendLocalControlPreference();
     }
   });
   els.installButton.addEventListener("click", async () => {
@@ -1060,7 +755,6 @@ function setupEvents() {
 
 applySavedSettings();
 syncRecordingControls();
-syncAudioRecordingControls();
 setupEvents();
 setupPwa();
 buildKeyboard();

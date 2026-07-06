@@ -103,8 +103,7 @@ h2 {
 }
 
 .brand p,
-.field span,
-.toggle {
+.field span {
   color: var(--muted);
 }
 
@@ -147,15 +146,6 @@ button {
   background: #8f261f;
 }
 
-.audio-record-button {
-  background: #5b4b8a;
-  color: white;
-}
-
-.audio-record-button:active {
-  background: #43356a;
-}
-
 .ghost {
   background: white;
   border-color: var(--line);
@@ -174,9 +164,16 @@ button:disabled {
 .panel-strip {
   padding: 12px;
   display: grid;
-  grid-template-columns: minmax(190px, 0.8fr) minmax(280px, 410px) minmax(300px, auto) minmax(120px, max-content);
+  grid-template-columns: 1fr;
   align-items: end;
   gap: 10px;
+}
+
+.control-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(320px, 1.4fr);
+  gap: 10px;
+  align-items: end;
 }
 
 .field {
@@ -197,27 +194,6 @@ select {
   background: white;
   color: var(--ink);
   padding: 0 34px 0 11px;
-}
-
-.toggle {
-  min-height: 42px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: flex-start;
-  font-size: 14px;
-}
-
-.toggle input {
-  width: 20px;
-  height: 20px;
-  accent-color: var(--accent);
-}
-
-.device-sound-toggle {
-  align-self: end;
-  padding: 0 8px 1px;
-  color: var(--ink);
 }
 
 .segmented {
@@ -252,7 +228,7 @@ select {
 .key-options {
   min-height: 42px;
   display: grid;
-  grid-template-columns: repeat(12, minmax(38px, 1fr));
+  grid-template-columns: repeat(12, minmax(54px, 1fr));
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
@@ -442,16 +418,16 @@ select {
     grid-template-columns: 1fr;
   }
 
+  .control-row {
+    grid-template-columns: 1fr;
+  }
+
   .key-options {
     grid-template-columns: repeat(6, minmax(42px, 1fr));
   }
 
   .key-option:nth-child(7) {
     border-left: 0;
-  }
-
-  .toggle {
-    justify-content: flex-start;
   }
 
   .score-board {
