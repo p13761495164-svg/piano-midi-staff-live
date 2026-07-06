@@ -322,7 +322,7 @@ function drawKeySignature(svg) {
   const symbol = key.accidental === "b" ? "♭" : "♯";
   for (let index = 0; index < key.count; index += 1) {
     const letter = letters[index];
-    const x = 170 + index * 24;
+    const x = 235 + index * 24;
     const trebleMark = createSvg("text", {
       x,
       y: positions.treble[letter],
