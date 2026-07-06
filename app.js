@@ -69,6 +69,7 @@ const els = {
   recordButton: document.getElementById("recordButton"),
   stopRecordButton: document.getElementById("stopRecordButton"),
   saveRecordButton: document.getElementById("saveRecordButton"),
+  fullscreenButton: document.getElementById("fullscreenButton"),
   installButton: document.getElementById("installButton"),
   inputSelect: document.getElementById("inputSelect"),
   keyButtons: [...document.querySelectorAll("[data-key-signature]")],
@@ -593,14 +594,17 @@ function updateKeyboardActive() {
 }
 
 async function connectMidi() {
+  els.connectButton.disabled = true;
   if (window.webkit?.messageHandlers?.midiBridge) {
     setStatus("正在连接 iOS MIDI...");
     window.webkit.messageHandlers.midiBridge.postMessage({ type: "connect" });
+    els.connectButton.disabled = false;
     return;
   }
 
   if (!("requestMIDIAccess" in navigator)) {
     setStatus("iPad Safari 不能让网页读取 MIDI。蓝牙键盘已连接也只能给原生 CoreMIDI App 使用；请用电脑 Chrome/Edge，或做 iPad 原生版。");
+    els.connectButton.disabled = false;
     return;
   }
 
@@ -612,7 +616,45 @@ async function connectMidi() {
     attachSelectedInput();
   } catch (error) {
     setStatus(`MIDI 权限未开启：${error.message || "浏览器拒绝访问"}`);
+  } finally {
+    els.connectButton.disabled = false;
   }
+}
+
+function autoConnectMidi() {
+  window.setTimeout(() => {
+    connectMidi();
+  }, 350);
+}
+
+async function toggleFullscreen() {
+  const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+  try {
+    if (fullscreenElement) {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+      return;
+    }
+
+    const target = document.documentElement;
+    if (target.requestFullscreen) {
+      await target.requestFullscreen();
+    } else if (target.webkitRequestFullscreen) {
+      target.webkitRequestFullscreen();
+    } else {
+      setStatus("当前浏览器不支持网页全屏，可以尝试添加到主屏幕使用。");
+    }
+  } catch (error) {
+    setStatus(`无法进入全屏：${error.message || "浏览器需要手动允许"}`);
+  }
+}
+
+function syncFullscreenButton() {
+  const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+  els.fullscreenButton.textContent = fullscreenElement ? "退出全屏" : "全屏";
 }
 
 function refreshMidiInputs() {
@@ -712,6 +754,9 @@ function setupEvents() {
   els.recordButton.addEventListener("click", startRecording);
   els.stopRecordButton.addEventListener("click", stopRecording);
   els.saveRecordButton.addEventListener("click", saveRecording);
+  els.fullscreenButton.addEventListener("click", toggleFullscreen);
+  document.addEventListener("fullscreenchange", syncFullscreenButton);
+  document.addEventListener("webkitfullscreenchange", syncFullscreenButton);
   els.inputSelect.addEventListener("change", () => {
     state.selectedInputId = els.inputSelect.value;
     saveSettings();
@@ -755,7 +800,9 @@ function setupEvents() {
 
 applySavedSettings();
 syncRecordingControls();
+syncFullscreenButton();
 setupEvents();
 setupPwa();
 buildKeyboard();
 drawStaff();
+autoConnectMidi();
