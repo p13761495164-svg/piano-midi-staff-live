@@ -32,18 +32,23 @@ const MAJOR_KEY_SIGNATURES = {
 };
 const KEY_SIGNATURE_Y = {
   "#": {
-    treble: { F: 130, C: 160, G: 120, D: 150, A: 180, E: 140, B: 170 },
-    bass: { F: 300, C: 330, G: 290, D: 320, A: 280, E: 310, B: 340 }
+    treble: { F: 100, C: 160, G: 80, D: 140, A: 200, E: 120, B: 180 },
+    bass: { F: 460, C: 520, G: 440, D: 500, A: 420, E: 480, B: 540 }
   },
   b: {
-    treble: { B: 170, E: 140, A: 180, D: 150, G: 190, C: 160, F: 200 },
-    bass: { B: 340, E: 310, A: 350, D: 320, G: 360, C: 330, F: 370 }
+    treble: { B: 180, E: 120, A: 200, D: 140, G: 220, C: 160, F: 240 },
+    bass: { B: 540, E: 480, A: 560, D: 500, G: 580, C: 520, F: 600 }
   }
 };
 const KEY_SIGNATURE_ORDER = {
   "#": ["F", "C", "G", "D", "A", "E", "B"],
   b: ["B", "E", "A", "D", "G", "C", "F"]
 };
+const STAFF_VIEWBOX = { width: 1100, height: 720 };
+const STAFF_STEP_PX = 20;
+const TREBLE_LINE_YS = [100, 140, 180, 220, 260];
+const BASS_LINE_YS = [420, 460, 500, 540, 580];
+const NOTE_RADIUS = 20;
 
 const state = {
   midiAccess: null,
@@ -125,8 +130,8 @@ function midiToStaffStep(note) {
 function yForNote(note, clef) {
   const step = midiToStaffStep(note);
   const reference = clef === "bass" ? midiToStaffStep(43) : midiToStaffStep(64);
-  const referenceY = clef === "bass" ? 360 : 210;
-  return referenceY - (step - reference) * 10;
+  const referenceY = clef === "bass" ? BASS_LINE_YS[4] : TREBLE_LINE_YS[4];
+  return referenceY - (step - reference) * STAFF_STEP_PX;
 }
 
 function preferredClef(note) {
@@ -218,19 +223,19 @@ function drawStaff() {
   const svg = els.staffSvg;
   svg.replaceChildren();
 
-  const bg = createSvg("rect", { x: 0, y: 0, width: 1100, height: 460, fill: "#fffdf8" });
+  const bg = createSvg("rect", { x: 0, y: 0, width: STAFF_VIEWBOX.width, height: STAFF_VIEWBOX.height, fill: "#fffdf8" });
   svg.appendChild(bg);
 
-  [130, 150, 170, 190, 210, 280, 300, 320, 340, 360].forEach((y) => {
+  [...TREBLE_LINE_YS, ...BASS_LINE_YS].forEach((y) => {
     svg.appendChild(createSvg("line", { x1: 88, y1: y, x2: 1036, y2: y, class: "staff-line" }));
   });
   [88, 1036].forEach((x) => {
-    svg.appendChild(createSvg("line", { x1: x, y1: 130, x2: x, y2: 360, class: "bar-line" }));
+    svg.appendChild(createSvg("line", { x1: x, y1: TREBLE_LINE_YS[0], x2: x, y2: BASS_LINE_YS[4], class: "bar-line" }));
   });
 
-  const treble = createSvg("text", { x: 112, y: 202, class: "clef" });
+  const treble = createSvg("text", { x: 104, y: 244, class: "clef" });
   treble.textContent = "𝄞";
-  const bass = createSvg("text", { x: 118, y: 354, class: "clef" });
+  const bass = createSvg("text", { x: 112, y: 568, class: "clef" });
   bass.textContent = "𝄢";
   svg.append(treble, bass);
   drawKeySignature(svg);
@@ -260,7 +265,7 @@ function drawStaff() {
 
     const cluster = noteItems.slice(clusterStart, index);
     if (cluster.length > 1) {
-      const spread = 22;
+      const spread = 35;
       cluster.forEach((item, itemIndex) => {
         item.xOffset = (itemIndex - (cluster.length - 1) / 2) * spread;
       });
@@ -272,7 +277,7 @@ function drawStaff() {
     const y = yForNote(note, clef);
     drawLedgerLines(svg, x, y, clef);
 
-    svg.appendChild(createSvg("circle", { cx: x, cy: y, r: 10, class: "note-head" }));
+    svg.appendChild(createSvg("circle", { cx: x, cy: y, r: NOTE_RADIUS, class: "note-head" }));
 
     const innerLabel = noteInnerLabel(note);
     if (innerLabel) {
@@ -289,8 +294,8 @@ function drawStaff() {
     const accidental = accidentalForNote(note);
     if (accidental) {
       const accidentalText = createSvg("text", {
-        x: x - 34,
-        y: y + 10,
+        x: x - 52,
+        y: y + 17,
         class: "accidental",
         fill: "#292522",
         "data-accidental": accidental
@@ -317,7 +322,7 @@ function drawKeySignature(svg) {
   const symbol = key.accidental === "b" ? "♭" : "♯";
   for (let index = 0; index < key.count; index += 1) {
     const letter = letters[index];
-    const x = 170 + index * 18;
+    const x = 170 + index * 24;
     const trebleMark = createSvg("text", {
       x,
       y: positions.treble[letter],
@@ -339,14 +344,14 @@ function drawKeySignature(svg) {
 }
 
 function drawLedgerLines(svg, x, y, clef) {
-  const lineYs = clef === "bass" ? [280, 300, 320, 340, 360] : [130, 150, 170, 190, 210];
+  const lineYs = clef === "bass" ? BASS_LINE_YS : TREBLE_LINE_YS;
   const min = Math.min(...lineYs);
   const max = Math.max(...lineYs);
   const ledgerYs = [];
-  for (let ly = min - 20; ly >= y - 1; ly -= 20) ledgerYs.push(ly);
-  for (let ly = max + 20; ly <= y + 1; ly += 20) ledgerYs.push(ly);
+  for (let ly = min - STAFF_STEP_PX * 2; ly >= y - 1; ly -= STAFF_STEP_PX * 2) ledgerYs.push(ly);
+  for (let ly = max + STAFF_STEP_PX * 2; ly <= y + 1; ly += STAFF_STEP_PX * 2) ledgerYs.push(ly);
   ledgerYs.forEach((ly) => {
-    svg.appendChild(createSvg("line", { x1: x - 28, y1: ly, x2: x + 28, y2: ly, class: "ledger-line" }));
+    svg.appendChild(createSvg("line", { x1: x - 52, y1: ly, x2: x + 52, y2: ly, class: "ledger-line" }));
   });
 }
 
