@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon.svg">
-  <link rel="stylesheet" href="styles.css?v=28">
+  <link rel="stylesheet" href="styles.css?v=29">
 </head>
 <body>
   <main class="app-shell">
@@ -21,7 +21,10 @@
           <span class="brand-mark" aria-hidden="true">♪</span>
           <div>
             <h1>Piano MIDI Staff</h1>
-            <p id="statusText">等待连接 MIDI 键盘</p>
+            <div class="status-row">
+              <p id="statusText">等待连接 MIDI 键盘</p>
+              <span id="versionBadge" class="version-badge">v29</span>
+            </div>
           </div>
         </div>
         <div class="actions">
@@ -30,6 +33,7 @@
           <button id="stopRecordButton" class="ghost hidden" type="button">停止 MIDI</button>
           <button id="saveRecordButton" class="ghost" type="button" disabled>保存 MIDI</button>
           <button id="fullscreenButton" class="ghost" type="button">全屏</button>
+          <button id="refreshButton" class="ghost" type="button">更新</button>
           <button id="installButton" class="ghost hidden" type="button">安装</button>
         </div>
       </div>
@@ -81,6 +85,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=28"></script>
+  <script src="app.js?v=29"></script>
 </body>
 </html>

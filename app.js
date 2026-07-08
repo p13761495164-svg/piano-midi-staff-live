@@ -1,5 +1,6 @@
 "use strict";
 
+const APP_VERSION = "v29";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -76,7 +77,9 @@ const els = {
   stopRecordButton: document.getElementById("stopRecordButton"),
   saveRecordButton: document.getElementById("saveRecordButton"),
   fullscreenButton: document.getElementById("fullscreenButton"),
+  refreshButton: document.getElementById("refreshButton"),
   installButton: document.getElementById("installButton"),
+  versionBadge: document.getElementById("versionBadge"),
   inputSelect: document.getElementById("inputSelect"),
   keyButtons: [...document.querySelectorAll("[data-key-signature]")],
   modeButtons: [...document.querySelectorAll("[data-label-mode]")],
@@ -323,7 +326,7 @@ function drawKeySignature(svg) {
   const symbol = key.accidental === "b" ? "♭" : "♯";
   for (let index = 0; index < key.count; index += 1) {
     const letter = letters[index];
-    const x = 315 + index * 24;
+    const x = 275 + index * 24;
     const trebleMark = createSvg("text", {
       x,
       y: positions.treble[letter],
@@ -755,6 +758,29 @@ function setupPwa() {
   });
 }
 
+async function forceRefreshApp() {
+  setStatus("正在获取最新版本...");
+
+  try {
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    }
+
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+  } catch {
+    setStatus("正在重新载入页面...");
+  }
+
+  const url = new URL(window.location.href);
+  url.searchParams.set("v", APP_VERSION);
+  url.searchParams.set("fresh", Date.now().toString());
+  window.location.replace(url.toString());
+}
+
 async function requestWakeLock() {
   if (!("wakeLock" in navigator) || state.wakeLock) return;
 
@@ -785,6 +811,7 @@ function setupEvents() {
   els.stopRecordButton.addEventListener("click", stopRecording);
   els.saveRecordButton.addEventListener("click", saveRecording);
   els.fullscreenButton.addEventListener("click", toggleFullscreen);
+  els.refreshButton.addEventListener("click", forceRefreshApp);
   document.addEventListener("fullscreenchange", syncFullscreenButton);
   document.addEventListener("webkitfullscreenchange", syncFullscreenButton);
   els.inputSelect.addEventListener("change", () => {
@@ -831,6 +858,7 @@ function setupEvents() {
 }
 
 applySavedSettings();
+els.versionBadge.textContent = APP_VERSION;
 syncRecordingControls();
 syncFullscreenButton();
 setupEvents();
