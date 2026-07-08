@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v32";
+const APP_VERSION = "v33";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -33,11 +33,11 @@ const MAJOR_KEY_SIGNATURES = {
 };
 const KEY_SIGNATURE_Y = {
   "#": {
-    treble: { F: 100, C: 160, G: 80, D: 140, A: 200, E: 120, B: 180 },
+    treble: { F: 140, C: 200, G: 120, D: 180, A: 240, E: 160, B: 220 },
     bass: { F: 460, C: 520, G: 440, D: 500, A: 420, E: 480, B: 540 }
   },
   b: {
-    treble: { B: 180, E: 120, A: 200, D: 140, G: 220, C: 160, F: 240 },
+    treble: { B: 220, E: 160, A: 240, D: 180, G: 260, C: 200, F: 280 },
     bass: { B: 540, E: 480, A: 560, D: 500, G: 580, C: 520, F: 600 }
   }
 };
@@ -45,13 +45,13 @@ const KEY_SIGNATURE_ORDER = {
   "#": ["F", "C", "G", "D", "A", "E", "B"],
   b: ["B", "E", "A", "D", "G", "C", "F"]
 };
-const STAFF_VIEWBOX = { width: 1100, height: 720 };
+const STAFF_VIEWBOX = { width: 1760, height: 720 };
 const STAFF_STEP_PX = 20;
-const TREBLE_LINE_YS = [100, 140, 180, 220, 260];
+const TREBLE_LINE_YS = [140, 180, 220, 260, 300];
 const BASS_LINE_YS = [420, 460, 500, 540, 580];
 const NOTE_RADIUS = 20;
-const MEASURE_NOTE_LEFT_X = 320;
-const MEASURE_NOTE_RIGHT_X = 1000;
+const MEASURE_NOTE_LEFT_X = 500;
+const MEASURE_NOTE_RIGHT_X = 1620;
 const LEDGER_OCTAVE_LIMIT = 70;
 
 const state = {
@@ -265,13 +265,13 @@ function drawStaff() {
   svg.appendChild(bg);
 
   [...TREBLE_LINE_YS, ...BASS_LINE_YS].forEach((y) => {
-    svg.appendChild(createSvg("line", { x1: 64, y1: y, x2: 1070, y2: y, class: "staff-line" }));
+    svg.appendChild(createSvg("line", { x1: 64, y1: y, x2: 1674, y2: y, class: "staff-line" }));
   });
-  [64, 1070].forEach((x) => {
+  [64, 1674].forEach((x) => {
     svg.appendChild(createSvg("line", { x1: x, y1: TREBLE_LINE_YS[0], x2: x, y2: BASS_LINE_YS[4], class: "bar-line" }));
   });
 
-  const treble = createSvg("text", { x: 104, y: 244, class: "clef" });
+  const treble = createSvg("text", { x: 104, y: 284, class: "clef" });
   treble.textContent = "𝄞";
   const bass = createSvg("text", { x: 112, y: 568, class: "clef" });
   bass.textContent = "𝄢";
@@ -289,7 +289,7 @@ function drawStaff() {
     return;
   }
 
-  const chordX = 585;
+  const chordX = STAFF_VIEWBOX.width / 2;
   const noteItems = visibleNotes.map((note) => {
     const clef = preferredClef(note);
     const step = midiToStaffStep(note);

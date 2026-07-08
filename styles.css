@@ -283,8 +283,8 @@ select {
 
 .score-board {
   position: relative;
-  height: clamp(420px, 58vh, 720px);
-  min-height: 420px;
+  height: clamp(460px, 41vw, 720px);
+  min-height: 460px;
   border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--panel);
