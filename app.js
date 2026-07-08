@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v34";
+const APP_VERSION = "v35";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -52,7 +52,7 @@ const BASS_LINE_YS = [420, 460, 500, 540, 580];
 const NOTE_RADIUS = 20;
 const MEASURE_NOTE_LEFT_X = 500;
 const MEASURE_NOTE_RIGHT_X = 1620;
-const LEDGER_OCTAVE_LIMIT = STAFF_STEP_PX * 8;
+const LEDGER_OCTAVE_LIMIT = STAFF_STEP_PX * 6;
 
 const state = {
   midiAccess: null,
@@ -71,7 +71,14 @@ const state = {
     filename: "",
     timeSignature: { numerator: 4, denominator: 4 },
     ticksPerQuarter: MIDI_PPQ,
-    measureTicks: MIDI_PPQ * 4
+    measureTicks: MIDI_PPQ * 4,
+    microsecondsPerQuarter: 500000
+  },
+  playback: {
+    audioContext: null,
+    activeNodes: [],
+    stopTimer: 0,
+    playing: false
   },
   recording: {
     active: false,
@@ -95,6 +102,7 @@ const els = {
   installButton: document.getElementById("installButton"),
   prevMeasureButton: document.getElementById("prevMeasureButton"),
   nextMeasureButton: document.getElementById("nextMeasureButton"),
+  playMeasureButton: document.getElementById("playMeasureButton"),
   measureStatus: document.getElementById("measureStatus"),
   versionBadge: document.getElementById("versionBadge"),
   inputSelect: document.getElementById("inputSelect"),
@@ -228,6 +236,9 @@ function syncPracticeControls() {
   const hasMeasures = state.practice.measures.length > 0;
   els.prevMeasureButton.disabled = !hasMeasures || state.practice.currentMeasure <= 0;
   els.nextMeasureButton.disabled = !hasMeasures || state.practice.currentMeasure >= state.practice.measures.length - 1;
+  const measure = state.practice.measures[state.practice.currentMeasure];
+  els.playMeasureButton.disabled = !measure || !measure.notes.length;
+  els.playMeasureButton.textContent = state.playback.playing ? "停止" : "播放";
 
   if (!hasMeasures) {
     els.measureStatus.textContent = "实时显示";
@@ -236,7 +247,6 @@ function syncPracticeControls() {
 
   const total = state.practice.measures.length;
   const current = state.practice.currentMeasure + 1;
-  const measure = state.practice.measures[state.practice.currentMeasure];
   const matched = measure.notes.filter((note) => state.practice.matchedIds.has(note.id)).length;
   els.measureStatus.textContent = `${current} / ${total} 小节 · ${matched}/${measure.notes.length}`;
 }
@@ -739,6 +749,7 @@ async function loadMidiFile(file) {
   if (!file) return;
 
   try {
+    stopMeasurePlayback();
     const bytes = new Uint8Array(await file.arrayBuffer());
     const parsed = parseMidiFile(bytes);
     state.practice.measures = parsed.measures;
@@ -748,6 +759,7 @@ async function loadMidiFile(file) {
     state.practice.timeSignature = parsed.timeSignature;
     state.practice.ticksPerQuarter = parsed.ticksPerQuarter;
     state.practice.measureTicks = parsed.measureTicks;
+    state.practice.microsecondsPerQuarter = parsed.microsecondsPerQuarter;
     setStatus(parsed.measures.length
       ? `已载入：${state.practice.filename}`
       : "MIDI 已载入，但没有找到可显示的音符");
@@ -767,9 +779,90 @@ function goToMeasure(delta) {
   if (!state.practice.measures.length) return;
   const next = Math.max(0, Math.min(state.practice.measures.length - 1, state.practice.currentMeasure + delta));
   if (next === state.practice.currentMeasure) return;
+  stopMeasurePlayback();
   state.practice.currentMeasure = next;
   state.practice.matchedIds = new Set();
   updateAll();
+}
+
+async function toggleMeasurePlayback() {
+  if (state.playback.playing) {
+    stopMeasurePlayback();
+    syncPracticeControls();
+    return;
+  }
+  await playCurrentMeasure();
+}
+
+async function playCurrentMeasure() {
+  const measure = state.practice.measures[state.practice.currentMeasure];
+  if (!measure || !measure.notes.length) return;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) {
+    setStatus("当前浏览器不支持网页播放。");
+    return;
+  }
+
+  stopMeasurePlayback();
+  if (!state.playback.audioContext) {
+    state.playback.audioContext = new AudioContextClass();
+  }
+  const audioContext = state.playback.audioContext;
+  if (audioContext.state === "suspended") {
+    await audioContext.resume();
+  }
+
+  const secondsPerTick = (state.practice.microsecondsPerQuarter || 500000) / 1000000 / (state.practice.ticksPerQuarter || MIDI_PPQ);
+  const startAt = audioContext.currentTime + 0.06;
+  const measureStart = measure.startTick;
+  const measureDuration = Math.max(0.1, (measure.endTick - measure.startTick) * secondsPerTick);
+
+  state.playback.playing = true;
+  state.playback.activeNodes = [];
+  measure.notes.forEach((target) => {
+    const noteStart = Math.max(0, (target.startTick - measureStart) * secondsPerTick);
+    const noteDuration = Math.max(0.08, (target.endTick - target.startTick) * secondsPerTick);
+    schedulePracticeTone(audioContext, target.note, startAt + noteStart, noteDuration);
+  });
+
+  state.playback.stopTimer = window.setTimeout(() => {
+    stopMeasurePlayback();
+    syncPracticeControls();
+  }, Math.ceil((measureDuration + 0.22) * 1000));
+  syncPracticeControls();
+}
+
+function schedulePracticeTone(audioContext, note, startAt, duration) {
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  const frequency = 440 * 2 ** ((note - 69) / 12);
+  oscillator.type = "triangle";
+  oscillator.frequency.setValueAtTime(frequency, startAt);
+  gain.gain.setValueAtTime(0.0001, startAt);
+  gain.gain.exponentialRampToValueAtTime(0.12, startAt + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
+  oscillator.start(startAt);
+  oscillator.stop(startAt + duration + 0.04);
+  state.playback.activeNodes.push(oscillator, gain);
+}
+
+function stopMeasurePlayback() {
+  if (state.playback.stopTimer) {
+    window.clearTimeout(state.playback.stopTimer);
+    state.playback.stopTimer = 0;
+  }
+  state.playback.activeNodes.forEach((node) => {
+    try {
+      if (typeof node.stop === "function") node.stop();
+      if (typeof node.disconnect === "function") node.disconnect();
+    } catch {
+      // Audio nodes may already be stopped.
+    }
+  });
+  state.playback.activeNodes = [];
+  state.playback.playing = false;
 }
 
 function parseMidiFile(bytes) {
@@ -785,6 +878,7 @@ function parseMidiFile(bytes) {
   const ticksPerQuarter = division || MIDI_PPQ;
   const noteEvents = [];
   let timeSignature = { numerator: 4, denominator: 4 };
+  let microsecondsPerQuarter = 500000;
 
   for (let trackIndex = 0; trackIndex < trackCount && reader.remaining() >= 8; trackIndex += 1) {
     const chunkType = reader.readText(4);
@@ -798,6 +892,7 @@ function parseMidiFile(bytes) {
     const trackResult = parseMidiTrack(bytes, reader.position, trackEnd, ticksPerQuarter);
     noteEvents.push(...trackResult.notes);
     if (trackResult.timeSignature) timeSignature = trackResult.timeSignature;
+    if (trackResult.microsecondsPerQuarter) microsecondsPerQuarter = trackResult.microsecondsPerQuarter;
     reader.position = trackEnd;
   }
 
@@ -805,7 +900,7 @@ function parseMidiFile(bytes) {
   const notes = noteEvents
     .filter((item) => item.note >= MIDI_MIN && item.note <= MIDI_MAX)
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
-  if (!notes.length) return { measures: [], ticksPerQuarter, measureTicks, timeSignature, format };
+  if (!notes.length) return { measures: [], ticksPerQuarter, measureTicks, timeSignature, microsecondsPerQuarter, format };
 
   const lastTick = Math.max(...notes.map((note) => Math.max(note.endTick, note.startTick + 1)));
   const measureCount = Math.max(1, Math.ceil(lastTick / measureTicks));
@@ -824,7 +919,7 @@ function parseMidiFile(bytes) {
     });
   });
 
-  return { measures, ticksPerQuarter, measureTicks, timeSignature, format };
+  return { measures, ticksPerQuarter, measureTicks, timeSignature, microsecondsPerQuarter, format };
 }
 
 function parseMidiTrack(bytes, start, end) {
@@ -834,6 +929,7 @@ function parseMidiTrack(bytes, start, end) {
   let tick = 0;
   let runningStatus = 0;
   let timeSignature = null;
+  let microsecondsPerQuarter = null;
 
   while (reader.position < end) {
     tick += reader.readVarLen();
@@ -854,6 +950,9 @@ function parseMidiTrack(bytes, start, end) {
         const denominatorPower = reader.readUint8();
         timeSignature = { numerator, denominator: 2 ** denominatorPower };
         reader.skip(length - 2);
+      } else if (type === 0x51 && length >= 3) {
+        microsecondsPerQuarter = (reader.readUint8() << 16) | (reader.readUint8() << 8) | reader.readUint8();
+        reader.skip(length - 3);
       } else {
         reader.skip(length);
       }
@@ -889,7 +988,7 @@ function parseMidiTrack(bytes, start, end) {
     });
   });
 
-  return { notes, timeSignature };
+  return { notes, timeSignature, microsecondsPerQuarter };
 }
 
 function makeMidiReader(bytes, position = 0) {
@@ -1225,6 +1324,7 @@ function setupEvents() {
   els.midiFileInput.addEventListener("change", () => loadMidiFile(els.midiFileInput.files[0]));
   els.prevMeasureButton.addEventListener("click", () => goToMeasure(-1));
   els.nextMeasureButton.addEventListener("click", () => goToMeasure(1));
+  els.playMeasureButton.addEventListener("click", toggleMeasurePlayback);
   els.fullscreenButton.addEventListener("click", toggleFullscreen);
   els.refreshButton.addEventListener("click", forceRefreshApp);
   document.addEventListener("fullscreenchange", syncFullscreenButton);
@@ -1254,6 +1354,7 @@ function setupEvents() {
     saveSettings();
   });
   window.addEventListener("beforeunload", () => {
+    stopMeasurePlayback();
     revokeRecordingUrl();
   });
   document.addEventListener("visibilitychange", () => {
