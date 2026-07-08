@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v33";
+const APP_VERSION = "v34";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -52,7 +52,7 @@ const BASS_LINE_YS = [420, 460, 500, 540, 580];
 const NOTE_RADIUS = 20;
 const MEASURE_NOTE_LEFT_X = 500;
 const MEASURE_NOTE_RIGHT_X = 1620;
-const LEDGER_OCTAVE_LIMIT = 70;
+const LEDGER_OCTAVE_LIMIT = STAFF_STEP_PX * 8;
 
 const state = {
   midiAccess: null,
