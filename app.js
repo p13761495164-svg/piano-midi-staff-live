@@ -59,6 +59,7 @@ const state = {
   keySignature: "C",
   noteLabelMode: "degree",
   deferredInstallPrompt: null,
+  wakeLock: null,
   recording: {
     active: false,
     startedAt: 0,
@@ -322,7 +323,7 @@ function drawKeySignature(svg) {
   const symbol = key.accidental === "b" ? "♭" : "♯";
   for (let index = 0; index < key.count; index += 1) {
     const letter = letters[index];
-    const x = 235 + index * 24;
+    const x = 315 + index * 24;
     const trebleMark = createSvg("text", {
       x,
       y: positions.treble[letter],
@@ -754,6 +755,30 @@ function setupPwa() {
   });
 }
 
+async function requestWakeLock() {
+  if (!("wakeLock" in navigator) || state.wakeLock) return;
+
+  try {
+    state.wakeLock = await navigator.wakeLock.request("screen");
+    state.wakeLock.addEventListener("release", () => {
+      state.wakeLock = null;
+    });
+  } catch {
+    state.wakeLock = null;
+  }
+}
+
+function setupWakeLock() {
+  requestWakeLock();
+  const wakeFromGesture = () => {
+    requestWakeLock();
+  };
+
+  window.addEventListener("pointerdown", wakeFromGesture, { passive: true });
+  window.addEventListener("keydown", wakeFromGesture);
+  window.addEventListener("touchstart", wakeFromGesture, { passive: true });
+}
+
 function setupEvents() {
   els.connectButton.addEventListener("click", connectMidi);
   els.recordButton.addEventListener("click", startRecording);
@@ -792,6 +817,8 @@ function setupEvents() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
       saveSettings();
+    } else {
+      requestWakeLock();
     }
   });
   els.installButton.addEventListener("click", async () => {
@@ -808,6 +835,7 @@ syncRecordingControls();
 syncFullscreenButton();
 setupEvents();
 setupPwa();
+setupWakeLock();
 buildKeyboard();
 drawStaff();
 autoConnectMidi();
