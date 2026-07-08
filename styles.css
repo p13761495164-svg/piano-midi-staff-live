@@ -184,6 +184,10 @@ button:disabled {
   display: none;
 }
 
+.file-input {
+  display: none;
+}
+
 .panel-strip {
   padding: 12px;
   display: grid;
@@ -278,6 +282,7 @@ select {
 }
 
 .score-board {
+  position: relative;
   height: clamp(420px, 58vh, 720px);
   min-height: 420px;
   border-radius: 8px;
@@ -285,6 +290,49 @@ select {
   background: var(--panel);
   box-shadow: var(--shadow);
   overflow: hidden;
+}
+
+.measure-nav {
+  position: absolute;
+  top: 50%;
+  z-index: 4;
+  width: 46px;
+  height: 68px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid rgba(41, 37, 34, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.84);
+  color: var(--ink);
+  box-shadow: 0 8px 24px rgba(56, 47, 37, 0.12);
+  font-size: 42px;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+.measure-nav-left {
+  left: 12px;
+}
+
+.measure-nav-right {
+  right: 12px;
+}
+
+.measure-status {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 4;
+  transform: translateX(-50%);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  background: rgba(255, 253, 248, 0.84);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.2;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 #staffSvg {
@@ -313,6 +361,15 @@ select {
   fill: #fffdf8;
   stroke: var(--ink);
   stroke-width: 2;
+}
+
+.target-note {
+  stroke: var(--ink);
+}
+
+.matched-note {
+  fill: #8fd19b;
+  stroke: #17653a;
 }
 
 .ledger-line {

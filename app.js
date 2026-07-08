@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v29";
+const APP_VERSION = "v30";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -50,6 +50,8 @@ const STAFF_STEP_PX = 20;
 const TREBLE_LINE_YS = [100, 140, 180, 220, 260];
 const BASS_LINE_YS = [420, 460, 500, 540, 580];
 const NOTE_RADIUS = 20;
+const MEASURE_NOTE_LEFT_X = 390;
+const MEASURE_NOTE_RIGHT_X = 940;
 
 const state = {
   midiAccess: null,
@@ -61,6 +63,15 @@ const state = {
   noteLabelMode: "degree",
   deferredInstallPrompt: null,
   wakeLock: null,
+  practice: {
+    measures: [],
+    currentMeasure: 0,
+    matchedIds: new Set(),
+    filename: "",
+    timeSignature: { numerator: 4, denominator: 4 },
+    ticksPerQuarter: MIDI_PPQ,
+    measureTicks: MIDI_PPQ * 4
+  },
   recording: {
     active: false,
     startedAt: 0,
@@ -76,9 +87,14 @@ const els = {
   recordButton: document.getElementById("recordButton"),
   stopRecordButton: document.getElementById("stopRecordButton"),
   saveRecordButton: document.getElementById("saveRecordButton"),
+  loadMidiButton: document.getElementById("loadMidiButton"),
+  midiFileInput: document.getElementById("midiFileInput"),
   fullscreenButton: document.getElementById("fullscreenButton"),
   refreshButton: document.getElementById("refreshButton"),
   installButton: document.getElementById("installButton"),
+  prevMeasureButton: document.getElementById("prevMeasureButton"),
+  nextMeasureButton: document.getElementById("nextMeasureButton"),
+  measureStatus: document.getElementById("measureStatus"),
   versionBadge: document.getElementById("versionBadge"),
   inputSelect: document.getElementById("inputSelect"),
   keyButtons: [...document.querySelectorAll("[data-key-signature]")],
@@ -207,6 +223,23 @@ function syncRecordingControls() {
   els.saveRecordButton.disabled = state.recording.active || !state.recording.events.length;
 }
 
+function syncPracticeControls() {
+  const hasMeasures = state.practice.measures.length > 0;
+  els.prevMeasureButton.disabled = !hasMeasures || state.practice.currentMeasure <= 0;
+  els.nextMeasureButton.disabled = !hasMeasures || state.practice.currentMeasure >= state.practice.measures.length - 1;
+
+  if (!hasMeasures) {
+    els.measureStatus.textContent = "实时显示";
+    return;
+  }
+
+  const total = state.practice.measures.length;
+  const current = state.practice.currentMeasure + 1;
+  const measure = state.practice.measures[state.practice.currentMeasure];
+  const matched = measure.notes.filter((note) => state.practice.matchedIds.has(note.id)).length;
+  els.measureStatus.textContent = `${current} / ${total} 小节 · ${matched}/${measure.notes.length}`;
+}
+
 function applySavedSettings() {
   const settings = readSettings();
   if (MAJOR_KEY_SIGNATURES[settings.keySignature]) {
@@ -244,6 +277,12 @@ function drawStaff() {
   svg.append(treble, bass);
   drawKeySignature(svg);
 
+  const hasPracticeScore = state.practice.measures.length > 0;
+  if (hasPracticeScore) {
+    buildPracticeNoteItems().forEach((item) => drawNote(svg, item));
+    return;
+  }
+
   const visibleNotes = [...state.activeNotes.keys()].sort((a, b) => a - b);
   if (!visibleNotes.length) {
     return;
@@ -253,7 +292,7 @@ function drawStaff() {
   const noteItems = visibleNotes.map((note) => {
     const clef = preferredClef(note);
     const step = midiToStaffStep(note);
-    return { note, clef, step, xOffset: 0 };
+    return { note, clef, step, x: chordX, xOffset: 0 };
   });
 
   for (let index = 0; index < noteItems.length;) {
@@ -276,39 +315,101 @@ function drawStaff() {
     }
   }
 
-  noteItems.forEach(({ note, clef, xOffset }) => {
-    const x = chordX + xOffset;
-    const y = yForNote(note, clef);
-    drawLedgerLines(svg, x, y, clef);
-
-    svg.appendChild(createSvg("circle", { cx: x, cy: y, r: NOTE_RADIUS, class: "note-head" }));
-
-    const innerLabel = noteInnerLabel(note);
-    if (innerLabel) {
-      const noteInnerLabelText = createSvg("text", {
-        x,
-        y,
-        class: "note-inner-label",
-        "data-note-inner-label": innerLabel
-      });
-      noteInnerLabelText.textContent = innerLabel;
-      svg.appendChild(noteInnerLabelText);
-    }
-
-    const accidental = accidentalForNote(note);
-    if (accidental) {
-      const accidentalText = createSvg("text", {
-        x: x - 52,
-        y: y + 17,
-        class: "accidental",
-        fill: "#292522",
-        "data-accidental": accidental
-      });
-      accidentalText.textContent = accidental;
-      svg.appendChild(accidentalText);
-    }
-
+  noteItems.forEach((item) => {
+    drawNote(svg, { ...item, x: chordX + item.xOffset });
   });
+}
+
+function buildPracticeNoteItems() {
+  const measure = state.practice.measures[state.practice.currentMeasure];
+  if (!measure || !measure.notes.length) return [];
+
+  const timeSpan = Math.max(1, measure.endTick - measure.startTick);
+  const items = measure.notes
+    .slice()
+    .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
+    .map((target) => {
+      const clef = preferredClef(target.note);
+      const step = midiToStaffStep(target.note);
+      const progress = Math.max(0, Math.min(1, (target.startTick - measure.startTick) / timeSpan));
+      const x = MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
+      return {
+        note: target.note,
+        clef,
+        step,
+        x,
+        targetId: target.id,
+        matched: state.practice.matchedIds.has(target.id),
+        isPractice: true,
+        xOffset: 0
+      };
+    });
+
+  for (let index = 0; index < items.length;) {
+    const clusterStart = index;
+    index += 1;
+    while (
+      index < items.length &&
+      Math.abs(items[index].x - items[clusterStart].x) < 18 &&
+      items[index].clef === items[index - 1].clef &&
+      items[index].step - items[index - 1].step <= 1
+    ) {
+      index += 1;
+    }
+
+    const cluster = items.slice(clusterStart, index);
+    if (cluster.length > 1) {
+      const spread = 35;
+      cluster.forEach((item, itemIndex) => {
+        item.xOffset = (itemIndex - (cluster.length - 1) / 2) * spread;
+      });
+    }
+  }
+
+  return items.map((item) => ({ ...item, x: item.x + item.xOffset }));
+}
+
+function drawNote(svg, item) {
+  const { note, clef, x, matched, isPractice, targetId } = item;
+  const y = yForNote(note, clef);
+  drawLedgerLines(svg, x, y, clef);
+
+  const noteClasses = ["note-head"];
+  if (isPractice) noteClasses.push("target-note");
+  if (matched) noteClasses.push("matched-note");
+  svg.appendChild(createSvg("circle", {
+    cx: x,
+    cy: y,
+    r: NOTE_RADIUS,
+    class: noteClasses.join(" "),
+    "data-target-id": targetId || "",
+    "data-note": note
+  }));
+
+  const innerLabel = noteInnerLabel(note);
+  if (innerLabel) {
+    const noteInnerLabelText = createSvg("text", {
+      x,
+      y,
+      class: "note-inner-label",
+      "data-note-inner-label": innerLabel
+    });
+    noteInnerLabelText.textContent = innerLabel;
+    svg.appendChild(noteInnerLabelText);
+  }
+
+  const accidental = accidentalForNote(note);
+  if (accidental) {
+    const accidentalText = createSvg("text", {
+      x: x - 52,
+      y: y + 17,
+      class: "accidental",
+      fill: "#292522",
+      "data-accidental": accidental
+    });
+    accidentalText.textContent = accidental;
+    svg.appendChild(accidentalText);
+  }
 }
 
 function noteInnerLabel(note) {
@@ -430,6 +531,7 @@ function makeKey(note, className) {
 function pressNote(note, velocity = 96, source = "midi") {
   if (note < MIDI_MIN || note > MIDI_MAX) return;
   recordMidiEvent("noteon", { note, velocity });
+  markPracticeNote(note);
   state.releasedWhileSustained.delete(note);
   state.activeNotes.set(note, { velocity, source, startedAt: performance.now() });
   updateAll();
@@ -521,6 +623,211 @@ function revokeRecordingUrl() {
   state.recording.lastBlobUrl = "";
 }
 
+function markPracticeNote(note) {
+  const measure = state.practice.measures[state.practice.currentMeasure];
+  if (!measure) return;
+
+  const target = measure.notes.find((item) => item.note === note && !state.practice.matchedIds.has(item.id));
+  if (!target) return;
+  state.practice.matchedIds.add(target.id);
+}
+
+async function loadMidiFile(file) {
+  if (!file) return;
+
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const parsed = parseMidiFile(bytes);
+    state.practice.measures = parsed.measures;
+    state.practice.currentMeasure = 0;
+    state.practice.matchedIds = new Set();
+    state.practice.filename = file.name || "MIDI";
+    state.practice.timeSignature = parsed.timeSignature;
+    state.practice.ticksPerQuarter = parsed.ticksPerQuarter;
+    state.practice.measureTicks = parsed.measureTicks;
+    setStatus(parsed.measures.length
+      ? `已载入：${state.practice.filename}`
+      : "MIDI 已载入，但没有找到可显示的音符");
+    updateAll();
+  } catch (error) {
+    state.practice.measures = [];
+    state.practice.currentMeasure = 0;
+    state.practice.matchedIds = new Set();
+    setStatus(`MIDI 读取失败：${error.message || "文件格式不支持"}`);
+    updateAll();
+  } finally {
+    els.midiFileInput.value = "";
+  }
+}
+
+function goToMeasure(delta) {
+  if (!state.practice.measures.length) return;
+  const next = Math.max(0, Math.min(state.practice.measures.length - 1, state.practice.currentMeasure + delta));
+  if (next === state.practice.currentMeasure) return;
+  state.practice.currentMeasure = next;
+  state.practice.matchedIds = new Set();
+  updateAll();
+}
+
+function parseMidiFile(bytes) {
+  const reader = makeMidiReader(bytes);
+  if (reader.readText(4) !== "MThd") throw new Error("不是标准 MIDI 文件");
+  const headerLength = reader.readUint32();
+  const format = reader.readUint16();
+  const trackCount = reader.readUint16();
+  const division = reader.readUint16();
+  reader.skip(Math.max(0, headerLength - 6));
+  if (division & 0x8000) throw new Error("暂不支持 SMPTE 时间格式 MIDI");
+
+  const ticksPerQuarter = division || MIDI_PPQ;
+  const noteEvents = [];
+  let timeSignature = { numerator: 4, denominator: 4 };
+
+  for (let trackIndex = 0; trackIndex < trackCount && reader.remaining() >= 8; trackIndex += 1) {
+    const chunkType = reader.readText(4);
+    const chunkLength = reader.readUint32();
+    const trackEnd = reader.position + chunkLength;
+    if (chunkType !== "MTrk") {
+      reader.position = trackEnd;
+      continue;
+    }
+
+    const trackResult = parseMidiTrack(bytes, reader.position, trackEnd, ticksPerQuarter);
+    noteEvents.push(...trackResult.notes);
+    if (trackResult.timeSignature) timeSignature = trackResult.timeSignature;
+    reader.position = trackEnd;
+  }
+
+  const measureTicks = ticksPerQuarter * timeSignature.numerator * 4 / timeSignature.denominator;
+  const notes = noteEvents
+    .filter((item) => item.note >= MIDI_MIN && item.note <= MIDI_MAX)
+    .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+  if (!notes.length) return { measures: [], ticksPerQuarter, measureTicks, timeSignature, format };
+
+  const lastTick = Math.max(...notes.map((note) => Math.max(note.endTick, note.startTick + 1)));
+  const measureCount = Math.max(1, Math.ceil(lastTick / measureTicks));
+  const measures = Array.from({ length: measureCount }, (_, index) => ({
+    index,
+    startTick: index * measureTicks,
+    endTick: (index + 1) * measureTicks,
+    notes: []
+  }));
+
+  notes.forEach((note, index) => {
+    const measureIndex = Math.max(0, Math.min(measures.length - 1, Math.floor(note.startTick / measureTicks)));
+    measures[measureIndex].notes.push({
+      ...note,
+      id: `${measureIndex}-${index}-${note.note}-${note.startTick}`
+    });
+  });
+
+  return { measures, ticksPerQuarter, measureTicks, timeSignature, format };
+}
+
+function parseMidiTrack(bytes, start, end) {
+  const reader = makeMidiReader(bytes, start);
+  const activeNotes = new Map();
+  const notes = [];
+  let tick = 0;
+  let runningStatus = 0;
+  let timeSignature = null;
+
+  while (reader.position < end) {
+    tick += reader.readVarLen();
+    let status = reader.readUint8();
+    if (status < 0x80) {
+      if (!runningStatus) throw new Error("MIDI running status 无效");
+      reader.position -= 1;
+      status = runningStatus;
+    } else if (status < 0xf0) {
+      runningStatus = status;
+    }
+
+    if (status === 0xff) {
+      const type = reader.readUint8();
+      const length = reader.readVarLen();
+      if (type === 0x58 && length >= 2) {
+        const numerator = reader.readUint8();
+        const denominatorPower = reader.readUint8();
+        timeSignature = { numerator, denominator: 2 ** denominatorPower };
+        reader.skip(length - 2);
+      } else {
+        reader.skip(length);
+      }
+      continue;
+    }
+
+    if (status === 0xf0 || status === 0xf7) {
+      reader.skip(reader.readVarLen());
+      continue;
+    }
+
+    const command = status & 0xf0;
+    const channel = status & 0x0f;
+    const data1 = reader.readUint8();
+    const hasSecondDataByte = command !== 0xc0 && command !== 0xd0;
+    const data2 = hasSecondDataByte ? reader.readUint8() : 0;
+
+    if (command === 0x90 && data2 > 0) {
+      const key = `${channel}:${data1}`;
+      if (!activeNotes.has(key)) activeNotes.set(key, []);
+      activeNotes.get(key).push({ note: data1, velocity: data2, channel, startTick: tick });
+    } else if (command === 0x80 || (command === 0x90 && data2 === 0)) {
+      const key = `${channel}:${data1}`;
+      const stack = activeNotes.get(key);
+      const started = stack?.shift();
+      if (started) notes.push({ ...started, endTick: Math.max(tick, started.startTick + 1) });
+    }
+  }
+
+  activeNotes.forEach((stack) => {
+    stack.forEach((started) => {
+      notes.push({ ...started, endTick: Math.max(tick, started.startTick + 1) });
+    });
+  });
+
+  return { notes, timeSignature };
+}
+
+function makeMidiReader(bytes, position = 0) {
+  return {
+    bytes,
+    position,
+    remaining() {
+      return this.bytes.length - this.position;
+    },
+    readUint8() {
+      if (this.position >= this.bytes.length) throw new Error("MIDI 文件不完整");
+      return this.bytes[this.position++];
+    },
+    readUint16() {
+      return (this.readUint8() << 8) | this.readUint8();
+    },
+    readUint32() {
+      return ((this.readUint8() << 24) | (this.readUint8() << 16) | (this.readUint8() << 8) | this.readUint8()) >>> 0;
+    },
+    readText(length) {
+      let text = "";
+      for (let index = 0; index < length; index += 1) {
+        text += String.fromCharCode(this.readUint8());
+      }
+      return text;
+    },
+    readVarLen() {
+      let value = 0;
+      for (let index = 0; index < 4; index += 1) {
+        const byte = this.readUint8();
+        value = (value << 7) | (byte & 0x7f);
+        if (!(byte & 0x80)) return value;
+      }
+      return value;
+    },
+    skip(length) {
+      this.position = Math.min(this.bytes.length, this.position + Math.max(0, length));
+    }
+  };
+}
+
 function buildMidiFile(events) {
   const track = [];
   let previousTick = 0;
@@ -594,6 +901,7 @@ function clampMidiByte(value) {
 function updateAll() {
   drawStaff();
   updateKeyboardActive();
+  syncPracticeControls();
 }
 
 function updateKeyboardActive() {
@@ -810,6 +1118,10 @@ function setupEvents() {
   els.recordButton.addEventListener("click", startRecording);
   els.stopRecordButton.addEventListener("click", stopRecording);
   els.saveRecordButton.addEventListener("click", saveRecording);
+  els.loadMidiButton.addEventListener("click", () => els.midiFileInput.click());
+  els.midiFileInput.addEventListener("change", () => loadMidiFile(els.midiFileInput.files[0]));
+  els.prevMeasureButton.addEventListener("click", () => goToMeasure(-1));
+  els.nextMeasureButton.addEventListener("click", () => goToMeasure(1));
   els.fullscreenButton.addEventListener("click", toggleFullscreen);
   els.refreshButton.addEventListener("click", forceRefreshApp);
   document.addEventListener("fullscreenchange", syncFullscreenButton);
@@ -861,6 +1173,7 @@ applySavedSettings();
 els.versionBadge.textContent = APP_VERSION;
 syncRecordingControls();
 syncFullscreenButton();
+syncPracticeControls();
 setupEvents();
 setupPwa();
 setupWakeLock();
