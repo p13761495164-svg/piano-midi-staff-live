@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v35";
+const APP_VERSION = "v36";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -67,7 +67,6 @@ const state = {
   practice: {
     measures: [],
     currentMeasure: 0,
-    matchedIds: new Set(),
     filename: "",
     timeSignature: { numerator: 4, denominator: 4 },
     ticksPerQuarter: MIDI_PPQ,
@@ -247,7 +246,7 @@ function syncPracticeControls() {
 
   const total = state.practice.measures.length;
   const current = state.practice.currentMeasure + 1;
-  const matched = measure.notes.filter((note) => state.practice.matchedIds.has(note.id)).length;
+  const matched = measure.notes.filter((note) => isPracticeNoteActive(note.note)).length;
   els.measureStatus.textContent = `${current} / ${total} 小节 · ${matched}/${measure.notes.length}`;
 }
 
@@ -353,7 +352,7 @@ function buildPracticeNoteItems() {
         durationKind: durationKindForTicks(durationTicks),
         octaveMark: display.octaveMark,
         targetId: target.id,
-        matched: state.practice.matchedIds.has(target.id),
+        matched: isPracticeNoteActive(target.note),
         isPractice: true,
         xOffset: 0
       };
@@ -644,7 +643,6 @@ function makeKey(note, className) {
 function pressNote(note, velocity = 96, source = "midi") {
   if (note < MIDI_MIN || note > MIDI_MAX) return;
   recordMidiEvent("noteon", { note, velocity });
-  markPracticeNote(note);
   state.releasedWhileSustained.delete(note);
   state.activeNotes.set(note, { velocity, source, startedAt: performance.now() });
   updateAll();
@@ -736,13 +734,8 @@ function revokeRecordingUrl() {
   state.recording.lastBlobUrl = "";
 }
 
-function markPracticeNote(note) {
-  const measure = state.practice.measures[state.practice.currentMeasure];
-  if (!measure) return;
-
-  const target = measure.notes.find((item) => item.note === note && !state.practice.matchedIds.has(item.id));
-  if (!target) return;
-  state.practice.matchedIds.add(target.id);
+function isPracticeNoteActive(note) {
+  return state.activeNotes.has(note);
 }
 
 async function loadMidiFile(file) {
@@ -754,7 +747,6 @@ async function loadMidiFile(file) {
     const parsed = parseMidiFile(bytes);
     state.practice.measures = parsed.measures;
     state.practice.currentMeasure = 0;
-    state.practice.matchedIds = new Set();
     state.practice.filename = file.name || "MIDI";
     state.practice.timeSignature = parsed.timeSignature;
     state.practice.ticksPerQuarter = parsed.ticksPerQuarter;
@@ -767,7 +759,6 @@ async function loadMidiFile(file) {
   } catch (error) {
     state.practice.measures = [];
     state.practice.currentMeasure = 0;
-    state.practice.matchedIds = new Set();
     setStatus(`MIDI 读取失败：${error.message || "文件格式不支持"}`);
     updateAll();
   } finally {
@@ -781,7 +772,6 @@ function goToMeasure(delta) {
   if (next === state.practice.currentMeasure) return;
   stopMeasurePlayback();
   state.practice.currentMeasure = next;
-  state.practice.matchedIds = new Set();
   updateAll();
 }
 
