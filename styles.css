@@ -367,9 +367,50 @@ select {
   stroke: var(--ink);
 }
 
+.practice-note-head {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.filled-note {
+  fill: var(--ink);
+}
+
+.open-note {
+  fill: #fffdf8;
+}
+
 .matched-note {
   fill: #8fd19b;
   stroke: #17653a;
+}
+
+.note-stem,
+.note-flag {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.matched-stem {
+  stroke: #17653a;
+}
+
+.octave-mark {
+  fill: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.octave-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-dasharray: 8 7;
+  stroke-linecap: round;
 }
 
 .ledger-line {
@@ -402,6 +443,10 @@ select {
   text-anchor: middle;
   dominant-baseline: middle;
   pointer-events: none;
+}
+
+.light-note-label {
+  fill: white;
 }
 
 .empty-note {

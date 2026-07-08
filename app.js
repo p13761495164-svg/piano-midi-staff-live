@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v30";
+const APP_VERSION = "v31";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -52,6 +52,7 @@ const BASS_LINE_YS = [420, 460, 500, 540, 580];
 const NOTE_RADIUS = 20;
 const MEASURE_NOTE_LEFT_X = 390;
 const MEASURE_NOTE_RIGHT_X = 940;
+const LEDGER_OCTAVE_LIMIT = 70;
 
 const state = {
   midiAccess: null,
@@ -329,15 +330,18 @@ function buildPracticeNoteItems() {
     .slice()
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
     .map((target) => {
-      const clef = preferredClef(target.note);
-      const step = midiToStaffStep(target.note);
+      const display = displayInfoForPracticeNote(target.note);
+      const durationTicks = Math.max(1, target.endTick - target.startTick);
       const progress = Math.max(0, Math.min(1, (target.startTick - measure.startTick) / timeSpan));
       const x = MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
       return {
         note: target.note,
-        clef,
-        step,
+        displayNote: display.note,
+        clef: display.clef,
+        step: midiToStaffStep(display.note),
         x,
+        durationKind: durationKindForTicks(durationTicks),
+        octaveMark: display.octaveMark,
         targetId: target.id,
         matched: state.practice.matchedIds.has(target.id),
         isPractice: true,
@@ -371,27 +375,32 @@ function buildPracticeNoteItems() {
 
 function drawNote(svg, item) {
   const { note, clef, x, matched, isPractice, targetId } = item;
-  const y = yForNote(note, clef);
+  const displayNote = item.displayNote ?? note;
+  const y = yForNote(displayNote, clef);
   drawLedgerLines(svg, x, y, clef);
 
-  const noteClasses = ["note-head"];
-  if (isPractice) noteClasses.push("target-note");
-  if (matched) noteClasses.push("matched-note");
-  svg.appendChild(createSvg("circle", {
-    cx: x,
-    cy: y,
-    r: NOTE_RADIUS,
-    class: noteClasses.join(" "),
-    "data-target-id": targetId || "",
-    "data-note": note
-  }));
+  if (isPractice) {
+    drawPracticeNoteShape(svg, { ...item, y, displayNote });
+  } else {
+    const noteClasses = ["note-head"];
+    if (matched) noteClasses.push("matched-note");
+    svg.appendChild(createSvg("circle", {
+      cx: x,
+      cy: y,
+      r: NOTE_RADIUS,
+      class: noteClasses.join(" "),
+      "data-target-id": targetId || "",
+      "data-note": note
+    }));
+  }
 
   const innerLabel = noteInnerLabel(note);
   if (innerLabel) {
+    const filledPracticeNote = isPractice && ["quarter", "eighth", "sixteenth"].includes(item.durationKind) && !matched;
     const noteInnerLabelText = createSvg("text", {
       x,
       y,
-      class: "note-inner-label",
+      class: filledPracticeNote ? "note-inner-label light-note-label" : "note-inner-label",
       "data-note-inner-label": innerLabel
     });
     noteInnerLabelText.textContent = innerLabel;
@@ -410,6 +419,114 @@ function drawNote(svg, item) {
     accidentalText.textContent = accidental;
     svg.appendChild(accidentalText);
   }
+}
+
+function displayInfoForPracticeNote(note) {
+  const clef = preferredClef(note);
+  let displayNote = note;
+  let octaveMark = "";
+  const lineYs = clef === "bass" ? BASS_LINE_YS : TREBLE_LINE_YS;
+  const topLimit = Math.min(...lineYs) - LEDGER_OCTAVE_LIMIT;
+  const bottomLimit = Math.max(...lineYs) + LEDGER_OCTAVE_LIMIT;
+
+  while (yForNote(displayNote, clef) < topLimit && displayNote - 12 >= MIDI_MIN) {
+    displayNote -= 12;
+    octaveMark = "8va";
+  }
+  while (yForNote(displayNote, clef) > bottomLimit && displayNote + 12 <= MIDI_MAX) {
+    displayNote += 12;
+    octaveMark = "8vb";
+  }
+
+  return { note: displayNote, clef, octaveMark };
+}
+
+function durationKindForTicks(durationTicks) {
+  const quarterTicks = state.practice.ticksPerQuarter || MIDI_PPQ;
+  const ratio = durationTicks / quarterTicks;
+  const candidates = [
+    { kind: "whole", ratio: 4 },
+    { kind: "half", ratio: 2 },
+    { kind: "quarter", ratio: 1 },
+    { kind: "eighth", ratio: 0.5 },
+    { kind: "sixteenth", ratio: 0.25 }
+  ];
+  return candidates.reduce((best, item) => (
+    Math.abs(item.ratio - ratio) < Math.abs(best.ratio - ratio) ? item : best
+  ), candidates[0]).kind;
+}
+
+function drawPracticeNoteShape(svg, item) {
+  const { note, displayNote, x, y, clef, matched, durationKind, targetId, octaveMark } = item;
+  const isFilled = durationKind === "quarter" || durationKind === "eighth" || durationKind === "sixteenth";
+  const hasStem = durationKind !== "whole";
+  const classes = ["note-head", "practice-note-head", isFilled ? "filled-note" : "open-note"];
+  if (matched) classes.push("matched-note");
+  svg.appendChild(createSvg("ellipse", {
+    cx: x,
+    cy: y,
+    rx: 21,
+    ry: 14,
+    transform: `rotate(-18 ${x} ${y})`,
+    class: classes.join(" "),
+    "data-target-id": targetId || "",
+    "data-note": note,
+    "data-display-note": displayNote
+  }));
+
+  if (hasStem) {
+    drawStemAndFlags(svg, x, y, clef, durationKind, matched);
+  }
+  if (octaveMark) {
+    drawOctaveMark(svg, x, y, octaveMark);
+  }
+}
+
+function drawStemAndFlags(svg, x, y, clef, durationKind, matched) {
+  const lineYs = clef === "bass" ? BASS_LINE_YS : TREBLE_LINE_YS;
+  const stemDown = y < lineYs[2];
+  const stemX = stemDown ? x - 17 : x + 17;
+  const stemEndY = stemDown ? y + 72 : y - 72;
+  svg.appendChild(createSvg("line", {
+    x1: stemX,
+    y1: y,
+    x2: stemX,
+    y2: stemEndY,
+    class: matched ? "note-stem matched-stem" : "note-stem"
+  }));
+
+  if (durationKind !== "eighth" && durationKind !== "sixteenth") return;
+  const flagCount = durationKind === "sixteenth" ? 2 : 1;
+  for (let index = 0; index < flagCount; index += 1) {
+    const offset = index * (stemDown ? -16 : 16);
+    const startY = stemEndY + offset;
+    const curveY = startY + (stemDown ? 24 : -24);
+    const endY = startY + (stemDown ? 38 : -38);
+    const endX = stemX + (stemDown ? 30 : 30);
+    svg.appendChild(createSvg("path", {
+      d: `M ${stemX} ${startY} C ${stemX + 20} ${curveY}, ${endX} ${curveY}, ${endX} ${endY}`,
+      class: matched ? "note-flag matched-stem" : "note-flag"
+    }));
+  }
+}
+
+function drawOctaveMark(svg, x, y, octaveMark) {
+  const isHigh = octaveMark === "8va";
+  const markY = y + (isHigh ? -62 : 74);
+  const text = createSvg("text", {
+    x: x - 8,
+    y: markY,
+    class: "octave-mark"
+  });
+  text.textContent = octaveMark;
+  svg.appendChild(text);
+  svg.appendChild(createSvg("line", {
+    x1: x + 24,
+    y1: markY - 6,
+    x2: x + 78,
+    y2: markY - 6,
+    class: "octave-line"
+  }));
 }
 
 function noteInnerLabel(note) {
