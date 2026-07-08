@@ -385,8 +385,7 @@ select {
   stroke: #17653a;
 }
 
-.note-stem,
-.note-flag {
+.note-stem {
   fill: none;
   stroke: var(--ink);
   stroke-width: 4;

@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v31";
+const APP_VERSION = "v32";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -50,8 +50,8 @@ const STAFF_STEP_PX = 20;
 const TREBLE_LINE_YS = [100, 140, 180, 220, 260];
 const BASS_LINE_YS = [420, 460, 500, 540, 580];
 const NOTE_RADIUS = 20;
-const MEASURE_NOTE_LEFT_X = 390;
-const MEASURE_NOTE_RIGHT_X = 940;
+const MEASURE_NOTE_LEFT_X = 320;
+const MEASURE_NOTE_RIGHT_X = 1000;
 const LEDGER_OCTAVE_LIMIT = 70;
 
 const state = {
@@ -265,9 +265,9 @@ function drawStaff() {
   svg.appendChild(bg);
 
   [...TREBLE_LINE_YS, ...BASS_LINE_YS].forEach((y) => {
-    svg.appendChild(createSvg("line", { x1: 88, y1: y, x2: 1036, y2: y, class: "staff-line" }));
+    svg.appendChild(createSvg("line", { x1: 64, y1: y, x2: 1070, y2: y, class: "staff-line" }));
   });
-  [88, 1036].forEach((x) => {
+  [64, 1070].forEach((x) => {
     svg.appendChild(createSvg("line", { x1: x, y1: TREBLE_LINE_YS[0], x2: x, y2: BASS_LINE_YS[4], class: "bar-line" }));
   });
 
@@ -475,14 +475,14 @@ function drawPracticeNoteShape(svg, item) {
   }));
 
   if (hasStem) {
-    drawStemAndFlags(svg, x, y, clef, durationKind, matched);
+    drawStem(svg, x, y, clef, matched);
   }
   if (octaveMark) {
     drawOctaveMark(svg, x, y, octaveMark);
   }
 }
 
-function drawStemAndFlags(svg, x, y, clef, durationKind, matched) {
+function drawStem(svg, x, y, clef, matched) {
   const lineYs = clef === "bass" ? BASS_LINE_YS : TREBLE_LINE_YS;
   const stemDown = y < lineYs[2];
   const stemX = stemDown ? x - 17 : x + 17;
@@ -494,20 +494,6 @@ function drawStemAndFlags(svg, x, y, clef, durationKind, matched) {
     y2: stemEndY,
     class: matched ? "note-stem matched-stem" : "note-stem"
   }));
-
-  if (durationKind !== "eighth" && durationKind !== "sixteenth") return;
-  const flagCount = durationKind === "sixteenth" ? 2 : 1;
-  for (let index = 0; index < flagCount; index += 1) {
-    const offset = index * (stemDown ? -16 : 16);
-    const startY = stemEndY + offset;
-    const curveY = startY + (stemDown ? 24 : -24);
-    const endY = startY + (stemDown ? 38 : -38);
-    const endX = stemX + (stemDown ? 30 : 30);
-    svg.appendChild(createSvg("path", {
-      d: `M ${stemX} ${startY} C ${stemX + 20} ${curveY}, ${endX} ${curveY}, ${endX} ${endY}`,
-      class: matched ? "note-flag matched-stem" : "note-flag"
-    }));
-  }
 }
 
 function drawOctaveMark(svg, x, y, octaveMark) {
