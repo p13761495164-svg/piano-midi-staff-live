@@ -432,6 +432,13 @@ select {
   stroke: #17653a;
 }
 
+.tie-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
 .octave-mark {
   fill: var(--ink);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -454,6 +461,7 @@ select {
   stroke-linecap: round;
 }
 
+.tie-line.secondary-track-line,
 .ledger-line.secondary-track-line,
 .octave-line.secondary-track-line {
   stroke: #85817b;
