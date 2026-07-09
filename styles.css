@@ -213,6 +213,10 @@ button:disabled {
   font-size: 12px;
 }
 
+.pedal-field {
+  width: min(210px, 100%);
+}
+
 select {
   width: 100%;
   min-height: 42px;
