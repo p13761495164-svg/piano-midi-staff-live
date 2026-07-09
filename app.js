@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v40";
+const APP_VERSION = "v41";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -354,7 +354,7 @@ function buildPracticeNoteItems() {
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
     .map((target) => {
       const display = displayInfoForPracticeNote(target.note);
-      const durationTicks = Math.max(1, target.endTick - target.startTick);
+      const durationInfo = durationInfoForTicks(Math.max(1, target.endTick - target.startTick));
       const progress = Math.max(0, Math.min(1, (target.startTick - viewStartTick) / timeSpan));
       const x = MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
       return {
@@ -363,7 +363,8 @@ function buildPracticeNoteItems() {
         clef: display.clef,
         step: midiToStaffStep(display.note),
         x,
-        durationKind: durationKindForTicks(durationTicks),
+        durationKind: durationInfo.kind,
+        dotted: durationInfo.dotted,
         octaveMark: display.octaveMark,
         targetId: target.id,
         matched: isPracticeNoteActive(target.note),
@@ -476,23 +477,27 @@ function displayInfoForPracticeNote(note) {
   return { note: displayNote, clef, octaveMark };
 }
 
-function durationKindForTicks(durationTicks) {
+function durationInfoForTicks(durationTicks) {
   const quarterTicks = state.practice.ticksPerQuarter || MIDI_PPQ;
   const ratio = durationTicks / quarterTicks;
   const candidates = [
-    { kind: "whole", ratio: 4 },
-    { kind: "half", ratio: 2 },
-    { kind: "quarter", ratio: 1 },
-    { kind: "eighth", ratio: 0.5 },
-    { kind: "sixteenth", ratio: 0.25 }
+    { kind: "whole", ratio: 4, dotted: false },
+    { kind: "half", ratio: 3, dotted: true },
+    { kind: "half", ratio: 2, dotted: false },
+    { kind: "quarter", ratio: 1.5, dotted: true },
+    { kind: "quarter", ratio: 1, dotted: false },
+    { kind: "eighth", ratio: 0.75, dotted: true },
+    { kind: "eighth", ratio: 0.5, dotted: false },
+    { kind: "sixteenth", ratio: 0.25, dotted: false }
   ];
-  return candidates.reduce((best, item) => (
+  const nearest = candidates.reduce((best, item) => (
     Math.abs(item.ratio - ratio) < Math.abs(best.ratio - ratio) ? item : best
-  ), candidates[0]).kind;
+  ), candidates[0]);
+  return { kind: nearest.kind, dotted: nearest.dotted };
 }
 
 function drawPracticeNoteShape(svg, item) {
-  const { note, displayNote, x, y, clef, matched, durationKind, targetId, octaveMark } = item;
+  const { note, displayNote, x, y, clef, matched, durationKind, dotted, targetId, octaveMark } = item;
   const isFilled = durationKind === "quarter" || durationKind === "eighth" || durationKind === "sixteenth";
   const hasStem = durationKind !== "whole";
   const classes = ["note-head", "practice-note-head", isFilled ? "filled-note" : "open-note"];
@@ -510,12 +515,26 @@ function drawPracticeNoteShape(svg, item) {
     "data-display-note": displayNote
   }));
 
+  if (dotted) {
+    drawAugmentationDot(svg, x, y, item.trackRole);
+  }
   if (hasStem) {
     drawStem(svg, x, y, clef, matched, item.trackRole);
   }
   if (octaveMark) {
     drawOctaveMark(svg, x, y, octaveMark, item.trackRole);
   }
+}
+
+function drawAugmentationDot(svg, x, y, trackRole = "primary") {
+  const classes = ["augmentation-dot"];
+  if (trackRole === "secondary") classes.push("secondary-track-dot");
+  svg.appendChild(createSvg("circle", {
+    cx: x + 36,
+    cy: y - 2,
+    r: 5.5,
+    class: classes.join(" ")
+  }));
 }
 
 function drawStem(svg, x, y, clef, matched, trackRole = "primary") {
