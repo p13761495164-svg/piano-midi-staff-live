@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v39";
+const APP_VERSION = "v40";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -368,6 +368,7 @@ function buildPracticeNoteItems() {
         targetId: target.id,
         matched: isPracticeNoteActive(target.note),
         isPractice: true,
+        trackRole: target.trackRole || "primary",
         xOffset: 0
       };
     });
@@ -409,7 +410,7 @@ function drawNote(svg, item) {
   const { note, clef, x, matched, isPractice, targetId } = item;
   const displayNote = item.displayNote ?? note;
   const y = yForNote(displayNote, clef);
-  drawLedgerLines(svg, x, y, clef);
+  drawLedgerLines(svg, x, y, clef, item.trackRole);
 
   if (isPractice) {
     drawPracticeNoteShape(svg, { ...item, y, displayNote });
@@ -441,10 +442,12 @@ function drawNote(svg, item) {
 
   const accidental = accidentalForNote(note);
   if (accidental) {
+    const accidentalClasses = ["accidental"];
+    if (item.trackRole === "secondary") accidentalClasses.push("secondary-track-text");
     const accidentalText = createSvg("text", {
       x: x - 52,
       y: y + 17,
-      class: "accidental",
+      class: accidentalClasses.join(" "),
       fill: "#292522",
       "data-accidental": accidental
     });
@@ -493,6 +496,7 @@ function drawPracticeNoteShape(svg, item) {
   const isFilled = durationKind === "quarter" || durationKind === "eighth" || durationKind === "sixteenth";
   const hasStem = durationKind !== "whole";
   const classes = ["note-head", "practice-note-head", isFilled ? "filled-note" : "open-note"];
+  if (item.trackRole === "secondary") classes.push("secondary-track-note");
   if (matched) classes.push("matched-note");
   svg.appendChild(createSvg("ellipse", {
     cx: x,
@@ -507,34 +511,43 @@ function drawPracticeNoteShape(svg, item) {
   }));
 
   if (hasStem) {
-    drawStem(svg, x, y, clef, matched);
+    drawStem(svg, x, y, clef, matched, item.trackRole);
   }
   if (octaveMark) {
-    drawOctaveMark(svg, x, y, octaveMark);
+    drawOctaveMark(svg, x, y, octaveMark, item.trackRole);
   }
 }
 
-function drawStem(svg, x, y, clef, matched) {
+function drawStem(svg, x, y, clef, matched, trackRole = "primary") {
   const lineYs = clef === "bass" ? BASS_LINE_YS : TREBLE_LINE_YS;
   const stemDown = y < lineYs[2];
   const stemX = stemDown ? x - 17 : x + 17;
   const stemEndY = stemDown ? y + 72 : y - 72;
+  const classes = ["note-stem"];
+  if (trackRole === "secondary") classes.push("secondary-track-stem");
+  if (matched) classes.push("matched-stem");
   svg.appendChild(createSvg("line", {
     x1: stemX,
     y1: y,
     x2: stemX,
     y2: stemEndY,
-    class: matched ? "note-stem matched-stem" : "note-stem"
+    class: classes.join(" ")
   }));
 }
 
-function drawOctaveMark(svg, x, y, octaveMark) {
+function drawOctaveMark(svg, x, y, octaveMark, trackRole = "primary") {
   const isHigh = octaveMark === "8va";
   const markY = y + (isHigh ? -62 : 74);
+  const markTextClasses = ["octave-mark"];
+  const markLineClasses = ["octave-line"];
+  if (trackRole === "secondary") {
+    markTextClasses.push("secondary-track-text");
+    markLineClasses.push("secondary-track-line");
+  }
   const text = createSvg("text", {
     x: x - 8,
     y: markY,
-    class: "octave-mark"
+    class: markTextClasses.join(" ")
   });
   text.textContent = octaveMark;
   svg.appendChild(text);
@@ -543,7 +556,7 @@ function drawOctaveMark(svg, x, y, octaveMark) {
     y1: markY - 6,
     x2: x + 78,
     y2: markY - 6,
-    class: "octave-line"
+    class: markLineClasses.join(" ")
   }));
 }
 
@@ -583,15 +596,17 @@ function drawKeySignature(svg) {
   }
 }
 
-function drawLedgerLines(svg, x, y, clef) {
+function drawLedgerLines(svg, x, y, clef, trackRole = "primary") {
   const lineYs = clef === "bass" ? BASS_LINE_YS : TREBLE_LINE_YS;
   const min = Math.min(...lineYs);
   const max = Math.max(...lineYs);
   const ledgerYs = [];
   for (let ly = min - STAFF_STEP_PX * 2; ly >= y - 1; ly -= STAFF_STEP_PX * 2) ledgerYs.push(ly);
   for (let ly = max + STAFF_STEP_PX * 2; ly <= y + 1; ly += STAFF_STEP_PX * 2) ledgerYs.push(ly);
+  const classes = ["ledger-line"];
+  if (trackRole === "secondary") classes.push("secondary-track-line");
   ledgerYs.forEach((ly) => {
-    svg.appendChild(createSvg("line", { x1: x - 52, y1: ly, x2: x + 52, y2: ly, class: "ledger-line" }));
+    svg.appendChild(createSvg("line", { x1: x - 52, y1: ly, x2: x + 52, y2: ly, class: classes.join(" ") }));
   });
 }
 
@@ -922,7 +937,7 @@ function parseMidiFile(bytes) {
     }
 
     const trackResult = parseMidiTrack(bytes, reader.position, trackEnd, ticksPerQuarter);
-    noteEvents.push(...trackResult.notes);
+    noteEvents.push(...trackResult.notes.map((note) => ({ ...note, trackIndex })));
     if (trackResult.timeSignature) timeSignature = trackResult.timeSignature;
     if (trackResult.microsecondsPerQuarter) microsecondsPerQuarter = trackResult.microsecondsPerQuarter;
     reader.position = trackEnd;
@@ -933,6 +948,7 @@ function parseMidiFile(bytes) {
     .filter((item) => item.note >= MIDI_MIN && item.note <= MIDI_MAX)
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
   if (!notes.length) return { measures: [], ticksPerQuarter, measureTicks, timeSignature, microsecondsPerQuarter, format };
+  const trackRoles = trackRolesForNotes(notes);
 
   const lastTick = Math.max(...notes.map((note) => Math.max(note.endTick, note.startTick + 1)));
   const measureCount = Math.max(1, Math.ceil(lastTick / measureTicks));
@@ -947,11 +963,34 @@ function parseMidiFile(bytes) {
     const measureIndex = Math.max(0, Math.min(measures.length - 1, Math.floor(note.startTick / measureTicks)));
     measures[measureIndex].notes.push({
       ...note,
+      trackRole: trackRoles.get(note.trackIndex) || "primary",
       id: `${measureIndex}-${index}-${note.note}-${note.startTick}`
     });
   });
 
   return { measures, ticksPerQuarter, measureTicks, timeSignature, microsecondsPerQuarter, format };
+}
+
+function trackRolesForNotes(notes) {
+  const stats = new Map();
+  notes.forEach((note) => {
+    const trackIndex = note.trackIndex ?? 0;
+    const current = stats.get(trackIndex) || { count: 0, totalPitch: 0 };
+    current.count += 1;
+    current.totalPitch += note.note;
+    stats.set(trackIndex, current);
+  });
+
+  const noteTracks = [...stats.entries()]
+    .filter(([, stat]) => stat.count > 0)
+    .map(([trackIndex, stat]) => ({
+      trackIndex,
+      averagePitch: stat.totalPitch / stat.count
+    }));
+
+  if (noteTracks.length < 2) return new Map();
+  noteTracks.sort((a, b) => a.averagePitch - b.averagePitch || a.trackIndex - b.trackIndex);
+  return new Map([[noteTracks[0].trackIndex, "secondary"]]);
 }
 
 function parseMidiTrack(bytes, start, end) {

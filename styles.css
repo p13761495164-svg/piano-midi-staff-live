@@ -394,7 +394,25 @@ select {
   fill: #fffdf8;
 }
 
+.secondary-track-note {
+  stroke: #85817b;
+}
+
+.secondary-track-note.filled-note {
+  fill: #85817b;
+}
+
+.secondary-track-note.open-note {
+  fill: #fffdf8;
+  stroke: #85817b;
+}
+
 .matched-note {
+  fill: #8fd19b;
+  stroke: #17653a;
+}
+
+.secondary-track-note.matched-note {
   fill: #8fd19b;
   stroke: #17653a;
 }
@@ -404,6 +422,10 @@ select {
   stroke: var(--ink);
   stroke-width: 4;
   stroke-linecap: round;
+}
+
+.secondary-track-stem {
+  stroke: #85817b;
 }
 
 .matched-stem {
@@ -432,12 +454,22 @@ select {
   stroke-linecap: round;
 }
 
+.ledger-line.secondary-track-line,
+.octave-line.secondary-track-line {
+  stroke: #85817b;
+}
+
 .accidental {
   fill: var(--ink);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 56px;
   font-weight: 700;
   text-anchor: middle;
+}
+
+.accidental.secondary-track-text,
+.octave-mark.secondary-track-text {
+  fill: #85817b;
 }
 
 .key-signature {
