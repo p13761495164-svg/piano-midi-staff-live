@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v41";
+const APP_VERSION = "v42";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -14,7 +14,8 @@ const SETTINGS_FIELD_KEYS = {
   keySignature: "piano-midi-staff-key-signature",
   showDegrees: "piano-midi-staff-show-degrees",
   noteLabelMode: "piano-midi-staff-note-label-mode",
-  selectedInputId: "piano-midi-staff-midi-input"
+  selectedInputId: "piano-midi-staff-midi-input",
+  pedalStep: "piano-midi-staff-pedal-step"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const MAJOR_KEY_SIGNATURES = {
@@ -63,6 +64,7 @@ const state = {
   softPedalDown: false,
   keySignature: "C",
   noteLabelMode: "degree",
+  pedalStep: "measure",
   deferredInstallPrompt: null,
   wakeLock: null,
   practice: {
@@ -81,7 +83,7 @@ const state = {
     stopTimer: 0,
     playing: false
   },
-  scoreSwipe: {
+  scorePointer: {
     active: false,
     pointerId: 0,
     startX: 0,
@@ -115,6 +117,7 @@ const els = {
   inputSelect: document.getElementById("inputSelect"),
   keyButtons: [...document.querySelectorAll("[data-key-signature]")],
   modeButtons: [...document.querySelectorAll("[data-label-mode]")],
+  pedalStepButtons: [...document.querySelectorAll("[data-pedal-step]")],
   scoreBoard: document.querySelector(".score-board"),
   staffSvg: document.getElementById("staffSvg"),
   keyboard: document.getElementById("keyboard")
@@ -193,10 +196,12 @@ function readSettings() {
     const showDegrees = window.localStorage.getItem(SETTINGS_FIELD_KEYS.showDegrees);
     const noteLabelMode = window.localStorage.getItem(SETTINGS_FIELD_KEYS.noteLabelMode);
     const selectedInputId = window.localStorage.getItem(SETTINGS_FIELD_KEYS.selectedInputId);
+    const pedalStep = window.localStorage.getItem(SETTINGS_FIELD_KEYS.pedalStep);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
     if (selectedInputId !== null) settings.selectedInputId = selectedInputId;
+    if (["measure", "half"].includes(pedalStep)) settings.pedalStep = pedalStep;
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -207,7 +212,8 @@ function saveSettings() {
   const settings = {
     keySignature: state.keySignature,
     noteLabelMode: state.noteLabelMode,
-    selectedInputId: state.selectedInputId
+    selectedInputId: state.selectedInputId,
+    pedalStep: state.pedalStep
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -215,6 +221,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.showDegrees, String(settings.noteLabelMode === "degree"));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.noteLabelMode, settings.noteLabelMode);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.selectedInputId, settings.selectedInputId);
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.pedalStep, settings.pedalStep);
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -229,6 +236,11 @@ function syncControlsFromState() {
   });
   els.modeButtons.forEach((button) => {
     const active = button.dataset.labelMode === state.noteLabelMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  els.pedalStepButtons.forEach((button) => {
+    const active = button.dataset.pedalStep === state.pedalStep;
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
@@ -275,6 +287,9 @@ function applySavedSettings() {
   }
   if (typeof settings.selectedInputId === "string") {
     state.selectedInputId = settings.selectedInputId;
+  }
+  if (["measure", "half"].includes(settings.pedalStep)) {
+    state.pedalStep = settings.pedalStep;
   }
   syncControlsFromState();
 }
@@ -1335,10 +1350,18 @@ function handleMidiBytes(data) {
     recordMidiEvent("cc", { controller: 67, value });
     const pressed = value >= 64;
     if (pressed && !state.softPedalDown) {
-      goToMeasure(1);
+      advanceByPedalStep();
     }
     state.softPedalDown = pressed;
   }
+}
+
+function advanceByPedalStep() {
+  if (state.pedalStep === "half") {
+    panPracticeView(0.5);
+    return;
+  }
+  goToMeasure(1);
 }
 
 window.PianoMidiNative = {
@@ -1415,10 +1438,10 @@ function setupWakeLock() {
   window.addEventListener("touchstart", wakeFromGesture, { passive: true });
 }
 
-function setupScoreSwipe() {
+function setupScoreClickPaging() {
   els.scoreBoard.addEventListener("pointerdown", (event) => {
     if (!event.isPrimary || event.target.closest("button")) return;
-    state.scoreSwipe = {
+    state.scorePointer = {
       active: true,
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -1427,21 +1450,23 @@ function setupScoreSwipe() {
   });
 
   els.scoreBoard.addEventListener("pointerup", (event) => {
-    handleScoreSwipeEnd(event);
+    handleScoreClickEnd(event);
   });
   els.scoreBoard.addEventListener("pointercancel", (event) => {
-    handleScoreSwipeEnd(event);
+    state.scorePointer.active = false;
   });
 }
 
-function handleScoreSwipeEnd(event) {
-  if (!state.scoreSwipe.active || event.pointerId !== state.scoreSwipe.pointerId) return;
-  const dx = event.clientX - state.scoreSwipe.startX;
-  const dy = event.clientY - state.scoreSwipe.startY;
-  state.scoreSwipe.active = false;
+function handleScoreClickEnd(event) {
+  if (!state.scorePointer.active || event.pointerId !== state.scorePointer.pointerId) return;
+  const dx = event.clientX - state.scorePointer.startX;
+  const dy = event.clientY - state.scorePointer.startY;
+  state.scorePointer.active = false;
 
-  if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.35) return;
-  panPracticeView(dx < 0 ? 0.5 : -0.5);
+  if (Math.abs(dx) > 14 || Math.abs(dy) > 14) return;
+  const rect = els.scoreBoard.getBoundingClientRect();
+  const direction = event.clientX < rect.left + rect.width / 2 ? -0.5 : 0.5;
+  panPracticeView(direction);
 }
 
 function setupEvents() {
@@ -1479,6 +1504,13 @@ function setupEvents() {
       drawStaff();
     });
   });
+  els.pedalStepButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.pedalStep = button.dataset.pedalStep;
+      syncControlsFromState();
+      saveSettings();
+    });
+  });
   window.addEventListener("pagehide", () => {
     saveSettings();
   });
@@ -1510,7 +1542,7 @@ syncPracticeControls();
 setupEvents();
 setupPwa();
 setupWakeLock();
-setupScoreSwipe();
+setupScoreClickPaging();
 buildKeyboard();
 drawStaff();
 autoConnectMidi();
