@@ -286,6 +286,7 @@ select {
   background: var(--panel);
   box-shadow: var(--shadow);
   overflow: hidden;
+  touch-action: pan-y;
 }
 
 .measure-nav {

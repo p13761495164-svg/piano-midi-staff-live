@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v37";
+const APP_VERSION = "v38";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -60,6 +60,7 @@ const state = {
   activeNotes: new Map(),
   releasedWhileSustained: new Set(),
   sustainDown: false,
+  softPedalDown: false,
   keySignature: "C",
   noteLabelMode: "degree",
   deferredInstallPrompt: null,
@@ -78,6 +79,12 @@ const state = {
     activeNodes: [],
     stopTimer: 0,
     playing: false
+  },
+  scoreSwipe: {
+    active: false,
+    pointerId: 0,
+    startX: 0,
+    startY: 0
   },
   recording: {
     active: false,
@@ -107,6 +114,7 @@ const els = {
   inputSelect: document.getElementById("inputSelect"),
   keyButtons: [...document.querySelectorAll("[data-key-signature]")],
   modeButtons: [...document.querySelectorAll("[data-label-mode]")],
+  scoreBoard: document.querySelector(".score-board"),
   staffSvg: document.getElementById("staffSvg"),
   keyboard: document.getElementById("keyboard")
 };
@@ -1228,6 +1236,16 @@ function handleMidiBytes(data) {
     recordMidiEvent("cc", { controller: 64, value });
     state.sustainDown = value >= 64;
     if (!state.sustainDown) releaseSustainedNotes();
+    return;
+  }
+
+  if (command === 0xb0 && note === 67) {
+    recordMidiEvent("cc", { controller: 67, value });
+    const pressed = value >= 64;
+    if (pressed && !state.softPedalDown) {
+      goToMeasure(1);
+    }
+    state.softPedalDown = pressed;
   }
 }
 
@@ -1305,6 +1323,35 @@ function setupWakeLock() {
   window.addEventListener("touchstart", wakeFromGesture, { passive: true });
 }
 
+function setupScoreSwipe() {
+  els.scoreBoard.addEventListener("pointerdown", (event) => {
+    if (!event.isPrimary || event.target.closest("button")) return;
+    state.scoreSwipe = {
+      active: true,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY
+    };
+  });
+
+  els.scoreBoard.addEventListener("pointerup", (event) => {
+    handleScoreSwipeEnd(event);
+  });
+  els.scoreBoard.addEventListener("pointercancel", (event) => {
+    handleScoreSwipeEnd(event);
+  });
+}
+
+function handleScoreSwipeEnd(event) {
+  if (!state.scoreSwipe.active || event.pointerId !== state.scoreSwipe.pointerId) return;
+  const dx = event.clientX - state.scoreSwipe.startX;
+  const dy = event.clientY - state.scoreSwipe.startY;
+  state.scoreSwipe.active = false;
+
+  if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.35) return;
+  goToMeasure(dx < 0 ? 1 : -1);
+}
+
 function setupEvents() {
   els.connectButton.addEventListener("click", connectMidi);
   els.recordButton.addEventListener("click", startRecording);
@@ -1371,6 +1418,7 @@ syncPracticeControls();
 setupEvents();
 setupPwa();
 setupWakeLock();
+setupScoreSwipe();
 buildKeyboard();
 drawStaff();
 autoConnectMidi();
