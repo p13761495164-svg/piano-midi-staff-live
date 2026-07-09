@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v42";
+const APP_VERSION = "v43";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -317,7 +317,9 @@ function drawStaff() {
 
   const hasPracticeScore = state.practice.measures.length > 0;
   if (hasPracticeScore) {
-    buildPracticeNoteItems().forEach((item) => drawNote(svg, item));
+    const practiceItems = buildPracticeNoteItems();
+    practiceItems.forEach((item) => drawNote(svg, item));
+    drawPracticeOctaveGroups(svg, practiceItems);
     return;
   }
 
@@ -369,7 +371,7 @@ function buildPracticeNoteItems() {
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
     .map((target) => {
       const display = displayInfoForPracticeNote(target.note);
-      const durationInfo = durationInfoForTicks(Math.max(1, target.endTick - target.startTick));
+      const durationKind = durationKindForTicks(Math.max(1, target.endTick - target.startTick));
       const progress = Math.max(0, Math.min(1, (target.startTick - viewStartTick) / timeSpan));
       const x = MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
       return {
@@ -378,8 +380,7 @@ function buildPracticeNoteItems() {
         clef: display.clef,
         step: midiToStaffStep(display.note),
         x,
-        durationKind: durationInfo.kind,
-        dotted: durationInfo.dotted,
+        durationKind,
         octaveMark: display.octaveMark,
         targetId: target.id,
         matched: isPracticeNoteActive(target.note),
@@ -492,27 +493,23 @@ function displayInfoForPracticeNote(note) {
   return { note: displayNote, clef, octaveMark };
 }
 
-function durationInfoForTicks(durationTicks) {
+function durationKindForTicks(durationTicks) {
   const quarterTicks = state.practice.ticksPerQuarter || MIDI_PPQ;
   const ratio = durationTicks / quarterTicks;
   const candidates = [
-    { kind: "whole", ratio: 4, dotted: false },
-    { kind: "half", ratio: 3, dotted: true },
-    { kind: "half", ratio: 2, dotted: false },
-    { kind: "quarter", ratio: 1.5, dotted: true },
-    { kind: "quarter", ratio: 1, dotted: false },
-    { kind: "eighth", ratio: 0.75, dotted: true },
-    { kind: "eighth", ratio: 0.5, dotted: false },
-    { kind: "sixteenth", ratio: 0.25, dotted: false }
+    { kind: "whole", ratio: 4 },
+    { kind: "half", ratio: 2 },
+    { kind: "quarter", ratio: 1 },
+    { kind: "eighth", ratio: 0.5 },
+    { kind: "sixteenth", ratio: 0.25 }
   ];
-  const nearest = candidates.reduce((best, item) => (
+  return candidates.reduce((best, item) => (
     Math.abs(item.ratio - ratio) < Math.abs(best.ratio - ratio) ? item : best
-  ), candidates[0]);
-  return { kind: nearest.kind, dotted: nearest.dotted };
+  ), candidates[0]).kind;
 }
 
 function drawPracticeNoteShape(svg, item) {
-  const { note, displayNote, x, y, clef, matched, durationKind, dotted, targetId, octaveMark } = item;
+  const { note, displayNote, x, y, clef, matched, durationKind, targetId } = item;
   const isFilled = durationKind === "quarter" || durationKind === "eighth" || durationKind === "sixteenth";
   const hasStem = durationKind !== "whole";
   const classes = ["note-head", "practice-note-head", isFilled ? "filled-note" : "open-note"];
@@ -530,26 +527,9 @@ function drawPracticeNoteShape(svg, item) {
     "data-display-note": displayNote
   }));
 
-  if (dotted) {
-    drawAugmentationDot(svg, x, y, item.trackRole);
-  }
   if (hasStem) {
     drawStem(svg, x, y, clef, matched, item.trackRole);
   }
-  if (octaveMark) {
-    drawOctaveMark(svg, x, y, octaveMark, item.trackRole);
-  }
-}
-
-function drawAugmentationDot(svg, x, y, trackRole = "primary") {
-  const classes = ["augmentation-dot"];
-  if (trackRole === "secondary") classes.push("secondary-track-dot");
-  svg.appendChild(createSvg("circle", {
-    cx: x + 36,
-    cy: y - 2,
-    r: 5.5,
-    class: classes.join(" ")
-  }));
 }
 
 function drawStem(svg, x, y, clef, matched, trackRole = "primary") {
@@ -569,9 +549,49 @@ function drawStem(svg, x, y, clef, matched, trackRole = "primary") {
   }));
 }
 
-function drawOctaveMark(svg, x, y, octaveMark, trackRole = "primary") {
+function drawPracticeOctaveGroups(svg, items) {
+  const sorted = items.slice().sort((a, b) => a.x - b.x || a.step - b.step);
+  const groups = [];
+  let current = null;
+
+  sorted.forEach((item) => {
+    if (!item.octaveMark) {
+      current = null;
+      return;
+    }
+    if (
+      current &&
+      current.octaveMark === item.octaveMark &&
+      current.trackRole === item.trackRole &&
+      Math.abs(item.x - current.endX) < 230
+    ) {
+      current.items.push(item);
+      current.endX = Math.max(current.endX, item.x);
+      current.markY = current.octaveMark === "8va"
+        ? Math.min(current.markY, yForNote(item.displayNote, item.clef) - 62)
+        : Math.max(current.markY, yForNote(item.displayNote, item.clef) + 74);
+      return;
+    }
+
+    const y = yForNote(item.displayNote, item.clef);
+    current = {
+      octaveMark: item.octaveMark,
+      trackRole: item.trackRole,
+      items: [item],
+      startX: item.x,
+      endX: item.x,
+      markY: item.octaveMark === "8va" ? y - 62 : y + 74
+    };
+    groups.push(current);
+  });
+
+  groups.forEach((group) => {
+    drawOctaveMark(svg, group.startX, group.endX, group.markY, group.octaveMark, group.trackRole);
+  });
+}
+
+function drawOctaveMark(svg, startX, endX, markY, octaveMark, trackRole = "primary") {
   const isHigh = octaveMark === "8va";
-  const markY = y + (isHigh ? -62 : 74);
   const markTextClasses = ["octave-mark"];
   const markLineClasses = ["octave-line"];
   if (trackRole === "secondary") {
@@ -579,17 +599,18 @@ function drawOctaveMark(svg, x, y, octaveMark, trackRole = "primary") {
     markLineClasses.push("secondary-track-line");
   }
   const text = createSvg("text", {
-    x: x - 8,
+    x: startX - 8,
     y: markY,
     class: markTextClasses.join(" ")
   });
   text.textContent = octaveMark;
   svg.appendChild(text);
+  const lineEndX = Math.max(startX + 78, endX + (endX > startX ? 34 : 78));
   svg.appendChild(createSvg("line", {
-    x1: x + 24,
-    y1: markY - 6,
-    x2: x + 78,
-    y2: markY - 6,
+    x1: startX + 24,
+    y1: markY - (isHigh ? 6 : -8),
+    x2: lineEndX,
+    y2: markY - (isHigh ? 6 : -8),
     class: markLineClasses.join(" ")
   }));
 }
