@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v44";
+const APP_VERSION = "v45";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -319,7 +319,6 @@ function drawStaff() {
   if (hasPracticeScore) {
     const practiceItems = buildPracticeNoteItems();
     practiceItems.forEach((item) => drawNote(svg, item));
-    drawPracticeTies(svg, practiceItems);
     drawPracticeOctaveGroups(svg, practiceItems);
     return;
   }
@@ -550,50 +549,6 @@ function drawStem(svg, x, y, clef, matched, trackRole = "primary") {
     y1: y,
     x2: stemX,
     y2: stemEndY,
-    class: classes.join(" ")
-  }));
-}
-
-function drawPracticeTies(svg, items) {
-  const toleranceTicks = Math.max(8, Math.round((state.practice.ticksPerQuarter || MIDI_PPQ) * 0.04));
-  const sorted = items.slice().sort((a, b) => (
-    a.note - b.note ||
-    a.trackIndex - b.trackIndex ||
-    a.channel - b.channel ||
-    a.startTick - b.startTick
-  ));
-
-  for (let index = 1; index < sorted.length; index += 1) {
-    const previous = sorted[index - 1];
-    const current = sorted[index];
-    if (
-      previous.note !== current.note ||
-      previous.trackIndex !== current.trackIndex ||
-      previous.channel !== current.channel ||
-      previous.x >= current.x ||
-      Math.abs(previous.endTick - current.startTick) > toleranceTicks
-    ) {
-      continue;
-    }
-    drawTie(svg, previous, current);
-  }
-}
-
-function drawTie(svg, startItem, endItem) {
-  const startY = yForNote(startItem.displayNote, startItem.clef);
-  const endY = yForNote(endItem.displayNote, endItem.clef);
-  const noteY = (startY + endY) / 2;
-  const stemDown = startY < (startItem.clef === "bass" ? BASS_LINE_YS[2] : TREBLE_LINE_YS[2]);
-  const y = noteY + (stemDown ? -18 : 18);
-  const bow = stemDown ? -10 : 10;
-  const startX = startItem.x + 18;
-  const endX = endItem.x - 18;
-  if (endX - startX < 16) return;
-
-  const classes = ["tie-line"];
-  if (startItem.trackRole === "secondary") classes.push("secondary-track-line");
-  svg.appendChild(createSvg("path", {
-    d: `M ${startX} ${y} Q ${(startX + endX) / 2} ${y + bow}, ${endX} ${y}`,
     class: classes.join(" ")
   }));
 }
