@@ -74,14 +74,10 @@ select {
 .brand-mark {
   width: 44px;
   height: 44px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
+  border-radius: 12px;
+  display: block;
   flex: 0 0 auto;
-  background: var(--ink);
-  color: var(--paper);
-  font-size: 26px;
-  line-height: 1;
+  box-shadow: 0 8px 18px rgba(41, 37, 34, 0.16);
 }
 
 h1,

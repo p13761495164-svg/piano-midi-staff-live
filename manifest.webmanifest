@@ -1,7 +1,7 @@
 {
-  "name": "Piano MIDI Staff",
-  "short_name": "Piano MIDI",
-  "description": "Connect a MIDI piano and see played keys on staff notation and an on-screen keyboard.",
+  "name": "Easy Piano",
+  "short_name": "Easy Piano",
+  "description": "Practice piano with MIDI, staff notation, and an on-screen keyboard.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

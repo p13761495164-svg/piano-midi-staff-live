@@ -1,4 +1,4 @@
-# Piano MIDI Staff PWA
+# Easy Piano
 
 这是一个静态 PWA：连接 MIDI 钢琴后，实时把按下的琴键显示在五线谱和 88 键屏幕钢琴键盘上。
 

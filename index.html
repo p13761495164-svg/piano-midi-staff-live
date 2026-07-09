@@ -6,24 +6,24 @@
   <meta name="theme-color" content="#f7f4ed">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Piano MIDI">
-  <title>Piano MIDI Staff</title>
+  <meta name="apple-mobile-web-app-title" content="Easy Piano">
+  <title>Easy Piano</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon.svg">
-  <link rel="stylesheet" href="styles.css?v=36">
+  <link rel="stylesheet" href="styles.css?v=37">
 </head>
 <body>
   <main class="app-shell">
     <section class="stage" aria-label="实时钢琴 MIDI 显示">
       <div class="topbar">
         <div class="brand">
-          <span class="brand-mark" aria-hidden="true">♪</span>
+          <img class="brand-mark" src="icons/icon.svg" alt="" aria-hidden="true">
           <div>
-            <h1>Piano MIDI Staff</h1>
+            <h1>Easy Piano</h1>
             <div class="status-row">
               <p id="statusText">等待连接 MIDI 键盘</p>
-              <span id="versionBadge" class="version-badge">v36</span>
+              <span id="versionBadge" class="version-badge">v37</span>
             </div>
           </div>
         </div>
@@ -93,6 +93,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=36"></script>
+  <script src="app.js?v=37"></script>
 </body>
 </html>
