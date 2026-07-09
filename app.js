@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v45";
+const APP_VERSION = "v47";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -34,11 +34,11 @@ const MAJOR_KEY_SIGNATURES = {
 };
 const KEY_SIGNATURE_Y = {
   "#": {
-    treble: { F: 140, C: 200, G: 120, D: 180, A: 240, E: 160, B: 220 },
+    treble: { F: 180, C: 240, G: 160, D: 220, A: 280, E: 200, B: 260 },
     bass: { F: 460, C: 520, G: 440, D: 500, A: 420, E: 480, B: 540 }
   },
   b: {
-    treble: { B: 220, E: 160, A: 240, D: 180, G: 260, C: 200, F: 280 },
+    treble: { B: 260, E: 200, A: 280, D: 220, G: 300, C: 240, F: 320 },
     bass: { B: 540, E: 480, A: 560, D: 500, G: 580, C: 520, F: 600 }
   }
 };
@@ -48,7 +48,7 @@ const KEY_SIGNATURE_ORDER = {
 };
 const STAFF_VIEWBOX = { width: 1760, height: 720 };
 const STAFF_STEP_PX = 20;
-const TREBLE_LINE_YS = [140, 180, 220, 260, 300];
+const TREBLE_LINE_YS = [180, 220, 260, 300, 340];
 const BASS_LINE_YS = [420, 460, 500, 540, 580];
 const NOTE_RADIUS = 20;
 const MEASURE_NOTE_LEFT_X = 500;
@@ -114,6 +114,7 @@ const els = {
   playMeasureButton: document.getElementById("playMeasureButton"),
   measureStatus: document.getElementById("measureStatus"),
   versionBadge: document.getElementById("versionBadge"),
+  inputField: document.querySelector(".input-field"),
   inputSelect: document.getElementById("inputSelect"),
   keyButtons: [...document.querySelectorAll("[data-key-signature]")],
   modeButtons: [...document.querySelectorAll("[data-label-mode]")],
@@ -308,7 +309,7 @@ function drawStaff() {
     svg.appendChild(createSvg("line", { x1: x, y1: TREBLE_LINE_YS[0], x2: x, y2: BASS_LINE_YS[4], class: "bar-line" }));
   });
 
-  const treble = createSvg("text", { x: 104, y: 284, class: "clef" });
+  const treble = createSvg("text", { x: 104, y: 324, class: "clef" });
   treble.textContent = "𝄞";
   const bass = createSvg("text", { x: 112, y: 568, class: "clef" });
   bass.textContent = "𝄢";
@@ -1309,6 +1310,7 @@ function syncFullscreenButton() {
 function refreshMidiInputs() {
   const previous = state.selectedInputId || els.inputSelect.value;
   const inputs = [...state.midiAccess.inputs.values()];
+  els.inputField.classList.toggle("hidden", inputs.length <= 1);
   els.inputSelect.replaceChildren(new Option("自动选择", ""));
   inputs.forEach((input) => {
     const label = input.name || input.manufacturer || input.id;

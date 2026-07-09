@@ -205,6 +205,10 @@ button:disabled {
   min-width: 0;
 }
 
+.field.hidden {
+  display: none;
+}
+
 .field span {
   font-size: 12px;
 }
@@ -227,6 +231,10 @@ select {
   border-radius: 8px;
   overflow: hidden;
   background: white;
+}
+
+.pedal-field .segmented {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .mode-option {
