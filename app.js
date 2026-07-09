@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v38";
+const APP_VERSION = "v39";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -72,7 +72,8 @@ const state = {
     timeSignature: { numerator: 4, denominator: 4 },
     ticksPerQuarter: MIDI_PPQ,
     measureTicks: MIDI_PPQ * 4,
-    microsecondsPerQuarter: 500000
+    microsecondsPerQuarter: 500000,
+    viewStartTick: 0
   },
   playback: {
     audioContext: null,
@@ -253,9 +254,13 @@ function syncPracticeControls() {
   }
 
   const total = state.practice.measures.length;
-  const current = state.practice.currentMeasure + 1;
-  const matched = measure.notes.filter((note) => isPracticeNoteActive(note.note)).length;
-  els.measureStatus.textContent = `${current} / ${total} 小节 · ${matched}/${measure.notes.length}`;
+  const visibleNotes = visiblePracticeTargets();
+  const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+  const startMeasure = Math.max(1, Math.floor((state.practice.viewStartTick || 0) / measureTicks) + 1);
+  const endMeasure = Math.min(total, Math.floor(((state.practice.viewStartTick || 0) + measureTicks - 1) / measureTicks) + 1);
+  const rangeLabel = startMeasure === endMeasure ? `${startMeasure}` : `${startMeasure}-${endMeasure}`;
+  const matched = visibleNotes.filter((note) => isPracticeNoteActive(note.note)).length;
+  els.measureStatus.textContent = `${rangeLabel} / ${total} 小节 · ${matched}/${visibleNotes.length}`;
 }
 
 function applySavedSettings() {
@@ -339,17 +344,18 @@ function drawStaff() {
 }
 
 function buildPracticeNoteItems() {
-  const measure = state.practice.measures[state.practice.currentMeasure];
-  if (!measure || !measure.notes.length) return [];
+  const visibleNotes = visiblePracticeTargets();
+  if (!visibleNotes.length) return [];
 
-  const timeSpan = Math.max(1, measure.endTick - measure.startTick);
-  const items = measure.notes
+  const viewStartTick = state.practice.viewStartTick || 0;
+  const timeSpan = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+  const items = visibleNotes
     .slice()
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
     .map((target) => {
       const display = displayInfoForPracticeNote(target.note);
       const durationTicks = Math.max(1, target.endTick - target.startTick);
-      const progress = Math.max(0, Math.min(1, (target.startTick - measure.startTick) / timeSpan));
+      const progress = Math.max(0, Math.min(1, (target.startTick - viewStartTick) / timeSpan));
       const x = MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
       return {
         note: target.note,
@@ -388,6 +394,15 @@ function buildPracticeNoteItems() {
   }
 
   return items.map((item) => ({ ...item, x: item.x + item.xOffset }));
+}
+
+function visiblePracticeTargets() {
+  if (!state.practice.measures.length) return [];
+  const viewStartTick = state.practice.viewStartTick || 0;
+  const viewEndTick = viewStartTick + Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+  return state.practice.measures
+    .flatMap((measure) => measure.notes)
+    .filter((target) => target.startTick < viewEndTick && target.endTick > viewStartTick);
 }
 
 function drawNote(svg, item) {
@@ -760,6 +775,7 @@ async function loadMidiFile(file) {
     state.practice.ticksPerQuarter = parsed.ticksPerQuarter;
     state.practice.measureTicks = parsed.measureTicks;
     state.practice.microsecondsPerQuarter = parsed.microsecondsPerQuarter;
+    state.practice.viewStartTick = 0;
     setStatus(parsed.measures.length
       ? `已载入：${state.practice.filename}`
       : "MIDI 已载入，但没有找到可显示的音符");
@@ -767,6 +783,7 @@ async function loadMidiFile(file) {
   } catch (error) {
     state.practice.measures = [];
     state.practice.currentMeasure = 0;
+    state.practice.viewStartTick = 0;
     setStatus(`MIDI 读取失败：${error.message || "文件格式不支持"}`);
     updateAll();
   } finally {
@@ -780,6 +797,23 @@ function goToMeasure(delta) {
   if (next === state.practice.currentMeasure) return;
   stopMeasurePlayback();
   state.practice.currentMeasure = next;
+  state.practice.viewStartTick = state.practice.measures[next].startTick;
+  updateAll();
+}
+
+function panPracticeView(deltaMeasures) {
+  if (!state.practice.measures.length) return;
+  const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+  const lastMeasure = state.practice.measures[state.practice.measures.length - 1];
+  const maxStart = Math.max(0, lastMeasure.endTick - measureTicks);
+  const nextStart = Math.max(0, Math.min(maxStart, (state.practice.viewStartTick || 0) + deltaMeasures * measureTicks));
+  if (Math.abs(nextStart - (state.practice.viewStartTick || 0)) < 1) return;
+  stopMeasurePlayback();
+  state.practice.viewStartTick = nextStart;
+  state.practice.currentMeasure = Math.max(0, Math.min(
+    state.practice.measures.length - 1,
+    Math.floor(nextStart / measureTicks)
+  ));
   updateAll();
 }
 
@@ -1349,7 +1383,7 @@ function handleScoreSwipeEnd(event) {
   state.scoreSwipe.active = false;
 
   if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.35) return;
-  goToMeasure(dx < 0 ? 1 : -1);
+  panPracticeView(dx < 0 ? 0.5 : -0.5);
 }
 
 function setupEvents() {
