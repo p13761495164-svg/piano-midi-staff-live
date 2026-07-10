@@ -1,11 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" fill="#292522"/>
-  <rect x="194" y="252" width="116" height="520" rx="24" fill="#fffdf8"/>
-  <rect x="318" y="252" width="116" height="520" rx="24" fill="#fffdf8"/>
-  <rect x="442" y="252" width="116" height="520" rx="24" fill="#fffdf8"/>
-  <rect x="566" y="252" width="116" height="520" rx="24" fill="#fffdf8"/>
-  <rect x="690" y="252" width="116" height="520" rx="24" fill="#fffdf8"/>
-  <rect x="282" y="252" width="70" height="320" rx="18" fill="#292522"/>
-  <rect x="406" y="252" width="70" height="320" rx="18" fill="#292522"/>
-  <rect x="654" y="252" width="70" height="320" rx="18" fill="#292522"/>
+  <rect width="1024" height="1024" fill="#111111"/>
+  <text
+    x="512"
+    y="360"
+    fill="#ffffff"
+    font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+    font-size="152"
+    font-weight="300"
+    letter-spacing="18"
+    text-anchor="middle">Piano</text>
+
+  <g transform="translate(220 560)">
+    <g fill="#fbfbfb">
+      <rect x="0" y="0" width="80" height="230" rx="5"/>
+      <rect x="84" y="0" width="80" height="230" rx="5"/>
+      <rect x="168" y="0" width="80" height="230" rx="5"/>
+      <rect x="252" y="0" width="80" height="230" rx="5"/>
+      <rect x="336" y="0" width="80" height="230" rx="5"/>
+      <rect x="420" y="0" width="80" height="230" rx="5"/>
+      <rect x="504" y="0" width="80" height="230" rx="5"/>
+    </g>
+    <g stroke="#d6d6d6" stroke-width="3">
+      <line x1="82" y1="0" x2="82" y2="230"/>
+      <line x1="166" y1="0" x2="166" y2="230"/>
+      <line x1="250" y1="0" x2="250" y2="230"/>
+      <line x1="334" y1="0" x2="334" y2="230"/>
+      <line x1="418" y1="0" x2="418" y2="230"/>
+      <line x1="502" y1="0" x2="502" y2="230"/>
+    </g>
+    <g fill="#111111">
+      <rect x="56" y="0" width="52" height="138" rx="4"/>
+      <rect x="140" y="0" width="52" height="138" rx="4"/>
+      <rect x="308" y="0" width="52" height="138" rx="4"/>
+      <rect x="392" y="0" width="52" height="138" rx="4"/>
+      <rect x="476" y="0" width="52" height="138" rx="4"/>
+    </g>
+  </g>
 </svg>
