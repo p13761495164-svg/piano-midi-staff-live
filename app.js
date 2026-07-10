@@ -1,11 +1,12 @@
 "use strict";
 
-const APP_VERSION = "v48";
+const APP_VERSION = "v49";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
 const WHITE_PATTERN = new Set([0, 2, 4, 5, 7, 9, 11]);
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const XML_STEP_TO_SEMITONE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const KEY_RANGE = { min: MIDI_MIN, max: MIDI_MAX };
 const SETTINGS_KEY = "piano-midi-staff-settings";
 const MIDI_PPQ = 480;
@@ -836,34 +837,53 @@ function isPracticeNoteActive(note) {
   return state.activeNotes.has(note);
 }
 
-async function loadMidiFile(file) {
+function applyParsedScore(parsed, filename, typeLabel) {
+  state.practice.measures = parsed.measures;
+  state.practice.currentMeasure = 0;
+  state.practice.filename = filename || typeLabel;
+  state.practice.timeSignature = parsed.timeSignature;
+  state.practice.ticksPerQuarter = parsed.ticksPerQuarter;
+  state.practice.measureTicks = parsed.measureTicks;
+  state.practice.microsecondsPerQuarter = parsed.microsecondsPerQuarter;
+  state.practice.viewStartTick = 0;
+  setStatus(parsed.measures.length
+    ? `已载入：${state.practice.filename}`
+    : `${typeLabel} 已载入，但没有找到可显示的音符`);
+  updateAll();
+}
+
+async function loadScoreFile(file) {
   if (!file) return;
 
   try {
     stopMeasurePlayback();
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const parsed = parseMidiFile(bytes);
-    state.practice.measures = parsed.measures;
-    state.practice.currentMeasure = 0;
-    state.practice.filename = file.name || "MIDI";
-    state.practice.timeSignature = parsed.timeSignature;
-    state.practice.ticksPerQuarter = parsed.ticksPerQuarter;
-    state.practice.measureTicks = parsed.measureTicks;
-    state.practice.microsecondsPerQuarter = parsed.microsecondsPerQuarter;
-    state.practice.viewStartTick = 0;
-    setStatus(parsed.measures.length
-      ? `已载入：${state.practice.filename}`
-      : "MIDI 已载入，但没有找到可显示的音符");
-    updateAll();
+    const name = file.name || "";
+    if (isMusicXmlFile(file)) {
+      const parsed = parseMusicXmlText(await file.text());
+      applyParsedScore(parsed, name || "MusicXML", "MusicXML");
+    } else {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const parsed = parseMidiFile(bytes);
+      applyParsedScore(parsed, name || "MIDI", "MIDI");
+    }
   } catch (error) {
     state.practice.measures = [];
     state.practice.currentMeasure = 0;
     state.practice.viewStartTick = 0;
-    setStatus(`MIDI 读取失败：${error.message || "文件格式不支持"}`);
+    setStatus(`乐谱读取失败：${error.message || "文件格式不支持"}`);
     updateAll();
   } finally {
     els.midiFileInput.value = "";
   }
+}
+
+function isMusicXmlFile(file) {
+  const name = (file.name || "").toLowerCase();
+  const type = (file.type || "").toLowerCase();
+  return name.endsWith(".musicxml") ||
+    name.endsWith(".xml") ||
+    type.includes("musicxml") ||
+    type.includes("xml");
 }
 
 function goToMeasure(delta) {
@@ -1029,6 +1049,144 @@ function parseMidiFile(bytes) {
   });
 
   return { measures, ticksPerQuarter, measureTicks, timeSignature, microsecondsPerQuarter, format };
+}
+
+function parseMusicXmlText(text) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length) throw new Error("MusicXML 格式不正确");
+  const score = firstByLocalName(doc, "score-partwise") || firstByLocalName(doc, "score-timewise");
+  if (!score) throw new Error("不是可识别的 MusicXML 文件");
+  if (localName(score) === "score-timewise") throw new Error("暂不支持 timewise MusicXML，请导出 partwise 格式");
+
+  const parts = childrenByLocalName(score, "part");
+  if (!parts.length) throw new Error("MusicXML 没有找到声部");
+
+  const ticksPerQuarter = MIDI_PPQ;
+  const timeSignature = readFirstMusicXmlTime(parts[0]) || { numerator: 4, denominator: 4 };
+  const measureTicks = ticksPerQuarter * timeSignature.numerator * 4 / timeSignature.denominator;
+  const measureCount = Math.max(...parts.map((part) => childrenByLocalName(part, "measure").length));
+  const measures = Array.from({ length: measureCount }, (_, index) => ({
+    index,
+    startTick: index * measureTicks,
+    endTick: (index + 1) * measureTicks,
+    notes: []
+  }));
+
+  parts.forEach((part, partIndex) => {
+    let divisions = 1;
+    childrenByLocalName(part, "measure").forEach((measureNode, measureIndex) => {
+      const measure = measures[measureIndex];
+      if (!measure) return;
+      const divisionText = childText(childByLocalName(measureNode, "attributes"), "divisions");
+      if (divisionText) divisions = Math.max(1, Number(divisionText) || divisions);
+
+      let cursor = measure.startTick;
+      let lastNoteStart = cursor;
+      let noteIndex = 0;
+      [...measureNode.children].forEach((child) => {
+        if (localName(child) === "backup") {
+          cursor = Math.max(measure.startTick, cursor - musicXmlDurationToTicks(child, divisions));
+          return;
+        }
+        if (localName(child) === "forward") {
+          cursor = Math.min(measure.endTick, cursor + musicXmlDurationToTicks(child, divisions));
+          return;
+        }
+        if (localName(child) !== "note") return;
+
+        const durationTicks = Math.max(1, musicXmlDurationToTicks(child, divisions));
+        const isChord = Boolean(childByLocalName(child, "chord"));
+        const startTick = isChord ? lastNoteStart : cursor;
+        const endTick = Math.max(startTick + 1, startTick + durationTicks);
+        const note = musicXmlNoteNumber(child);
+
+        if (note !== null && note >= MIDI_MIN && note <= MIDI_MAX) {
+          const staff = Number(childText(child, "staff") || 0);
+          measures[measureIndex].notes.push({
+            note,
+            startTick,
+            endTick,
+            velocity: 96,
+            channel: 0,
+            trackIndex: partIndex,
+            trackRole: staff === 2 || partIndex > 0 ? "secondary" : "primary",
+            id: `${measureIndex}-xml-${partIndex}-${noteIndex}-${note}-${startTick}`
+          });
+          noteIndex += 1;
+        }
+
+        if (!isChord) {
+          lastNoteStart = startTick;
+          cursor = Math.min(measure.endTick, cursor + durationTicks);
+        }
+      });
+    });
+  });
+
+  measures.forEach((measure) => {
+    measure.notes.sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+  });
+
+  return {
+    measures,
+    ticksPerQuarter,
+    measureTicks,
+    timeSignature,
+    microsecondsPerQuarter: 500000,
+    format: "musicxml"
+  };
+}
+
+function readFirstMusicXmlTime(partNode) {
+  const firstMeasure = childByLocalName(partNode, "measure");
+  const attributes = childByLocalName(firstMeasure, "attributes");
+  const timeNode = childByLocalName(attributes, "time");
+  if (!timeNode) return null;
+  const beats = Number(childText(timeNode, "beats"));
+  const beatType = Number(childText(timeNode, "beat-type"));
+  if (!beats || !beatType) return null;
+  return { numerator: beats, denominator: beatType };
+}
+
+function musicXmlDurationToTicks(node, divisions) {
+  const value = Number(childText(node, "duration") || 0);
+  return Math.round(value / Math.max(1, divisions) * MIDI_PPQ);
+}
+
+function musicXmlNoteNumber(noteNode) {
+  if (childByLocalName(noteNode, "rest")) return null;
+  const pitch = childByLocalName(noteNode, "pitch");
+  if (!pitch) return null;
+  const step = childText(pitch, "step");
+  const octave = Number(childText(pitch, "octave"));
+  const alter = Number(childText(pitch, "alter") || 0);
+  if (!(step in XML_STEP_TO_SEMITONE) || !Number.isFinite(octave)) return null;
+  return (octave + 1) * 12 + XML_STEP_TO_SEMITONE[step] + alter;
+}
+
+function localName(node) {
+  return node?.localName || node?.tagName || "";
+}
+
+function firstByLocalName(node, name) {
+  return [...node.getElementsByTagName("*")].find((child) => localName(child) === name) || null;
+}
+
+function childrenByLocalName(node, name) {
+  if (!node) return [];
+  return [...node.children].filter((child) => localName(child) === name);
+}
+
+function childByLocalName(node, name) {
+  return childrenByLocalName(node, name)[0] || null;
+}
+
+function childText(node, name) {
+  return directText(childByLocalName(node, name));
+}
+
+function directText(node) {
+  return node?.textContent?.trim() || "";
 }
 
 function trackRolesForNotes(notes) {
@@ -1502,7 +1660,7 @@ function setupEvents() {
   els.stopRecordButton.addEventListener("click", stopRecording);
   els.saveRecordButton.addEventListener("click", saveRecording);
   els.loadMidiButton.addEventListener("click", () => els.midiFileInput.click());
-  els.midiFileInput.addEventListener("change", () => loadMidiFile(els.midiFileInput.files[0]));
+  els.midiFileInput.addEventListener("change", () => loadScoreFile(els.midiFileInput.files[0]));
   els.prevMeasureButton.addEventListener("click", () => goToMeasure(-1));
   els.nextMeasureButton.addEventListener("click", () => goToMeasure(1));
   els.playMeasureButton.addEventListener("click", toggleMeasurePlayback);
