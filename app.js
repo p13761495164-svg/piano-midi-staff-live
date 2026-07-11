@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v53";
+const APP_VERSION = "v54";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -12,12 +12,14 @@ const SETTINGS_KEY = "piano-midi-staff-settings";
 const MIDI_PPQ = 480;
 const RECORDING_BPM = 120;
 const DISPLAY_FILENAME_MAX = 50;
+const SUSTAIN_PEDAL_PAGE_DEBOUNCE_MS = 260;
 const SETTINGS_FIELD_KEYS = {
   keySignature: "piano-midi-staff-key-signature",
   showDegrees: "piano-midi-staff-show-degrees",
   noteLabelMode: "piano-midi-staff-note-label-mode",
   selectedInputId: "piano-midi-staff-midi-input",
-  pedalStep: "piano-midi-staff-pedal-step"
+  pedalStep: "piano-midi-staff-pedal-step",
+  sustainPedalPage: "piano-midi-staff-sustain-pedal-page"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const MAJOR_KEY_SIGNATURES = {
@@ -69,6 +71,8 @@ const state = {
   keySignature: "C",
   noteLabelMode: "degree",
   pedalStep: "measure",
+  sustainPedalPage: "off",
+  lastSustainPedalPageAt: 0,
   deferredInstallPrompt: null,
   wakeLock: null,
   practice: {
@@ -124,6 +128,7 @@ const els = {
   keyButtons: [...document.querySelectorAll("[data-key-signature]")],
   modeButtons: [...document.querySelectorAll("[data-label-mode]")],
   pedalStepButtons: [...document.querySelectorAll("[data-pedal-step]")],
+  sustainPedalPageButtons: [...document.querySelectorAll("[data-sustain-pedal-page]")],
   timeSignatureButtons: [...document.querySelectorAll("[data-time-signature]")],
   scoreBoard: document.querySelector(".score-board"),
   staffSvg: document.getElementById("staffSvg"),
@@ -204,11 +209,13 @@ function readSettings() {
     const noteLabelMode = window.localStorage.getItem(SETTINGS_FIELD_KEYS.noteLabelMode);
     const selectedInputId = window.localStorage.getItem(SETTINGS_FIELD_KEYS.selectedInputId);
     const pedalStep = window.localStorage.getItem(SETTINGS_FIELD_KEYS.pedalStep);
+    const sustainPedalPage = window.localStorage.getItem(SETTINGS_FIELD_KEYS.sustainPedalPage);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
     if (selectedInputId !== null) settings.selectedInputId = selectedInputId;
     if (["measure", "half"].includes(pedalStep)) settings.pedalStep = pedalStep;
+    if (["off", "half", "page"].includes(sustainPedalPage)) settings.sustainPedalPage = sustainPedalPage;
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -220,7 +227,8 @@ function saveSettings() {
     keySignature: state.keySignature,
     noteLabelMode: state.noteLabelMode,
     selectedInputId: state.selectedInputId,
-    pedalStep: state.pedalStep
+    pedalStep: state.pedalStep,
+    sustainPedalPage: state.sustainPedalPage
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -229,6 +237,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.noteLabelMode, settings.noteLabelMode);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.selectedInputId, settings.selectedInputId);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.pedalStep, settings.pedalStep);
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.sustainPedalPage, settings.sustainPedalPage);
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -248,6 +257,11 @@ function syncControlsFromState() {
   });
   els.pedalStepButtons.forEach((button) => {
     const active = button.dataset.pedalStep === state.pedalStep;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  els.sustainPedalPageButtons.forEach((button) => {
+    const active = button.dataset.sustainPedalPage === state.sustainPedalPage;
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
@@ -316,6 +330,9 @@ function applySavedSettings() {
   }
   if (["measure", "half"].includes(settings.pedalStep)) {
     state.pedalStep = settings.pedalStep;
+  }
+  if (["off", "half", "page"].includes(settings.sustainPedalPage)) {
+    state.sustainPedalPage = settings.sustainPedalPage;
   }
   syncControlsFromState();
 }
@@ -1639,7 +1656,11 @@ function handleMidiBytes(data) {
 
   if (command === 0xb0 && note === 64) {
     recordMidiEvent("cc", { controller: 64, value });
-    state.sustainDown = value >= 64;
+    const pressed = value >= 64;
+    if (pressed && !state.sustainDown) {
+      advanceBySustainPedalPage();
+    }
+    state.sustainDown = pressed;
     if (!state.sustainDown) releaseSustainedNotes();
     return;
   }
@@ -1660,6 +1681,19 @@ function advanceByPedalStep() {
     return;
   }
   goToMeasure(1);
+}
+
+function advanceBySustainPedalPage() {
+  if (state.sustainPedalPage === "off" || !state.practice.measures.length) return;
+  const now = performance.now();
+  if (now - state.lastSustainPedalPageAt < SUSTAIN_PEDAL_PAGE_DEBOUNCE_MS) return;
+  state.lastSustainPedalPageAt = now;
+
+  if (state.sustainPedalPage === "half") {
+    panPracticeView(0.5);
+    return;
+  }
+  panPracticeView(1);
 }
 
 window.PianoMidiNative = {
@@ -1825,6 +1859,13 @@ function setupEvents() {
   els.pedalStepButtons.forEach((button) => {
     button.addEventListener("click", () => {
       state.pedalStep = button.dataset.pedalStep;
+      syncControlsFromState();
+      saveSettings();
+    });
+  });
+  els.sustainPedalPageButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.sustainPedalPage = button.dataset.sustainPedalPage;
       syncControlsFromState();
       saveSettings();
     });

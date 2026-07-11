@@ -220,6 +220,10 @@ button:disabled {
   width: min(210px, 100%);
 }
 
+.sustain-page-field {
+  width: min(230px, 100%);
+}
+
 .time-field {
   width: min(190px, 100%);
 }
