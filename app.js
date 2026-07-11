@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v63";
+const APP_VERSION = "v64";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -22,7 +22,8 @@ const SETTINGS_FIELD_KEYS = {
   selectedInputId: "piano-midi-staff-midi-input",
   pedalStep: "piano-midi-staff-pedal-step",
   sustainPedalPage: "piano-midi-staff-sustain-pedal-page",
-  autoFollowMode: "piano-midi-staff-auto-follow-mode"
+  autoFollowMode: "piano-midi-staff-auto-follow-mode",
+  looseAutoFollow: "piano-midi-staff-loose-auto-follow"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const MAJOR_KEY_SIGNATURES = {
@@ -78,6 +79,7 @@ const state = {
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
   autoFollowMode: "off",
+  looseAutoFollow: false,
   autoFollow: {
     currentBeatStart: null,
     playedTargetIds: new Set(),
@@ -143,6 +145,7 @@ const els = {
   pedalStepButtons: [...document.querySelectorAll("[data-pedal-step]")],
   sustainPedalPageButtons: [...document.querySelectorAll("[data-sustain-pedal-page]")],
   autoFollowButtons: [...document.querySelectorAll("[data-auto-follow-mode]")],
+  looseAutoFollowButtons: [...document.querySelectorAll("[data-loose-auto-follow]")],
   timeSignatureButtons: [...document.querySelectorAll("[data-time-signature]")],
   scoreBoard: document.querySelector(".score-board"),
   staffSvg: document.getElementById("staffSvg"),
@@ -225,6 +228,7 @@ function readSettings() {
     const pedalStep = window.localStorage.getItem(SETTINGS_FIELD_KEYS.pedalStep);
     const sustainPedalPage = window.localStorage.getItem(SETTINGS_FIELD_KEYS.sustainPedalPage);
     const autoFollowMode = window.localStorage.getItem(SETTINGS_FIELD_KEYS.autoFollowMode);
+    const looseAutoFollow = window.localStorage.getItem(SETTINGS_FIELD_KEYS.looseAutoFollow);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
@@ -232,6 +236,7 @@ function readSettings() {
     if (["measure", "half"].includes(pedalStep)) settings.pedalStep = pedalStep;
     if (["off", "half", "page"].includes(sustainPedalPage)) settings.sustainPedalPage = sustainPedalPage;
     if (["off", "beat"].includes(autoFollowMode)) settings.autoFollowMode = autoFollowMode;
+    if (looseAutoFollow === "true" || looseAutoFollow === "false") settings.looseAutoFollow = looseAutoFollow === "true";
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -245,7 +250,8 @@ function saveSettings() {
     selectedInputId: state.selectedInputId,
     pedalStep: state.pedalStep,
     sustainPedalPage: state.sustainPedalPage,
-    autoFollowMode: state.autoFollowMode
+    autoFollowMode: state.autoFollowMode,
+    looseAutoFollow: state.looseAutoFollow
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -256,6 +262,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.pedalStep, settings.pedalStep);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.sustainPedalPage, settings.sustainPedalPage);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.autoFollowMode, settings.autoFollowMode);
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.looseAutoFollow, String(settings.looseAutoFollow));
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -285,6 +292,11 @@ function syncControlsFromState() {
   });
   els.autoFollowButtons.forEach((button) => {
     const active = button.dataset.autoFollowMode === state.autoFollowMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  els.looseAutoFollowButtons.forEach((button) => {
+    const active = (button.dataset.looseAutoFollow === "on") === state.looseAutoFollow;
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
@@ -359,6 +371,9 @@ function applySavedSettings() {
   }
   if (["off", "beat"].includes(settings.autoFollowMode)) {
     state.autoFollowMode = settings.autoFollowMode;
+  }
+  if (typeof settings.looseAutoFollow === "boolean") {
+    state.looseAutoFollow = settings.looseAutoFollow;
   }
   syncControlsFromState();
 }
@@ -1249,6 +1264,7 @@ function isAutoFollowTargetMatched(target) {
 }
 
 function requiredAutoFollowMatches(targetCount) {
+  if (!state.looseAutoFollow) return targetCount;
   if (targetCount <= 1) return targetCount;
   if (targetCount === 2) return 2;
   return Math.max(1, Math.round(targetCount * 0.75));
@@ -2147,6 +2163,14 @@ function setupEvents() {
       syncControlsFromState();
       saveSettings();
       scheduleAutoFollowEmptyBeatCheck();
+    });
+  });
+  els.looseAutoFollowButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.looseAutoFollow = button.dataset.looseAutoFollow === "on";
+      syncControlsFromState();
+      saveSettings();
+      evaluateAutoFollowBeat();
     });
   });
   els.timeSignatureButtons.forEach((button) => {
