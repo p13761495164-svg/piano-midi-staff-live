@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v57";
+const APP_VERSION = "v58";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -499,28 +499,7 @@ function buildPracticeNoteItems() {
       };
     });
 
-  for (let index = 0; index < items.length;) {
-    const clusterStart = index;
-    index += 1;
-    while (
-      index < items.length &&
-      Math.abs(items[index].x - items[clusterStart].x) < 18 &&
-      items[index].clef === items[index - 1].clef &&
-      items[index].step - items[index - 1].step <= 1
-    ) {
-      index += 1;
-    }
-
-    const cluster = items.slice(clusterStart, index);
-    if (cluster.length > 1) {
-      const spread = 35;
-      cluster.forEach((item, itemIndex) => {
-        item.xOffset = (itemIndex - (cluster.length - 1) / 2) * spread;
-      });
-    }
-  }
-
-  return items.map((item) => ({ ...item, x: item.x + item.xOffset }));
+  return items;
 }
 
 function displayStartTicksForTargets(targets) {
@@ -639,9 +618,8 @@ function durationKindForTicks(durationTicks) {
 }
 
 function drawPracticeNoteShape(svg, item) {
-  const { note, displayNote, x, y, clef, matched, durationKind, targetId } = item;
+  const { note, displayNote, x, y, matched, durationKind, targetId } = item;
   const isFilled = durationKind === "quarter" || durationKind === "eighth" || durationKind === "sixteenth";
-  const hasStem = durationKind !== "whole";
   const classes = ["note-head", "practice-note-head", isFilled ? "filled-note" : "open-note"];
   if (item.trackRole === "secondary") classes.push("secondary-track-note");
   if (matched) classes.push("matched-note");
@@ -656,10 +634,6 @@ function drawPracticeNoteShape(svg, item) {
     "data-note": note,
     "data-display-note": displayNote
   }));
-
-  if (hasStem) {
-    drawStem(svg, x, y, clef, matched, item.trackRole);
-  }
 }
 
 function drawStem(svg, x, y, clef, matched, trackRole = "primary") {
