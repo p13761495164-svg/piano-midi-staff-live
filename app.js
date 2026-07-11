@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v61";
+const APP_VERSION = "v62";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -987,7 +987,7 @@ function recordMidiEvent(type, detail) {
 function saveRecording() {
   if (state.recording.active || !state.recording.events.length) return;
   const bytes = buildMidiFile(state.recording.events);
-  const filename = `piano-midi-take-${String(state.recording.takeNumber).padStart(2, "0")}.mid`;
+  const filename = `${timestampFilename(new Date())}.mid`;
 
   if (window.webkit?.messageHandlers?.midiBridge) {
     window.webkit.messageHandlers.midiBridge.postMessage({
@@ -1012,6 +1012,17 @@ function saveRecording() {
   anchor.remove();
   state.recording.takeNumber += 1;
   setStatus("MIDI 文件已生成");
+}
+
+function timestampFilename(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    pad(date.getHours()),
+    pad(date.getMinutes())
+  ].join("");
 }
 
 function revokeRecordingUrl() {
@@ -1228,8 +1239,15 @@ function evaluateAutoFollowBeat(options = {}) {
     if (options.advanceEmptyBeat) animatePracticeViewToTick((state.practice.viewStartTick || 0) + practiceBeatTicks());
     return;
   }
-  if (!targets.every((target) => state.autoFollow.playedTargetIds.has(target.id))) return;
+  const matchedCount = targets.filter((target) => state.autoFollow.playedTargetIds.has(target.id)).length;
+  if (matchedCount < requiredAutoFollowMatches(targets.length)) return;
   animatePracticeViewToTick((state.practice.viewStartTick || 0) + practiceBeatTicks());
+}
+
+function requiredAutoFollowMatches(targetCount) {
+  if (targetCount <= 1) return targetCount;
+  if (targetCount === 2) return 2;
+  return Math.max(1, Math.round(targetCount * 0.75));
 }
 
 function animatePracticeViewToTick(targetTick) {
