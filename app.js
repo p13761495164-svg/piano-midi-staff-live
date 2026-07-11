@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v52";
+const APP_VERSION = "v53";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -11,6 +11,7 @@ const KEY_RANGE = { min: MIDI_MIN, max: MIDI_MAX };
 const SETTINGS_KEY = "piano-midi-staff-settings";
 const MIDI_PPQ = 480;
 const RECORDING_BPM = 120;
+const DISPLAY_FILENAME_MAX = 50;
 const SETTINGS_FIELD_KEYS = {
   keySignature: "piano-midi-staff-key-signature",
   showDegrees: "piano-midi-staff-show-degrees",
@@ -895,6 +896,12 @@ function isPracticeNoteActive(note) {
   return state.activeNotes.has(note);
 }
 
+function displayFilename(filename, fallback) {
+  const value = String(filename || fallback || "").trim();
+  if (value.length <= DISPLAY_FILENAME_MAX) return value;
+  return `${value.slice(0, DISPLAY_FILENAME_MAX)}...`;
+}
+
 function applyParsedScore(parsed, filename, typeLabel) {
   state.practice.notes = parsed.notes || parsed.measures.flatMap((measure) => measure.notes);
   state.practice.currentMeasure = 0;
@@ -905,8 +912,9 @@ function applyParsedScore(parsed, filename, typeLabel) {
   state.practice.microsecondsPerQuarter = parsed.microsecondsPerQuarter;
   state.practice.viewStartTick = 0;
   state.practice.measures = buildMeasuresFromPracticeNotes(state.practice.notes);
+  const displayName = displayFilename(state.practice.filename, typeLabel);
   setStatus(parsed.measures.length
-    ? `已载入：${state.practice.filename}`
+    ? `已载入：${displayName}`
     : `${typeLabel} 已载入，但没有找到可显示的音符`);
   updateAll();
 }
@@ -1759,6 +1767,26 @@ function handleScoreClickEnd(event) {
   panPracticeView(direction);
 }
 
+function preventPageZoom() {
+  document.addEventListener("touchmove", (event) => {
+    if (event.touches && event.touches.length > 1) {
+      event.preventDefault();
+    }
+  }, { passive: false });
+
+  ["gesturestart", "gesturechange", "gestureend"].forEach((eventName) => {
+    document.addEventListener(eventName, (event) => {
+      event.preventDefault();
+    }, { passive: false });
+  });
+
+  document.addEventListener("wheel", (event) => {
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+    }
+  }, { passive: false });
+}
+
 function setupEvents() {
   els.connectButton.addEventListener("click", connectMidi);
   els.recordButton.addEventListener("click", startRecording);
@@ -1838,6 +1866,7 @@ setupEvents();
 setupPwa();
 setupWakeLock();
 setupScoreClickPaging();
+preventPageZoom();
 buildKeyboard();
 drawStaff();
 autoConnectMidi();
