@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon.svg">
-  <link rel="stylesheet" href="styles.css?v=51">
+  <link rel="stylesheet" href="styles.css?v=52">
 </head>
 <body>
   <main class="app-shell">
@@ -23,7 +23,7 @@
             <h1>Easy Piano</h1>
             <div class="status-row">
               <p id="statusText">等待连接 MIDI 键盘</p>
-              <span id="versionBadge" class="version-badge">v51</span>
+              <span id="versionBadge" class="version-badge">v52</span>
             </div>
           </div>
         </div>
@@ -63,6 +63,14 @@
               <button class="mode-option" type="button" data-pedal-step="half" aria-pressed="false">半小节</button>
             </div>
           </div>
+          <div class="field time-field">
+            <span>拍号</span>
+            <div class="segmented" role="group" aria-label="拍号">
+              <button class="mode-option active" type="button" data-time-signature="4/4" aria-pressed="true">4/4</button>
+              <button class="mode-option" type="button" data-time-signature="3/4" aria-pressed="false">3/4</button>
+              <button class="mode-option" type="button" data-time-signature="6/8" aria-pressed="false">6/8</button>
+            </div>
+          </div>
         </div>
         <div class="field key-field">
           <span>调号</span>
@@ -100,6 +108,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=51"></script>
+  <script src="app.js?v=52"></script>
 </body>
 </html>

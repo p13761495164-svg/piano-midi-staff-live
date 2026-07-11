@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v51";
+const APP_VERSION = "v52";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -72,6 +72,7 @@ const state = {
   wakeLock: null,
   practice: {
     measures: [],
+    notes: [],
     currentMeasure: 0,
     filename: "",
     timeSignature: { numerator: 4, denominator: 4 },
@@ -122,6 +123,7 @@ const els = {
   keyButtons: [...document.querySelectorAll("[data-key-signature]")],
   modeButtons: [...document.querySelectorAll("[data-label-mode]")],
   pedalStepButtons: [...document.querySelectorAll("[data-pedal-step]")],
+  timeSignatureButtons: [...document.querySelectorAll("[data-time-signature]")],
   scoreBoard: document.querySelector(".score-board"),
   staffSvg: document.getElementById("staffSvg"),
   keyboard: document.getElementById("keyboard")
@@ -248,6 +250,25 @@ function syncControlsFromState() {
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
+  els.timeSignatureButtons.forEach((button) => {
+    const active = button.dataset.timeSignature === timeSignatureKey(state.practice.timeSignature);
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+function timeSignatureKey(timeSignature) {
+  const numerator = Math.max(1, Number(timeSignature?.numerator) || 4);
+  const denominator = Math.max(1, Number(timeSignature?.denominator) || 4);
+  return `${numerator}/${denominator}`;
+}
+
+function parseTimeSignatureKey(value) {
+  const [numeratorText, denominatorText] = String(value || "4/4").split("/");
+  return {
+    numerator: Math.max(1, Number(numeratorText) || 4),
+    denominator: Math.max(1, Number(denominatorText) || 4)
+  };
 }
 
 function syncRecordingControls() {
@@ -383,27 +404,17 @@ function drawBeatGrid(svg) {
   state.practice.measures.forEach((measure) => {
     if (measure.endTick <= viewStartTick || measure.startTick >= viewEndTick) return;
 
-    for (let beat = 1; beat < numerator; beat += 1) {
+    for (let beat = 0; beat <= numerator; beat += 1) {
       const tick = measure.startTick + beat * beatTicks;
-      if (tick <= viewStartTick || tick >= viewEndTick) continue;
+      if (tick < viewStartTick || tick > viewEndTick) continue;
       const x = xForTick(tick);
+      const isMeasureEdge = beat === 0 || beat === numerator;
       svg.appendChild(createSvg("line", {
         x1: x,
         y1: BEAT_GRID_TOP_Y,
         x2: x,
         y2: BEAT_GRID_BOTTOM_Y,
-        class: "beat-grid-line"
-      }));
-    }
-
-    if (measure.startTick > viewStartTick && measure.startTick < viewEndTick) {
-      const x = xForTick(measure.startTick);
-      svg.appendChild(createSvg("line", {
-        x1: x,
-        y1: BEAT_GRID_TOP_Y,
-        x2: x,
-        y2: BEAT_GRID_BOTTOM_Y,
-        class: "beat-grid-line measure-grid-line"
+        class: isMeasureEdge ? "beat-grid-line measure-grid-line" : "beat-grid-line"
       }));
     }
   });
@@ -885,7 +896,7 @@ function isPracticeNoteActive(note) {
 }
 
 function applyParsedScore(parsed, filename, typeLabel) {
-  state.practice.measures = parsed.measures;
+  state.practice.notes = parsed.notes || parsed.measures.flatMap((measure) => measure.notes);
   state.practice.currentMeasure = 0;
   state.practice.filename = filename || typeLabel;
   state.practice.timeSignature = parsed.timeSignature;
@@ -893,10 +904,55 @@ function applyParsedScore(parsed, filename, typeLabel) {
   state.practice.measureTicks = parsed.measureTicks;
   state.practice.microsecondsPerQuarter = parsed.microsecondsPerQuarter;
   state.practice.viewStartTick = 0;
+  state.practice.measures = buildMeasuresFromPracticeNotes(state.practice.notes);
   setStatus(parsed.measures.length
     ? `已载入：${state.practice.filename}`
     : `${typeLabel} 已载入，但没有找到可显示的音符`);
   updateAll();
+}
+
+function updatePracticeTimeSignature(timeSignature) {
+  stopMeasurePlayback();
+  state.practice.timeSignature = timeSignature;
+  state.practice.measureTicks = measureTicksForTimeSignature(timeSignature, state.practice.ticksPerQuarter || MIDI_PPQ);
+  state.practice.measures = buildMeasuresFromPracticeNotes(state.practice.notes);
+  state.practice.currentMeasure = Math.max(0, Math.min(
+    state.practice.measures.length - 1,
+    Math.floor((state.practice.viewStartTick || 0) / Math.max(1, state.practice.measureTicks))
+  ));
+  state.practice.viewStartTick = state.practice.currentMeasure * Math.max(1, state.practice.measureTicks);
+  syncControlsFromState();
+  updateAll();
+}
+
+function measureTicksForTimeSignature(timeSignature, ticksPerQuarter) {
+  const numerator = Math.max(1, Number(timeSignature?.numerator) || 4);
+  const denominator = Math.max(1, Number(timeSignature?.denominator) || 4);
+  return Math.max(1, ticksPerQuarter * numerator * 4 / denominator);
+}
+
+function buildMeasuresFromPracticeNotes(notes) {
+  const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+  const validNotes = (notes || [])
+    .filter((note) => note.note >= MIDI_MIN && note.note <= MIDI_MAX)
+    .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+  if (!validNotes.length) return [];
+
+  const lastTick = Math.max(...validNotes.map((note) => Math.max(note.endTick, note.startTick + 1)));
+  const measureCount = Math.max(1, Math.ceil(lastTick / measureTicks));
+  const measures = Array.from({ length: measureCount }, (_, index) => ({
+    index,
+    startTick: index * measureTicks,
+    endTick: (index + 1) * measureTicks,
+    notes: []
+  }));
+
+  validNotes.forEach((note) => {
+    const measureIndex = Math.max(0, Math.min(measures.length - 1, Math.floor(note.startTick / measureTicks)));
+    measures[measureIndex].notes.push(note);
+  });
+
+  return measures;
 }
 
 async function loadScoreFile(file) {
@@ -915,6 +971,7 @@ async function loadScoreFile(file) {
     }
   } catch (error) {
     state.practice.measures = [];
+    state.practice.notes = [];
     state.practice.currentMeasure = 0;
     state.practice.viewStartTick = 0;
     setStatus(`乐谱读取失败：${error.message || "文件格式不支持"}`);
@@ -1437,6 +1494,7 @@ function clampMidiByte(value) {
 }
 
 function updateAll() {
+  syncControlsFromState();
   drawStaff();
   updateKeyboardActive();
   syncPracticeControls();
@@ -1741,6 +1799,11 @@ function setupEvents() {
       state.pedalStep = button.dataset.pedalStep;
       syncControlsFromState();
       saveSettings();
+    });
+  });
+  els.timeSignatureButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      updatePracticeTimeSignature(parseTimeSignatureKey(button.dataset.timeSignature));
     });
   });
   window.addEventListener("pagehide", () => {
