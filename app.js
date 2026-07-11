@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v56";
+const APP_VERSION = "v57";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -14,6 +14,7 @@ const RECORDING_BPM = 120;
 const DISPLAY_FILENAME_MAX = 50;
 const SUSTAIN_PEDAL_PAGE_DEBOUNCE_MS = 260;
 const AUTO_FOLLOW_ANIMATION_MS = 260;
+const ARPEGGIO_DISPLAY_WINDOW_RATIO = 0.125;
 const SETTINGS_FIELD_KEYS = {
   keySignature: "piano-midi-staff-key-signature",
   showDegrees: "piano-midi-staff-show-degrees",
@@ -467,13 +468,15 @@ function buildPracticeNoteItems() {
 
   const viewStartTick = state.practice.viewStartTick || 0;
   const timeSpan = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+  const displayStartById = displayStartTicksForTargets(visibleNotes);
   const items = visibleNotes
     .slice()
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
     .map((target) => {
       const display = displayInfoForPracticeNote(target.note);
       const durationKind = durationKindForTicks(Math.max(1, target.endTick - target.startTick));
-      const progress = Math.max(0, Math.min(1, (target.startTick - viewStartTick) / timeSpan));
+      const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
+      const progress = Math.max(0, Math.min(1, (displayStartTick - viewStartTick) / timeSpan));
       const x = MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
       return {
         note: target.note,
@@ -482,6 +485,7 @@ function buildPracticeNoteItems() {
         step: midiToStaffStep(display.note),
         x,
         startTick: target.startTick,
+        displayStartTick,
         endTick: target.endTick,
         durationKind,
         octaveMark: display.octaveMark,
@@ -517,6 +521,27 @@ function buildPracticeNoteItems() {
   }
 
   return items.map((item) => ({ ...item, x: item.x + item.xOffset }));
+}
+
+function displayStartTicksForTargets(targets) {
+  const map = new Map();
+  const arpeggioWindowTicks = Math.max(1, practiceBeatTicks() * ARPEGGIO_DISPLAY_WINDOW_RATIO);
+  const sorted = targets
+    .slice()
+    .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+
+  let groupStartTick = null;
+  sorted.forEach((target) => {
+    if (
+      groupStartTick === null ||
+      target.startTick - groupStartTick > arpeggioWindowTicks
+    ) {
+      groupStartTick = target.startTick;
+    }
+    map.set(target.id, groupStartTick);
+  });
+
+  return map;
 }
 
 function visiblePracticeTargets() {
