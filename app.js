@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v62";
+const APP_VERSION = "v63";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -987,7 +987,7 @@ function recordMidiEvent(type, detail) {
 function saveRecording() {
   if (state.recording.active || !state.recording.events.length) return;
   const bytes = buildMidiFile(state.recording.events);
-  const filename = `${timestampFilename(new Date())}.mid`;
+  const filename = `EP${timestampFilename(new Date())}.mid`;
 
   if (window.webkit?.messageHandlers?.midiBridge) {
     window.webkit.messageHandlers.midiBridge.postMessage({
@@ -1239,9 +1239,13 @@ function evaluateAutoFollowBeat(options = {}) {
     if (options.advanceEmptyBeat) animatePracticeViewToTick((state.practice.viewStartTick || 0) + practiceBeatTicks());
     return;
   }
-  const matchedCount = targets.filter((target) => state.autoFollow.playedTargetIds.has(target.id)).length;
+  const matchedCount = targets.filter((target) => isAutoFollowTargetMatched(target)).length;
   if (matchedCount < requiredAutoFollowMatches(targets.length)) return;
   animatePracticeViewToTick((state.practice.viewStartTick || 0) + practiceBeatTicks());
+}
+
+function isAutoFollowTargetMatched(target) {
+  return state.autoFollow.playedTargetIds.has(target.id) || isPracticeNoteActive(target.note);
 }
 
 function requiredAutoFollowMatches(targetCount) {
