@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v60";
+const APP_VERSION = "v61";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -1907,9 +1907,6 @@ function handleMidiBytes(data) {
   if (command === 0xb0 && note === 64) {
     recordMidiEvent("cc", { controller: 64, value });
     const pressed = value >= 64;
-    if (pressed && !state.sustainDown) {
-      advanceBySustainPedalPage();
-    }
     state.sustainDown = pressed;
     if (!state.sustainDown) releaseSustainedNotes();
     return;
