@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v58";
+const APP_VERSION = "v59";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -62,6 +62,7 @@ const MEASURE_NOTE_LEFT_X = 500;
 const MEASURE_NOTE_RIGHT_X = 1620;
 const BEAT_GRID_TOP_Y = TREBLE_LINE_YS[0];
 const BEAT_GRID_BOTTOM_Y = BASS_LINE_YS[4];
+const PEDAL_TRACK_Y = 650;
 const LEDGER_OCTAVE_LIMIT = STAFF_STEP_PX * 6;
 
 const state = {
@@ -89,6 +90,7 @@ const state = {
   practice: {
     measures: [],
     notes: [],
+    pedalEvents: [],
     currentMeasure: 0,
     filename: "",
     timeSignature: { numerator: 4, denominator: 4 },
@@ -385,6 +387,7 @@ function drawStaff() {
   const hasPracticeScore = state.practice.measures.length > 0;
   if (hasPracticeScore) {
     drawBeatGrid(svg);
+    drawPedalTrack(svg);
     const practiceItems = buildPracticeNoteItems();
     practiceItems.forEach((item) => drawNote(svg, item));
     drawPracticeOctaveGroups(svg, practiceItems);
@@ -460,6 +463,90 @@ function drawBeatGrid(svg) {
       }));
     }
   });
+}
+
+function drawPedalTrack(svg) {
+  const pedalEvents = state.practice.pedalEvents || [];
+  if (!pedalEvents.length) return;
+
+  const viewStartTick = state.practice.viewStartTick || 0;
+  const viewSpanTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+  const viewEndTick = viewStartTick + viewSpanTicks;
+  const xForTick = (tick) => {
+    const progress = (tick - viewStartTick) / viewSpanTicks;
+    return MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
+  };
+
+  pedalIntervalsForView(viewStartTick, viewEndTick).forEach((interval) => {
+    const startX = xForTick(Math.max(interval.startTick, viewStartTick));
+    const endX = xForTick(Math.min(interval.endTick, viewEndTick));
+    if (endX <= MEASURE_NOTE_LEFT_X || startX >= MEASURE_NOTE_RIGHT_X) return;
+
+    const lineStartX = Math.max(MEASURE_NOTE_LEFT_X, startX + (interval.startsInside ? 56 : 0));
+    const lineEndX = Math.min(MEASURE_NOTE_RIGHT_X, endX);
+    if (interval.startsInside) {
+      const label = createSvg("text", {
+        x: Math.max(MEASURE_NOTE_LEFT_X + 6, startX),
+        y: PEDAL_TRACK_Y + 7,
+        class: "pedal-label"
+      });
+      label.textContent = "Ped.";
+      svg.appendChild(label);
+    }
+
+    if (lineEndX > lineStartX) {
+      svg.appendChild(createSvg("line", {
+        x1: lineStartX,
+        y1: PEDAL_TRACK_Y,
+        x2: lineEndX,
+        y2: PEDAL_TRACK_Y,
+        class: "pedal-line"
+      }));
+    }
+
+    if (interval.endsInside) {
+      svg.appendChild(createSvg("line", {
+        x1: endX,
+        y1: PEDAL_TRACK_Y - 14,
+        x2: endX,
+        y2: PEDAL_TRACK_Y + 10,
+        class: "pedal-release"
+      }));
+    }
+  });
+}
+
+function pedalIntervalsForView(viewStartTick, viewEndTick) {
+  const events = (state.practice.pedalEvents || [])
+    .slice()
+    .sort((a, b) => a.tick - b.tick || a.value - b.value);
+  const intervals = [];
+  let downTick = null;
+
+  events.forEach((event) => {
+    const isDown = event.value >= 64;
+    if (isDown && downTick === null) {
+      downTick = event.tick;
+      return;
+    }
+    if (!isDown && downTick !== null) {
+      intervals.push({ startTick: downTick, endTick: Math.max(event.tick, downTick + 1) });
+      downTick = null;
+    }
+  });
+
+  if (downTick !== null) {
+    const lastMeasure = state.practice.measures[state.practice.measures.length - 1];
+    intervals.push({ startTick: downTick, endTick: Math.max(lastMeasure?.endTick || viewEndTick, downTick + 1) });
+  }
+
+  return intervals
+    .filter((interval) => interval.startTick < viewEndTick && interval.endTick > viewStartTick)
+    .map((interval) => ({
+      ...interval,
+      startsInside: interval.startTick >= viewStartTick && interval.startTick <= viewEndTick,
+      endsInside: interval.endTick >= viewStartTick && interval.endTick <= viewEndTick
+    }));
 }
 
 function buildPracticeNoteItems() {
@@ -946,6 +1033,7 @@ function displayFilename(filename, fallback) {
 function applyParsedScore(parsed, filename, typeLabel) {
   cancelAutoFollowAnimation();
   state.practice.notes = parsed.notes || parsed.measures.flatMap((measure) => measure.notes);
+  state.practice.pedalEvents = parsed.pedalEvents || [];
   state.practice.currentMeasure = 0;
   state.practice.filename = filename || typeLabel;
   state.practice.timeSignature = parsed.timeSignature;
@@ -1028,6 +1116,7 @@ async function loadScoreFile(file) {
     cancelAutoFollowAnimation();
     state.practice.measures = [];
     state.practice.notes = [];
+    state.practice.pedalEvents = [];
     state.practice.currentMeasure = 0;
     state.practice.viewStartTick = 0;
     resetAutoFollowBeat(null);
@@ -1280,6 +1369,7 @@ function parseMidiFile(bytes) {
 
   const ticksPerQuarter = division || MIDI_PPQ;
   const noteEvents = [];
+  const pedalEvents = [];
   let timeSignature = { numerator: 4, denominator: 4 };
   let microsecondsPerQuarter = 500000;
 
@@ -1294,6 +1384,7 @@ function parseMidiFile(bytes) {
 
     const trackResult = parseMidiTrack(bytes, reader.position, trackEnd, ticksPerQuarter);
     noteEvents.push(...trackResult.notes.map((note) => ({ ...note, trackIndex })));
+    pedalEvents.push(...trackResult.pedalEvents.map((event) => ({ ...event, trackIndex })));
     if (trackResult.timeSignature) timeSignature = trackResult.timeSignature;
     if (trackResult.microsecondsPerQuarter) microsecondsPerQuarter = trackResult.microsecondsPerQuarter;
     reader.position = trackEnd;
@@ -1303,7 +1394,7 @@ function parseMidiFile(bytes) {
   const notes = noteEvents
     .filter((item) => item.note >= MIDI_MIN && item.note <= MIDI_MAX)
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
-  if (!notes.length) return { measures: [], ticksPerQuarter, measureTicks, timeSignature, microsecondsPerQuarter, format };
+  if (!notes.length) return { measures: [], pedalEvents, ticksPerQuarter, measureTicks, timeSignature, microsecondsPerQuarter, format };
   const trackRoles = trackRolesForNotes(notes);
 
   const lastTick = Math.max(...notes.map((note) => Math.max(note.endTick, note.startTick + 1)));
@@ -1324,7 +1415,15 @@ function parseMidiFile(bytes) {
     });
   });
 
-  return { measures, ticksPerQuarter, measureTicks, timeSignature, microsecondsPerQuarter, format };
+  return {
+    measures,
+    pedalEvents: pedalEvents.sort((a, b) => a.tick - b.tick || a.value - b.value),
+    ticksPerQuarter,
+    measureTicks,
+    timeSignature,
+    microsecondsPerQuarter,
+    format
+  };
 }
 
 function parseMusicXmlText(text) {
@@ -1405,6 +1504,7 @@ function parseMusicXmlText(text) {
 
   return {
     measures,
+    pedalEvents: [],
     ticksPerQuarter,
     measureTicks,
     timeSignature,
@@ -1491,6 +1591,7 @@ function parseMidiTrack(bytes, start, end) {
   const reader = makeMidiReader(bytes, start);
   const activeNotes = new Map();
   const notes = [];
+  const pedalEvents = [];
   let tick = 0;
   let runningStatus = 0;
   let timeSignature = null;
@@ -1544,6 +1645,8 @@ function parseMidiTrack(bytes, start, end) {
       const stack = activeNotes.get(key);
       const started = stack?.shift();
       if (started) notes.push({ ...started, endTick: Math.max(tick, started.startTick + 1) });
+    } else if (command === 0xb0 && data1 === 64) {
+      pedalEvents.push({ tick, value: data2, channel });
     }
   }
 
@@ -1553,7 +1656,7 @@ function parseMidiTrack(bytes, start, end) {
     });
   });
 
-  return { notes, timeSignature, microsecondsPerQuarter };
+  return { notes, pedalEvents, timeSignature, microsecondsPerQuarter };
 }
 
 function makeMidiReader(bytes, position = 0) {

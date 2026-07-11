@@ -477,6 +477,26 @@ select {
   stroke: #17653a;
 }
 
+.pedal-label {
+  fill: #5f574f;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 28px;
+  font-style: italic;
+  font-weight: 700;
+}
+
+.pedal-line,
+.pedal-release {
+  fill: none;
+  stroke: #8f857a;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.pedal-line {
+  opacity: 0.72;
+}
+
 .octave-mark {
   fill: var(--ink);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
