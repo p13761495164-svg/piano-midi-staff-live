@@ -377,6 +377,20 @@ select {
   stroke-width: 3;
 }
 
+.beat-grid-line {
+  stroke: #bdb4a8;
+  stroke-width: 1.5;
+  stroke-dasharray: 6 10;
+  opacity: 0.58;
+}
+
+.measure-grid-line {
+  stroke: #8f857a;
+  stroke-width: 2;
+  stroke-dasharray: none;
+  opacity: 0.66;
+}
+
 .clef {
   font-family: "Times New Roman", serif;
   font-size: 142px;

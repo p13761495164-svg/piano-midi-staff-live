@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v50";
+const APP_VERSION = "v51";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -54,6 +54,8 @@ const BASS_LINE_YS = [420, 460, 500, 540, 580];
 const NOTE_RADIUS = 20;
 const MEASURE_NOTE_LEFT_X = 500;
 const MEASURE_NOTE_RIGHT_X = 1620;
+const BEAT_GRID_TOP_Y = TREBLE_LINE_YS[0];
+const BEAT_GRID_BOTTOM_Y = BASS_LINE_YS[4];
 const LEDGER_OCTAVE_LIMIT = STAFF_STEP_PX * 6;
 
 const state = {
@@ -319,6 +321,7 @@ function drawStaff() {
 
   const hasPracticeScore = state.practice.measures.length > 0;
   if (hasPracticeScore) {
+    drawBeatGrid(svg);
     const practiceItems = buildPracticeNoteItems();
     practiceItems.forEach((item) => drawNote(svg, item));
     drawPracticeOctaveGroups(svg, practiceItems);
@@ -359,6 +362,50 @@ function drawStaff() {
 
   noteItems.forEach((item) => {
     drawNote(svg, { ...item, x: chordX + item.xOffset });
+  });
+}
+
+function drawBeatGrid(svg) {
+  if (!state.practice.measures.length) return;
+
+  const timeSignature = state.practice.timeSignature || { numerator: 4, denominator: 4 };
+  const numerator = Math.max(1, Number(timeSignature.numerator) || 4);
+  const denominator = Math.max(1, Number(timeSignature.denominator) || 4);
+  const beatTicks = Math.max(1, (state.practice.ticksPerQuarter || MIDI_PPQ) * 4 / denominator);
+  const viewStartTick = state.practice.viewStartTick || 0;
+  const viewSpanTicks = Math.max(1, state.practice.measureTicks || beatTicks * numerator);
+  const viewEndTick = viewStartTick + viewSpanTicks;
+  const xForTick = (tick) => {
+    const progress = (tick - viewStartTick) / viewSpanTicks;
+    return MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
+  };
+
+  state.practice.measures.forEach((measure) => {
+    if (measure.endTick <= viewStartTick || measure.startTick >= viewEndTick) return;
+
+    for (let beat = 1; beat < numerator; beat += 1) {
+      const tick = measure.startTick + beat * beatTicks;
+      if (tick <= viewStartTick || tick >= viewEndTick) continue;
+      const x = xForTick(tick);
+      svg.appendChild(createSvg("line", {
+        x1: x,
+        y1: BEAT_GRID_TOP_Y,
+        x2: x,
+        y2: BEAT_GRID_BOTTOM_Y,
+        class: "beat-grid-line"
+      }));
+    }
+
+    if (measure.startTick > viewStartTick && measure.startTick < viewEndTick) {
+      const x = xForTick(measure.startTick);
+      svg.appendChild(createSvg("line", {
+        x1: x,
+        y1: BEAT_GRID_TOP_Y,
+        x2: x,
+        y2: BEAT_GRID_BOTTOM_Y,
+        class: "beat-grid-line measure-grid-line"
+      }));
+    }
   });
 }
 
