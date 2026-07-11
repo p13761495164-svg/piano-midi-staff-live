@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon.svg">
-  <link rel="stylesheet" href="styles.css?v=59">
+  <link rel="stylesheet" href="styles.css?v=60">
 </head>
 <body>
   <main class="app-shell">
@@ -23,7 +23,7 @@
             <h1>Easy Piano</h1>
             <div class="status-row">
               <p id="statusText">等待连接 MIDI 键盘</p>
-              <span id="versionBadge" class="version-badge">v59</span>
+              <span id="versionBadge" class="version-badge">v60</span>
             </div>
           </div>
         </div>
@@ -57,13 +57,13 @@
             </div>
           </div>
           <div class="field pedal-field">
-            <span>踏板翻页</span>
-            <div class="segmented" role="group" aria-label="踏板翻页">
+            <span>左踏板翻页</span>
+            <div class="segmented" role="group" aria-label="左踏板翻页">
               <button class="mode-option active" type="button" data-pedal-step="measure" aria-pressed="true">一小节</button>
               <button class="mode-option" type="button" data-pedal-step="half" aria-pressed="false">半小节</button>
             </div>
           </div>
-          <div class="field sustain-page-field">
+          <div class="field sustain-page-field hidden">
             <span>延音踏板翻页</span>
             <div class="segmented" role="group" aria-label="延音踏板翻页">
               <button class="mode-option active" type="button" data-sustain-pedal-page="off" aria-pressed="true">关</button>
@@ -123,6 +123,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=59"></script>
+  <script src="app.js?v=60"></script>
 </body>
 </html>
