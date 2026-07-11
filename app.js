@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v54";
+const APP_VERSION = "v55";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -13,13 +13,15 @@ const MIDI_PPQ = 480;
 const RECORDING_BPM = 120;
 const DISPLAY_FILENAME_MAX = 50;
 const SUSTAIN_PEDAL_PAGE_DEBOUNCE_MS = 260;
+const AUTO_FOLLOW_ANIMATION_MS = 260;
 const SETTINGS_FIELD_KEYS = {
   keySignature: "piano-midi-staff-key-signature",
   showDegrees: "piano-midi-staff-show-degrees",
   noteLabelMode: "piano-midi-staff-note-label-mode",
   selectedInputId: "piano-midi-staff-midi-input",
   pedalStep: "piano-midi-staff-pedal-step",
-  sustainPedalPage: "piano-midi-staff-sustain-pedal-page"
+  sustainPedalPage: "piano-midi-staff-sustain-pedal-page",
+  autoFollowMode: "piano-midi-staff-auto-follow-mode"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const MAJOR_KEY_SIGNATURES = {
@@ -73,6 +75,13 @@ const state = {
   pedalStep: "measure",
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
+  autoFollowMode: "off",
+  autoFollow: {
+    currentBeatStart: null,
+    playedTargetIds: new Set(),
+    animationFrame: 0,
+    animating: false
+  },
   deferredInstallPrompt: null,
   wakeLock: null,
   practice: {
@@ -129,6 +138,7 @@ const els = {
   modeButtons: [...document.querySelectorAll("[data-label-mode]")],
   pedalStepButtons: [...document.querySelectorAll("[data-pedal-step]")],
   sustainPedalPageButtons: [...document.querySelectorAll("[data-sustain-pedal-page]")],
+  autoFollowButtons: [...document.querySelectorAll("[data-auto-follow-mode]")],
   timeSignatureButtons: [...document.querySelectorAll("[data-time-signature]")],
   scoreBoard: document.querySelector(".score-board"),
   staffSvg: document.getElementById("staffSvg"),
@@ -210,12 +220,14 @@ function readSettings() {
     const selectedInputId = window.localStorage.getItem(SETTINGS_FIELD_KEYS.selectedInputId);
     const pedalStep = window.localStorage.getItem(SETTINGS_FIELD_KEYS.pedalStep);
     const sustainPedalPage = window.localStorage.getItem(SETTINGS_FIELD_KEYS.sustainPedalPage);
+    const autoFollowMode = window.localStorage.getItem(SETTINGS_FIELD_KEYS.autoFollowMode);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
     if (selectedInputId !== null) settings.selectedInputId = selectedInputId;
     if (["measure", "half"].includes(pedalStep)) settings.pedalStep = pedalStep;
     if (["off", "half", "page"].includes(sustainPedalPage)) settings.sustainPedalPage = sustainPedalPage;
+    if (["off", "beat"].includes(autoFollowMode)) settings.autoFollowMode = autoFollowMode;
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -228,7 +240,8 @@ function saveSettings() {
     noteLabelMode: state.noteLabelMode,
     selectedInputId: state.selectedInputId,
     pedalStep: state.pedalStep,
-    sustainPedalPage: state.sustainPedalPage
+    sustainPedalPage: state.sustainPedalPage,
+    autoFollowMode: state.autoFollowMode
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -238,6 +251,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.selectedInputId, settings.selectedInputId);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.pedalStep, settings.pedalStep);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.sustainPedalPage, settings.sustainPedalPage);
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.autoFollowMode, settings.autoFollowMode);
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -262,6 +276,11 @@ function syncControlsFromState() {
   });
   els.sustainPedalPageButtons.forEach((button) => {
     const active = button.dataset.sustainPedalPage === state.sustainPedalPage;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  els.autoFollowButtons.forEach((button) => {
+    const active = button.dataset.autoFollowMode === state.autoFollowMode;
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
@@ -333,6 +352,9 @@ function applySavedSettings() {
   }
   if (["off", "half", "page"].includes(settings.sustainPedalPage)) {
     state.sustainPedalPage = settings.sustainPedalPage;
+  }
+  if (["off", "beat"].includes(settings.autoFollowMode)) {
+    state.autoFollowMode = settings.autoFollowMode;
   }
   syncControlsFromState();
 }
@@ -820,7 +842,9 @@ function pressNote(note, velocity = 96, source = "midi") {
   recordMidiEvent("noteon", { note, velocity });
   state.releasedWhileSustained.delete(note);
   state.activeNotes.set(note, { velocity, source, startedAt: performance.now() });
+  markAutoFollowNote(note);
   updateAll();
+  evaluateAutoFollowBeat();
 }
 
 function releaseNote(note) {
@@ -920,6 +944,7 @@ function displayFilename(filename, fallback) {
 }
 
 function applyParsedScore(parsed, filename, typeLabel) {
+  cancelAutoFollowAnimation();
   state.practice.notes = parsed.notes || parsed.measures.flatMap((measure) => measure.notes);
   state.practice.currentMeasure = 0;
   state.practice.filename = filename || typeLabel;
@@ -929,6 +954,7 @@ function applyParsedScore(parsed, filename, typeLabel) {
   state.practice.microsecondsPerQuarter = parsed.microsecondsPerQuarter;
   state.practice.viewStartTick = 0;
   state.practice.measures = buildMeasuresFromPracticeNotes(state.practice.notes);
+  resetAutoFollowBeat(0);
   const displayName = displayFilename(state.practice.filename, typeLabel);
   setStatus(parsed.measures.length
     ? `已载入：${displayName}`
@@ -937,6 +963,7 @@ function applyParsedScore(parsed, filename, typeLabel) {
 }
 
 function updatePracticeTimeSignature(timeSignature) {
+  cancelAutoFollowAnimation();
   stopMeasurePlayback();
   state.practice.timeSignature = timeSignature;
   state.practice.measureTicks = measureTicksForTimeSignature(timeSignature, state.practice.ticksPerQuarter || MIDI_PPQ);
@@ -946,6 +973,7 @@ function updatePracticeTimeSignature(timeSignature) {
     Math.floor((state.practice.viewStartTick || 0) / Math.max(1, state.practice.measureTicks))
   ));
   state.practice.viewStartTick = state.practice.currentMeasure * Math.max(1, state.practice.measureTicks);
+  resetAutoFollowBeat(currentAutoFollowBeatStart());
   syncControlsFromState();
   updateAll();
 }
@@ -995,10 +1023,12 @@ async function loadScoreFile(file) {
       applyParsedScore(parsed, name || "MIDI", "MIDI");
     }
   } catch (error) {
+    cancelAutoFollowAnimation();
     state.practice.measures = [];
     state.practice.notes = [];
     state.practice.currentMeasure = 0;
     state.practice.viewStartTick = 0;
+    resetAutoFollowBeat(null);
     setStatus(`乐谱读取失败：${error.message || "文件格式不支持"}`);
     updateAll();
   } finally {
@@ -1019,9 +1049,11 @@ function goToMeasure(delta) {
   if (!state.practice.measures.length) return;
   const next = Math.max(0, Math.min(state.practice.measures.length - 1, state.practice.currentMeasure + delta));
   if (next === state.practice.currentMeasure) return;
+  cancelAutoFollowAnimation();
   stopMeasurePlayback();
   state.practice.currentMeasure = next;
   state.practice.viewStartTick = state.practice.measures[next].startTick;
+  resetAutoFollowBeat(currentAutoFollowBeatStart());
   updateAll();
 }
 
@@ -1032,13 +1064,107 @@ function panPracticeView(deltaMeasures) {
   const maxStart = Math.max(0, lastMeasure.endTick - measureTicks);
   const nextStart = Math.max(0, Math.min(maxStart, (state.practice.viewStartTick || 0) + deltaMeasures * measureTicks));
   if (Math.abs(nextStart - (state.practice.viewStartTick || 0)) < 1) return;
+  cancelAutoFollowAnimation();
   stopMeasurePlayback();
   state.practice.viewStartTick = nextStart;
   state.practice.currentMeasure = Math.max(0, Math.min(
     state.practice.measures.length - 1,
     Math.floor(nextStart / measureTicks)
   ));
+  resetAutoFollowBeat(currentAutoFollowBeatStart());
   updateAll();
+}
+
+function practiceBeatTicks() {
+  const timeSignature = state.practice.timeSignature || { numerator: 4, denominator: 4 };
+  const denominator = Math.max(1, Number(timeSignature.denominator) || 4);
+  return Math.max(1, (state.practice.ticksPerQuarter || MIDI_PPQ) * 4 / denominator);
+}
+
+function currentAutoFollowBeatStart() {
+  const beatTicks = practiceBeatTicks();
+  return Math.floor((state.practice.viewStartTick || 0) / beatTicks) * beatTicks;
+}
+
+function resetAutoFollowBeat(beatStart = null) {
+  state.autoFollow.currentBeatStart = beatStart;
+  state.autoFollow.playedTargetIds = new Set();
+}
+
+function cancelAutoFollowAnimation() {
+  window.cancelAnimationFrame(state.autoFollow.animationFrame);
+  state.autoFollow.animationFrame = 0;
+  state.autoFollow.animating = false;
+}
+
+function targetsForBeat(beatStart) {
+  const beatTicks = practiceBeatTicks();
+  const beatEnd = beatStart + beatTicks;
+  return (state.practice.notes || [])
+    .filter((target) => target.startTick >= beatStart && target.startTick < beatEnd)
+    .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+}
+
+function markAutoFollowNote(note) {
+  if (state.autoFollowMode !== "beat" || !state.practice.measures.length) return;
+  const beatStart = currentAutoFollowBeatStart();
+  if (state.autoFollow.currentBeatStart !== beatStart) resetAutoFollowBeat(beatStart);
+  targetsForBeat(beatStart).forEach((target) => {
+    if (target.note === note) state.autoFollow.playedTargetIds.add(target.id);
+  });
+}
+
+function evaluateAutoFollowBeat() {
+  if (state.autoFollowMode !== "beat" || state.autoFollow.animating || !state.practice.measures.length) return;
+  const beatStart = currentAutoFollowBeatStart();
+  if (state.autoFollow.currentBeatStart !== beatStart) resetAutoFollowBeat(beatStart);
+
+  const targets = targetsForBeat(beatStart);
+  if (!targets.length) return;
+  if (!targets.every((target) => state.autoFollow.playedTargetIds.has(target.id))) return;
+  animatePracticeViewToTick((state.practice.viewStartTick || 0) + practiceBeatTicks());
+}
+
+function animatePracticeViewToTick(targetTick) {
+  if (!state.practice.measures.length) return;
+  const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+  const lastMeasure = state.practice.measures[state.practice.measures.length - 1];
+  const maxStart = Math.max(0, lastMeasure.endTick - measureTicks);
+  const startTick = state.practice.viewStartTick || 0;
+  const endTick = Math.max(0, Math.min(maxStart, targetTick));
+  if (Math.abs(endTick - startTick) < 1) return;
+
+  stopMeasurePlayback();
+  window.cancelAnimationFrame(state.autoFollow.animationFrame);
+  state.autoFollow.animating = true;
+  const startedAt = performance.now();
+
+  const step = (now) => {
+    const progress = Math.min(1, (now - startedAt) / AUTO_FOLLOW_ANIMATION_MS);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    state.practice.viewStartTick = startTick + (endTick - startTick) * eased;
+    state.practice.currentMeasure = Math.max(0, Math.min(
+      state.practice.measures.length - 1,
+      Math.floor(state.practice.viewStartTick / measureTicks)
+    ));
+    updateAll();
+
+    if (progress < 1) {
+      state.autoFollow.animationFrame = window.requestAnimationFrame(step);
+      return;
+    }
+
+    state.practice.viewStartTick = endTick;
+    state.practice.currentMeasure = Math.max(0, Math.min(
+      state.practice.measures.length - 1,
+      Math.floor(endTick / measureTicks)
+    ));
+    state.autoFollow.animating = false;
+    resetAutoFollowBeat(currentAutoFollowBeatStart());
+    updateAll();
+  };
+
+  state.autoFollow.animationFrame = window.requestAnimationFrame(step);
 }
 
 async function toggleMeasurePlayback() {
@@ -1866,6 +1992,14 @@ function setupEvents() {
   els.sustainPedalPageButtons.forEach((button) => {
     button.addEventListener("click", () => {
       state.sustainPedalPage = button.dataset.sustainPedalPage;
+      syncControlsFromState();
+      saveSettings();
+    });
+  });
+  els.autoFollowButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.autoFollowMode = button.dataset.autoFollowMode;
+      resetAutoFollowBeat(currentAutoFollowBeatStart());
       syncControlsFromState();
       saveSettings();
     });
