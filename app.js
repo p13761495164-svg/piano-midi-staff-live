@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v55";
+const APP_VERSION = "v56";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -80,6 +80,7 @@ const state = {
     currentBeatStart: null,
     playedTargetIds: new Set(),
     animationFrame: 0,
+    emptyAdvanceTimer: 0,
     animating: false
   },
   deferredInstallPrompt: null,
@@ -960,6 +961,7 @@ function applyParsedScore(parsed, filename, typeLabel) {
     ? `已载入：${displayName}`
     : `${typeLabel} 已载入，但没有找到可显示的音符`);
   updateAll();
+  scheduleAutoFollowEmptyBeatCheck();
 }
 
 function updatePracticeTimeSignature(timeSignature) {
@@ -976,6 +978,7 @@ function updatePracticeTimeSignature(timeSignature) {
   resetAutoFollowBeat(currentAutoFollowBeatStart());
   syncControlsFromState();
   updateAll();
+  scheduleAutoFollowEmptyBeatCheck();
 }
 
 function measureTicksForTimeSignature(timeSignature, ticksPerQuarter) {
@@ -1055,6 +1058,7 @@ function goToMeasure(delta) {
   state.practice.viewStartTick = state.practice.measures[next].startTick;
   resetAutoFollowBeat(currentAutoFollowBeatStart());
   updateAll();
+  scheduleAutoFollowEmptyBeatCheck();
 }
 
 function panPracticeView(deltaMeasures) {
@@ -1073,6 +1077,7 @@ function panPracticeView(deltaMeasures) {
   ));
   resetAutoFollowBeat(currentAutoFollowBeatStart());
   updateAll();
+  scheduleAutoFollowEmptyBeatCheck();
 }
 
 function practiceBeatTicks() {
@@ -1093,7 +1098,9 @@ function resetAutoFollowBeat(beatStart = null) {
 
 function cancelAutoFollowAnimation() {
   window.cancelAnimationFrame(state.autoFollow.animationFrame);
+  window.clearTimeout(state.autoFollow.emptyAdvanceTimer);
   state.autoFollow.animationFrame = 0;
+  state.autoFollow.emptyAdvanceTimer = 0;
   state.autoFollow.animating = false;
 }
 
@@ -1114,13 +1121,25 @@ function markAutoFollowNote(note) {
   });
 }
 
-function evaluateAutoFollowBeat() {
+function scheduleAutoFollowEmptyBeatCheck() {
+  window.clearTimeout(state.autoFollow.emptyAdvanceTimer);
+  if (state.autoFollowMode !== "beat" || state.autoFollow.animating || !state.practice.measures.length) return;
+  state.autoFollow.emptyAdvanceTimer = window.setTimeout(() => {
+    state.autoFollow.emptyAdvanceTimer = 0;
+    evaluateAutoFollowBeat({ advanceEmptyBeat: true });
+  }, 120);
+}
+
+function evaluateAutoFollowBeat(options = {}) {
   if (state.autoFollowMode !== "beat" || state.autoFollow.animating || !state.practice.measures.length) return;
   const beatStart = currentAutoFollowBeatStart();
   if (state.autoFollow.currentBeatStart !== beatStart) resetAutoFollowBeat(beatStart);
 
   const targets = targetsForBeat(beatStart);
-  if (!targets.length) return;
+  if (!targets.length) {
+    if (options.advanceEmptyBeat) animatePracticeViewToTick((state.practice.viewStartTick || 0) + practiceBeatTicks());
+    return;
+  }
   if (!targets.every((target) => state.autoFollow.playedTargetIds.has(target.id))) return;
   animatePracticeViewToTick((state.practice.viewStartTick || 0) + practiceBeatTicks());
 }
@@ -1136,6 +1155,8 @@ function animatePracticeViewToTick(targetTick) {
 
   stopMeasurePlayback();
   window.cancelAnimationFrame(state.autoFollow.animationFrame);
+  window.clearTimeout(state.autoFollow.emptyAdvanceTimer);
+  state.autoFollow.emptyAdvanceTimer = 0;
   state.autoFollow.animating = true;
   const startedAt = performance.now();
 
@@ -1162,6 +1183,7 @@ function animatePracticeViewToTick(targetTick) {
     state.autoFollow.animating = false;
     resetAutoFollowBeat(currentAutoFollowBeatStart());
     updateAll();
+    scheduleAutoFollowEmptyBeatCheck();
   };
 
   state.autoFollow.animationFrame = window.requestAnimationFrame(step);
@@ -1998,10 +2020,12 @@ function setupEvents() {
   });
   els.autoFollowButtons.forEach((button) => {
     button.addEventListener("click", () => {
+      cancelAutoFollowAnimation();
       state.autoFollowMode = button.dataset.autoFollowMode;
       resetAutoFollowBeat(currentAutoFollowBeatStart());
       syncControlsFromState();
       saveSettings();
+      scheduleAutoFollowEmptyBeatCheck();
     });
   });
   els.timeSignatureButtons.forEach((button) => {
