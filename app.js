@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v69";
+const APP_VERSION = "v70";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -1181,9 +1181,7 @@ function goToPracticeStart() {
 function panPracticeView(deltaMeasures) {
   if (!state.practice.measures.length) return;
   const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
-  const lastMeasure = state.practice.measures[state.practice.measures.length - 1];
-  const maxStart = Math.max(0, lastMeasure.endTick - measureTicks);
-  const nextStart = Math.max(0, Math.min(maxStart, (state.practice.viewStartTick || 0) + deltaMeasures * measureTicks));
+  const nextStart = clampPracticeViewStartTick((state.practice.viewStartTick || 0) + deltaMeasures * measureTicks);
   if (Math.abs(nextStart - (state.practice.viewStartTick || 0)) < 1) return;
   animatePracticeViewToTick(nextStart);
 }
@@ -1194,9 +1192,24 @@ function practiceBeatTicks() {
   return Math.max(1, (state.practice.ticksPerQuarter || MIDI_PPQ) * 4 / denominator);
 }
 
-function currentAutoFollowBeatStart() {
+function maxPracticeViewStartTick() {
+  if (!state.practice.measures.length) return 0;
+  const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+  const lastMeasure = state.practice.measures[state.practice.measures.length - 1];
+  return Math.max(0, lastMeasure.endTick - measureTicks);
+}
+
+function snapTickToBeat(tick) {
   const beatTicks = practiceBeatTicks();
-  return Math.floor((state.practice.viewStartTick || 0) / beatTicks) * beatTicks;
+  return Math.round(Math.max(0, tick) / beatTicks) * beatTicks;
+}
+
+function clampPracticeViewStartTick(tick) {
+  return Math.max(0, Math.min(maxPracticeViewStartTick(), snapTickToBeat(tick)));
+}
+
+function currentAutoFollowBeatStart() {
+  return clampPracticeViewStartTick(state.practice.viewStartTick || 0);
 }
 
 function resetAutoFollowBeat(beatStart = null, options = {}) {
@@ -1309,10 +1322,8 @@ function requiredAutoFollowMatches(targetCount) {
 function animatePracticeViewToTick(targetTick) {
   if (!state.practice.measures.length) return;
   const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
-  const lastMeasure = state.practice.measures[state.practice.measures.length - 1];
-  const maxStart = Math.max(0, lastMeasure.endTick - measureTicks);
   const startTick = state.practice.viewStartTick || 0;
-  const endTick = Math.max(0, Math.min(maxStart, targetTick));
+  const endTick = clampPracticeViewStartTick(targetTick);
   if (Math.abs(endTick - startTick) < 1) return;
 
   stopMeasurePlayback();
