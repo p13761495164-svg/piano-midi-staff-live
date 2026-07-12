@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v66";
+const APP_VERSION = "v67";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -82,7 +82,7 @@ const state = {
   autoFollowTolerance: 10,
   autoFollow: {
     currentBeatStart: null,
-    playedTargetIds: new Set(),
+    playedNotesByBeat: new Map(),
     animationFrame: 0,
     emptyAdvanceTimer: 0,
     animating: false
@@ -1072,7 +1072,7 @@ function applyParsedScore(parsed, filename, typeLabel) {
   state.practice.microsecondsPerQuarter = parsed.microsecondsPerQuarter;
   state.practice.viewStartTick = 0;
   state.practice.measures = buildMeasuresFromPracticeNotes(state.practice.notes);
-  resetAutoFollowBeat(0);
+  resetAutoFollowBeat(0, { clearPlayed: true });
   const displayName = displayFilename(state.practice.filename, typeLabel);
   setStatus(parsed.measures.length
     ? `已载入：${displayName}`
@@ -1092,7 +1092,7 @@ function updatePracticeTimeSignature(timeSignature) {
     Math.floor((state.practice.viewStartTick || 0) / Math.max(1, state.practice.measureTicks))
   ));
   state.practice.viewStartTick = state.practice.currentMeasure * Math.max(1, state.practice.measureTicks);
-  resetAutoFollowBeat(currentAutoFollowBeatStart());
+  resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: true });
   syncControlsFromState();
   updateAll();
   scheduleAutoFollowEmptyBeatCheck();
@@ -1149,7 +1149,7 @@ async function loadScoreFile(file) {
     state.practice.pedalEvents = [];
     state.practice.currentMeasure = 0;
     state.practice.viewStartTick = 0;
-    resetAutoFollowBeat(null);
+    resetAutoFollowBeat(null, { clearPlayed: true });
     setStatus(`乐谱读取失败：${error.message || "文件格式不支持"}`);
     updateAll();
   } finally {
@@ -1199,9 +1199,11 @@ function currentAutoFollowBeatStart() {
   return Math.floor((state.practice.viewStartTick || 0) / beatTicks) * beatTicks;
 }
 
-function resetAutoFollowBeat(beatStart = null) {
+function resetAutoFollowBeat(beatStart = null, options = {}) {
   state.autoFollow.currentBeatStart = beatStart;
-  state.autoFollow.playedTargetIds = new Set();
+  if (options.clearPlayed) {
+    state.autoFollow.playedNotesByBeat = new Map();
+  }
 }
 
 function cancelAutoFollowAnimation() {
@@ -1224,8 +1226,43 @@ function markAutoFollowNote(note) {
   if (state.autoFollowMode !== "beat" || !state.practice.measures.length) return;
   const beatStart = currentAutoFollowBeatStart();
   if (state.autoFollow.currentBeatStart !== beatStart) resetAutoFollowBeat(beatStart);
-  targetsForBeat(beatStart).forEach((target) => {
-    if (target.note === note) state.autoFollow.playedTargetIds.add(target.id);
+  const target = targetForPlayedNote(note, beatStart);
+  if (target) markPlayedNoteForBeat(beatStartForTick(target.startTick), note);
+}
+
+function targetForPlayedNote(note, currentBeatStart) {
+  const beatTicks = practiceBeatTicks();
+  const viewStartTick = state.practice.viewStartTick || 0;
+  const viewEndTick = viewStartTick + Math.max(1, state.practice.measureTicks || beatTicks);
+  const earliestTick = Math.max(0, currentBeatStart - beatTicks * 0.25);
+  const candidates = (state.practice.notes || [])
+    .filter((target) => (
+      target.note === note &&
+      target.startTick >= earliestTick &&
+      target.startTick < viewEndTick
+    ))
+    .sort((a, b) => Math.abs(a.startTick - viewStartTick) - Math.abs(b.startTick - viewStartTick) || a.startTick - b.startTick);
+  return candidates[0] || null;
+}
+
+function beatStartForTick(tick) {
+  const beatTicks = practiceBeatTicks();
+  return Math.floor(Math.max(0, tick) / beatTicks) * beatTicks;
+}
+
+function markPlayedNoteForBeat(beatStart, note) {
+  const key = String(beatStart);
+  if (!state.autoFollow.playedNotesByBeat.has(key)) {
+    state.autoFollow.playedNotesByBeat.set(key, new Set());
+  }
+  state.autoFollow.playedNotesByBeat.get(key).add(note);
+  prunePlayedAutoFollowNotes(beatStart);
+}
+
+function prunePlayedAutoFollowNotes(currentBeatStart) {
+  const keepFrom = currentBeatStart - practiceBeatTicks();
+  [...state.autoFollow.playedNotesByBeat.keys()].forEach((key) => {
+    if (Number(key) < keepFrom) state.autoFollow.playedNotesByBeat.delete(key);
   });
 }
 
@@ -1254,7 +1291,8 @@ function evaluateAutoFollowBeat(options = {}) {
 }
 
 function isAutoFollowTargetMatched(target) {
-  return state.autoFollow.playedTargetIds.has(target.id) || isPracticeNoteActive(target.note);
+  const notes = state.autoFollow.playedNotesByBeat.get(String(beatStartForTick(target.startTick)));
+  return notes?.has(target.note) || false;
 }
 
 function requiredAutoFollowMatches(targetCount) {
@@ -2152,7 +2190,7 @@ function setupEvents() {
     button.addEventListener("click", () => {
       cancelAutoFollowAnimation();
       state.autoFollowMode = button.dataset.autoFollowMode;
-      resetAutoFollowBeat(currentAutoFollowBeatStart());
+      resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: true });
       syncControlsFromState();
       saveSettings();
       scheduleAutoFollowEmptyBeatCheck();
