@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon.svg">
-  <link rel="stylesheet" href="styles.css?v=64">
+  <link rel="stylesheet" href="styles.css?v=65">
 </head>
 <body>
   <main class="app-shell">
@@ -23,7 +23,7 @@
             <h1>Easy Piano</h1>
             <div class="status-row">
               <p id="statusText">等待连接 MIDI 键盘</p>
-              <span id="versionBadge" class="version-badge">v64</span>
+              <span id="versionBadge" class="version-badge">v65</span>
             </div>
           </div>
         </div>
@@ -117,6 +117,7 @@
         <button id="prevMeasureButton" class="measure-nav measure-nav-left" type="button" aria-label="上一小节" disabled>‹</button>
         <button id="nextMeasureButton" class="measure-nav measure-nav-right" type="button" aria-label="下一小节" disabled>›</button>
         <div class="measure-tools" aria-label="小节控制">
+          <button id="startMeasureButton" class="measure-play" type="button" disabled>开头</button>
           <button id="playMeasureButton" class="measure-play" type="button" disabled>播放</button>
           <span id="measureStatus" class="measure-status">实时显示</span>
         </div>
@@ -130,6 +131,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=64"></script>
+  <script src="app.js?v=65"></script>
 </body>
 </html>

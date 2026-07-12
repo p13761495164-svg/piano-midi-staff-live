@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v64";
+const APP_VERSION = "v65";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -135,6 +135,7 @@ const els = {
   installButton: document.getElementById("installButton"),
   prevMeasureButton: document.getElementById("prevMeasureButton"),
   nextMeasureButton: document.getElementById("nextMeasureButton"),
+  startMeasureButton: document.getElementById("startMeasureButton"),
   playMeasureButton: document.getElementById("playMeasureButton"),
   measureStatus: document.getElementById("measureStatus"),
   versionBadge: document.getElementById("versionBadge"),
@@ -331,6 +332,7 @@ function syncPracticeControls() {
   const hasMeasures = state.practice.measures.length > 0;
   els.prevMeasureButton.disabled = !hasMeasures || state.practice.currentMeasure <= 0;
   els.nextMeasureButton.disabled = !hasMeasures || state.practice.currentMeasure >= state.practice.measures.length - 1;
+  els.startMeasureButton.disabled = !hasMeasures || (state.practice.viewStartTick || 0) <= 0;
   const measure = state.practice.measures[state.practice.currentMeasure];
   els.playMeasureButton.disabled = !measure || !measure.notes.length;
   els.playMeasureButton.textContent = state.playback.playing ? "停止" : "播放";
@@ -1166,13 +1168,12 @@ function goToMeasure(delta) {
   if (!state.practice.measures.length) return;
   const next = Math.max(0, Math.min(state.practice.measures.length - 1, state.practice.currentMeasure + delta));
   if (next === state.practice.currentMeasure) return;
-  cancelAutoFollowAnimation();
-  stopMeasurePlayback();
-  state.practice.currentMeasure = next;
-  state.practice.viewStartTick = state.practice.measures[next].startTick;
-  resetAutoFollowBeat(currentAutoFollowBeatStart());
-  updateAll();
-  scheduleAutoFollowEmptyBeatCheck();
+  animatePracticeViewToTick(state.practice.measures[next].startTick);
+}
+
+function goToPracticeStart() {
+  if (!state.practice.measures.length) return;
+  animatePracticeViewToTick(0);
 }
 
 function panPracticeView(deltaMeasures) {
@@ -1182,16 +1183,7 @@ function panPracticeView(deltaMeasures) {
   const maxStart = Math.max(0, lastMeasure.endTick - measureTicks);
   const nextStart = Math.max(0, Math.min(maxStart, (state.practice.viewStartTick || 0) + deltaMeasures * measureTicks));
   if (Math.abs(nextStart - (state.practice.viewStartTick || 0)) < 1) return;
-  cancelAutoFollowAnimation();
-  stopMeasurePlayback();
-  state.practice.viewStartTick = nextStart;
-  state.practice.currentMeasure = Math.max(0, Math.min(
-    state.practice.measures.length - 1,
-    Math.floor(nextStart / measureTicks)
-  ));
-  resetAutoFollowBeat(currentAutoFollowBeatStart());
-  updateAll();
-  scheduleAutoFollowEmptyBeatCheck();
+  animatePracticeViewToTick(nextStart);
 }
 
 function practiceBeatTicks() {
@@ -2115,6 +2107,7 @@ function setupEvents() {
   els.midiFileInput.addEventListener("change", () => loadScoreFile(els.midiFileInput.files[0]));
   els.prevMeasureButton.addEventListener("click", () => goToMeasure(-1));
   els.nextMeasureButton.addEventListener("click", () => goToMeasure(1));
+  els.startMeasureButton.addEventListener("click", goToPracticeStart);
   els.playMeasureButton.addEventListener("click", toggleMeasurePlayback);
   els.fullscreenButton.addEventListener("click", toggleFullscreen);
   els.refreshButton.addEventListener("click", forceRefreshApp);
