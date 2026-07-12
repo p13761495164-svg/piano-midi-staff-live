@@ -1,13 +1,13 @@
 "use strict";
 
-const APP_VERSION = "v74";
+const APP_VERSION = "v75";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
 const LANDSCAPE_VISIBLE_WHITE_KEYS = 42;
 const TABLET_PORTRAIT_VISIBLE_WHITE_KEYS = 28;
 const PHONE_PORTRAIT_VISIBLE_WHITE_KEYS = 21;
-const LEFT_PEDAL_CONTROLLERS = new Set([66, 67]);
+const LEFT_PEDAL_CONTROLLERS = new Set([65, 66, 67, 68]);
 const WHITE_PATTERN = new Set([0, 2, 4, 5, 7, 9, 11]);
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const XML_STEP_TO_SEMITONE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -96,6 +96,7 @@ const I18N = {
     "button.byBeat": "按拍",
     "button.start": "开头",
     "button.play": "播放",
+    "button.pause": "暂停",
     "button.stop": "停止",
     "option.autoSelect": "自动选择",
     "status.waiting": "等待连接 MIDI 键盘",
@@ -118,6 +119,7 @@ const I18N = {
     "status.fullscreenFailed": "无法进入全屏：{message}",
     "status.noMidiInput": "没有发现 MIDI 输入。USB 线或蓝牙 MIDI 配对后再点连接。",
     "status.connected": "已连接：{name}",
+    "status.leftPedalPage": "左踏板翻页：CC{controller}",
     "status.cacheFailed": "页面可使用，但离线缓存注册失败。",
     "status.refreshing": "正在获取最新版本...",
     "status.reloading": "正在重新载入页面..."
@@ -152,6 +154,7 @@ const I18N = {
     "button.byBeat": "拍ごと",
     "button.start": "先頭",
     "button.play": "再生",
+    "button.pause": "一時停止",
     "button.stop": "停止",
     "option.autoSelect": "自動選択",
     "status.waiting": "MIDI キーボード接続待ち",
@@ -174,6 +177,7 @@ const I18N = {
     "status.fullscreenFailed": "全画面にできません：{message}",
     "status.noMidiInput": "MIDI 入力が見つかりません。USB または Bluetooth MIDI を接続してからもう一度押してください。",
     "status.connected": "接続済み：{name}",
+    "status.leftPedalPage": "左ペダル送り：CC{controller}",
     "status.cacheFailed": "ページは使用できますが、オフラインキャッシュ登録に失敗しました。",
     "status.refreshing": "最新版を取得中...",
     "status.reloading": "ページを再読み込み中..."
@@ -208,6 +212,7 @@ const I18N = {
     "button.byBeat": "By Beat",
     "button.start": "Start",
     "button.play": "Play",
+    "button.pause": "Pause",
     "button.stop": "Stop",
     "option.autoSelect": "Auto Select",
     "status.waiting": "Waiting for MIDI keyboard",
@@ -230,6 +235,7 @@ const I18N = {
     "status.fullscreenFailed": "Could not enter fullscreen: {message}",
     "status.noMidiInput": "No MIDI input found. Connect USB or Bluetooth MIDI, then tap Connect again.",
     "status.connected": "Connected: {name}",
+    "status.leftPedalPage": "Left pedal page: CC{controller}",
     "status.cacheFailed": "The page works, but offline cache registration failed.",
     "status.refreshing": "Getting the latest version...",
     "status.reloading": "Reloading page..."
@@ -299,7 +305,12 @@ const state = {
     audioContext: null,
     activeNodes: [],
     stopTimer: 0,
-    playing: false
+    animationFrame: 0,
+    playing: false,
+    startTick: 0,
+    endTick: 0,
+    startedAtAudioTime: 0,
+    secondsPerTick: 0
   },
   scorePointer: {
     active: false,
@@ -331,6 +342,7 @@ const els = {
   nextMeasureButton: document.getElementById("nextMeasureButton"),
   startMeasureButton: document.getElementById("startMeasureButton"),
   playMeasureButton: document.getElementById("playMeasureButton"),
+  pausePlaybackButton: document.getElementById("pausePlaybackButton"),
   measureStatus: document.getElementById("measureStatus"),
   versionBadge: document.getElementById("versionBadge"),
   languageLabel: document.getElementById("languageLabel"),
@@ -397,6 +409,8 @@ function applyLanguage() {
   updateText(els.refreshButton, t("button.refresh"));
   updateText(els.installButton, t("button.install"));
   updateText(els.startMeasureButton, t("button.start"));
+  updateText(els.playMeasureButton, t("button.play"));
+  updateText(els.pausePlaybackButton, t("button.pause"));
 
   document.querySelector('[data-label-mode="degree"]').textContent = t("button.degree");
   document.querySelector('[data-label-mode="pitch"]').textContent = t("button.pitch");
@@ -608,9 +622,10 @@ function syncPracticeControls() {
   els.prevMeasureButton.disabled = !hasMeasures || state.practice.currentMeasure <= 0;
   els.nextMeasureButton.disabled = !hasMeasures || state.practice.currentMeasure >= state.practice.measures.length - 1;
   els.startMeasureButton.disabled = !hasMeasures || (state.practice.viewStartTick || 0) <= 0;
-  const measure = state.practice.measures[state.practice.currentMeasure];
-  els.playMeasureButton.disabled = !measure || !measure.notes.length;
-  els.playMeasureButton.textContent = state.playback.playing ? t("button.stop") : t("button.play");
+  els.playMeasureButton.disabled = !hasMeasures || state.playback.playing;
+  els.playMeasureButton.textContent = t("button.play");
+  els.pausePlaybackButton.disabled = !state.playback.playing;
+  els.pausePlaybackButton.textContent = t("button.pause");
 
   if (!hasMeasures) {
     els.measureStatus.textContent = t("status.live");
@@ -1663,18 +1678,8 @@ function animatePracticeViewToTick(targetTick) {
   state.autoFollow.animationFrame = window.requestAnimationFrame(step);
 }
 
-async function toggleMeasurePlayback() {
-  if (state.playback.playing) {
-    stopMeasurePlayback();
-    syncPracticeControls();
-    return;
-  }
-  await playCurrentMeasure();
-}
-
-async function playCurrentMeasure() {
-  const measure = state.practice.measures[state.practice.currentMeasure];
-  if (!measure || !measure.notes.length) return;
+async function startContinuousPlayback() {
+  if (!state.practice.measures.length || state.playback.playing) return;
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextClass) {
     setStatusKey("status.playUnsupported");
@@ -1692,22 +1697,64 @@ async function playCurrentMeasure() {
 
   const secondsPerTick = (state.practice.microsecondsPerQuarter || 500000) / 1000000 / (state.practice.ticksPerQuarter || MIDI_PPQ);
   const startAt = audioContext.currentTime + 0.06;
-  const measureStart = measure.startTick;
-  const measureDuration = Math.max(0.1, (measure.endTick - measure.startTick) * secondsPerTick);
+  const playbackStartTick = currentAutoFollowBeatStart();
+  const lastMeasure = state.practice.measures[state.practice.measures.length - 1];
+  const playbackEndTick = Math.max(playbackStartTick + 1, lastMeasure?.endTick || playbackStartTick + practiceBeatTicks());
+  const playbackDuration = Math.max(0.1, (playbackEndTick - playbackStartTick) * secondsPerTick);
 
   state.playback.playing = true;
   state.playback.activeNodes = [];
-  measure.notes.forEach((target) => {
-    const noteStart = Math.max(0, (target.startTick - measureStart) * secondsPerTick);
-    const noteDuration = Math.max(0.08, (target.endTick - target.startTick) * secondsPerTick);
-    schedulePracticeTone(audioContext, target.note, startAt + noteStart, noteDuration);
-  });
+  state.playback.startTick = playbackStartTick;
+  state.playback.endTick = playbackEndTick;
+  state.playback.startedAtAudioTime = startAt;
+  state.playback.secondsPerTick = secondsPerTick;
 
+  state.practice.notes
+    .filter((target) => target.endTick > playbackStartTick && target.startTick < playbackEndTick)
+    .forEach((target) => {
+      const audibleStartTick = Math.max(target.startTick, playbackStartTick);
+      const audibleEndTick = Math.min(target.endTick, playbackEndTick);
+      const noteStart = Math.max(0, (audibleStartTick - playbackStartTick) * secondsPerTick);
+      const noteDuration = Math.max(0.08, (audibleEndTick - audibleStartTick) * secondsPerTick);
+      schedulePracticeTone(audioContext, target.note, startAt + noteStart, noteDuration);
+    });
+
+  animatePlaybackView();
   state.playback.stopTimer = window.setTimeout(() => {
     stopMeasurePlayback();
     syncPracticeControls();
-  }, Math.ceil((measureDuration + 0.22) * 1000));
+  }, Math.ceil((playbackDuration + 0.22) * 1000));
   syncPracticeControls();
+}
+
+function animatePlaybackView() {
+  window.cancelAnimationFrame(state.playback.animationFrame);
+  const audioContext = state.playback.audioContext;
+  if (!audioContext) return;
+
+  const step = () => {
+    if (!state.playback.playing) return;
+    const elapsed = Math.max(0, audioContext.currentTime - state.playback.startedAtAudioTime);
+    const playbackTick = state.playback.startTick + elapsed / Math.max(0.000001, state.playback.secondsPerTick);
+    const viewTick = Math.min(maxPracticeViewStartTick(), playbackTick);
+    const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+    state.practice.viewStartTick = viewTick;
+    state.practice.currentMeasure = Math.max(0, Math.min(
+      state.practice.measures.length - 1,
+      Math.floor(viewTick / measureTicks)
+    ));
+    updateAll();
+
+    if (playbackTick >= state.playback.endTick) {
+      stopMeasurePlayback();
+      syncPracticeControls();
+      return;
+    }
+
+    state.playback.animationFrame = window.requestAnimationFrame(step);
+  };
+
+  state.playback.animationFrame = window.requestAnimationFrame(step);
 }
 
 function schedulePracticeTone(audioContext, note, startAt, duration) {
@@ -1727,6 +1774,8 @@ function schedulePracticeTone(audioContext, note, startAt, duration) {
 }
 
 function stopMeasurePlayback() {
+  window.cancelAnimationFrame(state.playback.animationFrame);
+  state.playback.animationFrame = 0;
   if (state.playback.stopTimer) {
     window.clearTimeout(state.playback.stopTimer);
     state.playback.stopTimer = 0;
@@ -2277,7 +2326,55 @@ function handleMidiMessage(event) {
 }
 
 function handleMidiBytes(data) {
-  const [status, note, value] = data;
+  const bytes = Array.from(data || [])
+    .map((byte) => Number(byte) & 0xff)
+    .filter((byte) => Number.isFinite(byte));
+  let index = 0;
+  let runningStatus = 0;
+
+  while (index < bytes.length) {
+    let status = bytes[index];
+
+    if (status >= 0xf8) {
+      index += 1;
+      continue;
+    }
+
+    if (status >= 0x80) {
+      runningStatus = status;
+      index += 1;
+    } else if (runningStatus) {
+      status = runningStatus;
+    } else {
+      index += 1;
+      continue;
+    }
+
+    const dataLength = midiDataLengthForStatus(status);
+    if (!dataLength) {
+      runningStatus = 0;
+      while (index < bytes.length && bytes[index] < 0x80) index += 1;
+      continue;
+    }
+    if (index + dataLength > bytes.length) break;
+
+    const note = bytes[index];
+    const value = dataLength > 1 ? bytes[index + 1] : 0;
+    handleMidiCommand(status, note, value);
+    index += dataLength;
+  }
+}
+
+function midiDataLengthForStatus(status) {
+  const command = status & 0xf0;
+  if (command === 0xc0 || command === 0xd0) return 1;
+  if (command >= 0x80 && command <= 0xe0) return 2;
+  if (status === 0xf1 || status === 0xf3) return 1;
+  if (status === 0xf2) return 2;
+  return 0;
+}
+
+function handleMidiCommand(status, note, value) {
   const command = status & 0xf0;
 
   if (command === 0x90 && value > 0) {
@@ -2302,6 +2399,7 @@ function handleMidiBytes(data) {
     recordMidiEvent("cc", { controller: note, value });
     const pressed = value >= 64;
     if (pressed && !state.softPedalDown) {
+      setStatusKey("status.leftPedalPage", { controller: note });
       advanceByPedalStep();
     }
     state.softPedalDown = pressed;
@@ -2466,7 +2564,11 @@ function setupEvents() {
   els.prevMeasureButton.addEventListener("click", () => goToMeasure(-1));
   els.nextMeasureButton.addEventListener("click", () => goToMeasure(1));
   els.startMeasureButton.addEventListener("click", goToPracticeStart);
-  els.playMeasureButton.addEventListener("click", toggleMeasurePlayback);
+  els.playMeasureButton.addEventListener("click", startContinuousPlayback);
+  els.pausePlaybackButton.addEventListener("click", () => {
+    stopMeasurePlayback();
+    syncPracticeControls();
+  });
   els.fullscreenButton.addEventListener("click", toggleFullscreen);
   els.refreshButton.addEventListener("click", forceRefreshApp);
   document.addEventListener("fullscreenchange", syncFullscreenButton);

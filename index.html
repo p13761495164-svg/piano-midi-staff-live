@@ -9,21 +9,21 @@
   <meta name="apple-mobile-web-app-title" content="Easy Piano">
   <title>Easy Piano</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon.png?v=74" type="image/png">
-  <link rel="apple-touch-icon" href="icons/icon.png?v=74">
-  <link rel="stylesheet" href="styles.css?v=74">
+  <link rel="icon" href="icons/icon.png?v=75" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon.png?v=75">
+  <link rel="stylesheet" href="styles.css?v=75">
 </head>
 <body>
   <main class="app-shell">
     <section class="stage" aria-label="实时钢琴 MIDI 显示">
       <div class="topbar">
         <div class="brand">
-          <img class="brand-mark" src="icons/icon.png?v=74" alt="" aria-hidden="true">
+          <img class="brand-mark" src="icons/icon.png?v=75" alt="" aria-hidden="true">
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
               <p id="statusText">等待连接 MIDI 键盘</p>
-              <span id="versionBadge" class="version-badge">v74</span>
+              <span id="versionBadge" class="version-badge">v75</span>
             </div>
           </div>
         </div>
@@ -126,6 +126,7 @@
         <div class="measure-tools" aria-label="小节控制">
           <button id="startMeasureButton" class="measure-play" type="button" disabled>开头</button>
           <button id="playMeasureButton" class="measure-play" type="button" disabled>播放</button>
+          <button id="pausePlaybackButton" class="measure-play" type="button" disabled>暂停</button>
           <span id="measureStatus" class="measure-status">实时显示</span>
         </div>
         <svg id="staffSvg" viewBox="0 0 1760 720" role="img" aria-labelledby="staffTitle">
@@ -138,6 +139,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=74"></script>
+  <script src="app.js?v=75"></script>
 </body>
 </html>
