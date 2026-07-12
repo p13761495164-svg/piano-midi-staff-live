@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v70";
+const APP_VERSION = "v71";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -23,7 +23,8 @@ const SETTINGS_FIELD_KEYS = {
   pedalStep: "piano-midi-staff-pedal-step",
   sustainPedalPage: "piano-midi-staff-sustain-pedal-page",
   autoFollowMode: "piano-midi-staff-auto-follow-mode",
-  autoFollowTolerance: "piano-midi-staff-auto-follow-tolerance"
+  autoFollowTolerance: "piano-midi-staff-auto-follow-tolerance",
+  timeSignature: "piano-midi-staff-time-signature"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const MAJOR_KEY_SIGNATURES = {
@@ -79,7 +80,7 @@ const state = {
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
   autoFollowMode: "off",
-  autoFollowTolerance: 10,
+  autoFollowTolerance: 50,
   autoFollow: {
     currentBeatStart: null,
     playedNotesByBeat: new Map(),
@@ -231,6 +232,7 @@ function readSettings() {
     const sustainPedalPage = window.localStorage.getItem(SETTINGS_FIELD_KEYS.sustainPedalPage);
     const autoFollowMode = window.localStorage.getItem(SETTINGS_FIELD_KEYS.autoFollowMode);
     const autoFollowTolerance = window.localStorage.getItem(SETTINGS_FIELD_KEYS.autoFollowTolerance);
+    const timeSignature = window.localStorage.getItem(SETTINGS_FIELD_KEYS.timeSignature);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
@@ -239,6 +241,7 @@ function readSettings() {
     if (["off", "half", "page"].includes(sustainPedalPage)) settings.sustainPedalPage = sustainPedalPage;
     if (["off", "beat"].includes(autoFollowMode)) settings.autoFollowMode = autoFollowMode;
     if (autoFollowTolerance !== null) settings.autoFollowTolerance = clampTolerance(autoFollowTolerance);
+    if (/^\d+\/\d+$/.test(timeSignature || "")) settings.timeSignature = timeSignature;
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -253,7 +256,8 @@ function saveSettings() {
     pedalStep: state.pedalStep,
     sustainPedalPage: state.sustainPedalPage,
     autoFollowMode: state.autoFollowMode,
-    autoFollowTolerance: state.autoFollowTolerance
+    autoFollowTolerance: state.autoFollowTolerance,
+    timeSignature: timeSignatureKey(state.practice.timeSignature)
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -265,6 +269,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.sustainPedalPage, settings.sustainPedalPage);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.autoFollowMode, settings.autoFollowMode);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.autoFollowTolerance, String(settings.autoFollowTolerance));
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.timeSignature, settings.timeSignature);
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -378,6 +383,10 @@ function applySavedSettings() {
   }
   if (Number.isFinite(settings.autoFollowTolerance)) {
     state.autoFollowTolerance = clampTolerance(settings.autoFollowTolerance);
+  }
+  if (typeof settings.timeSignature === "string") {
+    state.practice.timeSignature = parseTimeSignatureKey(settings.timeSignature);
+    state.practice.measureTicks = measureTicksForTimeSignature(state.practice.timeSignature, state.practice.ticksPerQuarter || MIDI_PPQ);
   }
   syncControlsFromState();
 }
@@ -2216,6 +2225,7 @@ function setupEvents() {
   els.toleranceSlider.addEventListener("input", () => {
     state.autoFollowTolerance = clampTolerance(els.toleranceSlider.value);
     syncControlsFromState();
+    saveSettings();
     evaluateAutoFollowBeat();
   });
   els.toleranceSlider.addEventListener("change", () => {
@@ -2227,6 +2237,7 @@ function setupEvents() {
   els.timeSignatureButtons.forEach((button) => {
     button.addEventListener("click", () => {
       updatePracticeTimeSignature(parseTimeSignatureKey(button.dataset.timeSignature));
+      saveSettings();
     });
   });
   window.addEventListener("pagehide", () => {

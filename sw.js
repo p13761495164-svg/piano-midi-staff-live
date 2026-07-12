@@ -1,11 +1,11 @@
 "use strict";
 
-const CACHE_NAME = "easy-piano-v70";
+const CACHE_NAME = "easy-piano-v71";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=70",
-  "./app.js?v=70",
+  "./styles.css?v=71",
+  "./app.js?v=71",
   "./manifest.webmanifest",
   "./icons/icon.svg"
 ];
