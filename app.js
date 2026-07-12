@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v68";
+const APP_VERSION = "v69";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -350,7 +350,7 @@ function syncPracticeControls() {
   const startMeasure = Math.max(1, Math.floor((state.practice.viewStartTick || 0) / measureTicks) + 1);
   const endMeasure = Math.min(total, Math.floor(((state.practice.viewStartTick || 0) + measureTicks - 1) / measureTicks) + 1);
   const rangeLabel = startMeasure === endMeasure ? `${startMeasure}` : `${startMeasure}-${endMeasure}`;
-  const matched = visibleNotes.filter((note) => isPracticeTargetMatched(note)).length;
+  const matched = visibleNotes.filter((note) => isAutoFollowTargetMatched(note)).length;
   els.measureStatus.textContent = `${rangeLabel} / ${total} 小节 · ${matched}/${visibleNotes.length}`;
 }
 
@@ -596,7 +596,7 @@ function buildPracticeNoteItems() {
         durationKind,
         octaveMark: display.octaveMark,
         targetId: target.id,
-        matched: isPracticeTargetMatched(target),
+        matched: isPracticeNoteActive(target.note),
         isPractice: true,
         trackIndex: target.trackIndex ?? 0,
         channel: target.channel ?? 0,
@@ -958,7 +958,7 @@ function releaseNote(note) {
     recordMidiEvent("noteoff", { note, velocity: 0 });
   }
   if (state.sustainDown) {
-    state.releasedWhileSustained.add(note);
+    if (state.activeNotes.has(note)) state.releasedWhileSustained.add(note);
     return;
   }
   state.activeNotes.delete(note);
@@ -1299,13 +1299,6 @@ function evaluateAutoFollowBeat(options = {}) {
 function isAutoFollowTargetMatched(target) {
   const notes = state.autoFollow.playedNotesByBeat.get(String(beatStartForTick(target.startTick)));
   return notes?.has(target.note) || false;
-}
-
-function isPracticeTargetMatched(target) {
-  if (state.autoFollowMode === "beat" && state.practice.measures.length) {
-    return isAutoFollowTargetMatched(target);
-  }
-  return isPracticeNoteActive(target.note);
 }
 
 function requiredAutoFollowMatches(targetCount) {
