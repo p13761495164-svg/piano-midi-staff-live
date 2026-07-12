@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v77";
+const APP_VERSION = "v78";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -9,15 +9,49 @@ const TABLET_PORTRAIT_VISIBLE_WHITE_KEYS = 28;
 const PHONE_PORTRAIT_VISIBLE_WHITE_KEYS = 21;
 const LEFT_PEDAL_CONTROLLERS = new Set([65, 66, 67, 68, 69]);
 const HARDWARE_PEDAL_KEYS = new Set([
+  "ArrowLeft",
   "ArrowRight",
+  "ArrowUp",
   "ArrowDown",
+  "PageUp",
   "PageDown",
   " ",
   "Spacebar",
   "Enter",
   "NumpadEnter",
+  "Unidentified",
   "MediaPlayPause"
 ]);
+const HARDWARE_PEDAL_CODES = new Set([
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "PageUp",
+  "PageDown",
+  "Space",
+  "Enter",
+  "NumpadEnter",
+  "MediaPlayPause",
+  "75",
+  "78",
+  "79",
+  "80",
+  "81",
+  "82",
+  "40",
+  "44",
+  "88",
+  "89",
+  "select",
+  "playPause",
+  "leftArrow",
+  "rightArrow",
+  "upArrow",
+  "downArrow",
+  "Unidentified"
+]);
+const HARDWARE_PEDAL_DEBOUNCE_MS = 420;
 const WHITE_PATTERN = new Set([0, 2, 4, 5, 7, 9, 11]);
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const XML_STEP_TO_SEMITONE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -131,6 +165,7 @@ const I18N = {
     "status.connected": "已连接：{name}",
     "status.leftPedalSignal": "左踏板信号：CC{controller}={value}",
     "status.leftPedalPage": "左踏板翻页：CC{controller}",
+    "status.hardwareKeySignal": "硬件按键：{key} / {code} / {phase}",
     "status.leftPedalKeyPage": "左踏板翻页：按键 {key}",
     "status.cacheFailed": "页面可使用，但离线缓存注册失败。",
     "status.refreshing": "正在获取最新版本...",
@@ -191,6 +226,7 @@ const I18N = {
     "status.connected": "接続済み：{name}",
     "status.leftPedalSignal": "左ペダル信号：CC{controller}={value}",
     "status.leftPedalPage": "左ペダル送り：CC{controller}",
+    "status.hardwareKeySignal": "ハードキー：{key} / {code} / {phase}",
     "status.leftPedalKeyPage": "左ペダル送り：キー {key}",
     "status.cacheFailed": "ページは使用できますが、オフラインキャッシュ登録に失敗しました。",
     "status.refreshing": "最新版を取得中...",
@@ -251,6 +287,7 @@ const I18N = {
     "status.connected": "Connected: {name}",
     "status.leftPedalSignal": "Left pedal signal: CC{controller}={value}",
     "status.leftPedalPage": "Left pedal page: CC{controller}",
+    "status.hardwareKeySignal": "Hardware key: {key} / {code} / {phase}",
     "status.leftPedalKeyPage": "Left pedal page: key {key}",
     "status.cacheFailed": "The page works, but offline cache registration failed.",
     "status.refreshing": "Getting the latest version...",
@@ -294,6 +331,7 @@ const state = {
   pedalStep: "measure",
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
+  lastHardwarePedalAt: 0,
   autoFollowMode: "off",
   autoFollowTolerance: 50,
   autoFollow: {
@@ -2466,6 +2504,9 @@ window.PianoMidiNative = {
   receiveMidiMessage(data) {
     handleMidiBytes(data);
   },
+  receiveHardwareKey(data) {
+    handleHardwarePedalInput(data);
+  },
   setMidiStatus(text) {
     setStatus(text);
   }
@@ -2569,17 +2610,40 @@ function handleScoreClickEnd(event) {
 }
 
 function setupHardwarePedalKeys() {
-  window.addEventListener("keydown", (event) => {
+  const handleKeyEvent = (event) => {
     const target = event.target;
     if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) return;
     if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
     const key = event.key === " " || event.code === "Space" ? " " : event.key;
-    if (!HARDWARE_PEDAL_KEYS.has(key)) return;
+    const code = event.code || "";
+    const handled = handleHardwarePedalInput({ key, code, phase: event.type });
+    if (handled) event.preventDefault();
+  };
 
-    event.preventDefault();
-    setStatusKey("status.leftPedalKeyPage", { key: event.key || event.code || "hardware" });
-    advanceByPedalStep();
-  });
+  window.addEventListener("keydown", handleKeyEvent);
+  window.addEventListener("keyup", handleKeyEvent);
+}
+
+function handleHardwarePedalInput(data) {
+  const key = String(data?.key || "Unidentified");
+  const code = String(data?.code || "");
+  const phase = String(data?.phase || "native");
+  setStatusKey("status.hardwareKeySignal", { key, code: code || "-", phase });
+
+  if (!isHardwarePedalKey(key, code)) return false;
+  const now = performance.now();
+  if (now - state.lastHardwarePedalAt < HARDWARE_PEDAL_DEBOUNCE_MS) return true;
+
+  state.lastHardwarePedalAt = now;
+  setStatusKey("status.leftPedalKeyPage", { key: key || code || "hardware" });
+  advanceByPedalStep();
+  return true;
+}
+
+function isHardwarePedalKey(key, code) {
+  if (HARDWARE_PEDAL_KEYS.has(key) || HARDWARE_PEDAL_CODES.has(code)) return true;
+  if (key === "Unidentified" || code === "Unidentified") return true;
+  return /^[0-9]+$/.test(code);
 }
 
 function preventPageZoom() {
