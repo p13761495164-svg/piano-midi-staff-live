@@ -1,9 +1,10 @@
 "use strict";
 
-const APP_VERSION = "v71";
+const APP_VERSION = "v72";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
-const WHITE_KEY_WIDTH_PX = 38;
+const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
+const VISIBLE_OCTAVE_WHITE_KEYS = 42;
 const WHITE_PATTERN = new Set([0, 2, 4, 5, 7, 9, 11]);
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const XML_STEP_TO_SEMITONE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -24,7 +25,8 @@ const SETTINGS_FIELD_KEYS = {
   sustainPedalPage: "piano-midi-staff-sustain-pedal-page",
   autoFollowMode: "piano-midi-staff-auto-follow-mode",
   autoFollowTolerance: "piano-midi-staff-auto-follow-tolerance",
-  timeSignature: "piano-midi-staff-time-signature"
+  timeSignature: "piano-midi-staff-time-signature",
+  language: "piano-midi-staff-language"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const MAJOR_KEY_SIGNATURES = {
@@ -55,6 +57,181 @@ const KEY_SIGNATURE_ORDER = {
   "#": ["F", "C", "G", "D", "A", "E", "B"],
   b: ["B", "E", "A", "D", "G", "C", "F"]
 };
+const LANGUAGE_LABELS = {
+  zh: "中文",
+  ja: "日本語",
+  en: "EN"
+};
+const I18N = {
+  zh: {
+    "label.language": "语言",
+    "label.midiInput": "MIDI 输入",
+    "label.noteMark": "音符标记",
+    "label.leftPedal": "左踏板翻页",
+    "label.sustainPedal": "延音踏板翻页",
+    "label.autoFollow": "自动跟随",
+    "label.tolerance": "容错",
+    "label.timeSignature": "拍号",
+    "label.keySignature": "调号",
+    "button.connect": "连接 MIDI",
+    "button.record": "录 MIDI",
+    "button.stopRecord": "停止 MIDI",
+    "button.saveRecord": "保存 MIDI",
+    "button.loadScore": "载入乐谱",
+    "button.fullscreen": "全屏",
+    "button.exitFullscreen": "退出全屏",
+    "button.refresh": "更新",
+    "button.install": "安装",
+    "button.degree": "级数",
+    "button.pitch": "音高",
+    "button.none": "无",
+    "button.measure": "一小节",
+    "button.halfMeasure": "半小节",
+    "button.off": "关",
+    "button.halfPage": "半页",
+    "button.page": "一页",
+    "button.byBeat": "按拍",
+    "button.start": "开头",
+    "button.play": "播放",
+    "button.stop": "停止",
+    "option.autoSelect": "自动选择",
+    "status.waiting": "等待连接 MIDI 键盘",
+    "status.live": "实时显示",
+    "status.measure": "{range} / {total} 小节 · {matched}/{visible}",
+    "status.recording": "录制中...",
+    "status.recorded": "录制完成：{count} 个音，点击保存 MIDI",
+    "status.recordedEmpty": "录制完成：没有记录到音符",
+    "status.savingIos": "正在打开 iOS 保存面板...",
+    "status.midiGenerated": "MIDI 文件已生成",
+    "status.loaded": "已载入：{name}",
+    "status.loadedEmpty": "{type} 已载入，但没有找到可显示的音符",
+    "status.loadFailed": "乐谱读取失败：{message}",
+    "status.playUnsupported": "当前浏览器不支持网页播放。",
+    "status.connectingIos": "正在连接 iOS MIDI...",
+    "status.webMidiUnsupported": "iPad Safari 不能让网页读取 MIDI。蓝牙键盘已连接也只能给原生 CoreMIDI App 使用；请用电脑 Chrome/Edge，或做 iPad 原生版。",
+    "status.requestingMidi": "正在请求 MIDI 权限...",
+    "status.midiDenied": "MIDI 权限未开启：{message}",
+    "status.fullscreenUnsupported": "当前浏览器不支持网页全屏，可以尝试添加到主屏幕使用。",
+    "status.fullscreenFailed": "无法进入全屏：{message}",
+    "status.noMidiInput": "没有发现 MIDI 输入。USB 线或蓝牙 MIDI 配对后再点连接。",
+    "status.connected": "已连接：{name}",
+    "status.cacheFailed": "页面可使用，但离线缓存注册失败。",
+    "status.refreshing": "正在获取最新版本...",
+    "status.reloading": "正在重新载入页面..."
+  },
+  ja: {
+    "label.language": "言語",
+    "label.midiInput": "MIDI 入力",
+    "label.noteMark": "音符表示",
+    "label.leftPedal": "左ペダル送り",
+    "label.sustainPedal": "サステイン送り",
+    "label.autoFollow": "自動追従",
+    "label.tolerance": "許容",
+    "label.timeSignature": "拍子",
+    "label.keySignature": "調号",
+    "button.connect": "MIDI 接続",
+    "button.record": "MIDI 録音",
+    "button.stopRecord": "録音停止",
+    "button.saveRecord": "MIDI 保存",
+    "button.loadScore": "楽譜を読む",
+    "button.fullscreen": "全画面",
+    "button.exitFullscreen": "全画面終了",
+    "button.refresh": "更新",
+    "button.install": "インストール",
+    "button.degree": "度数",
+    "button.pitch": "音名",
+    "button.none": "なし",
+    "button.measure": "1小節",
+    "button.halfMeasure": "半小節",
+    "button.off": "オフ",
+    "button.halfPage": "半ページ",
+    "button.page": "1ページ",
+    "button.byBeat": "拍ごと",
+    "button.start": "先頭",
+    "button.play": "再生",
+    "button.stop": "停止",
+    "option.autoSelect": "自動選択",
+    "status.waiting": "MIDI キーボード接続待ち",
+    "status.live": "リアルタイム表示",
+    "status.measure": "{range} / {total} 小節 · {matched}/{visible}",
+    "status.recording": "録音中...",
+    "status.recorded": "録音完了：{count} 音。MIDI を保存できます",
+    "status.recordedEmpty": "録音完了：音符は記録されませんでした",
+    "status.savingIos": "iOS 保存画面を開いています...",
+    "status.midiGenerated": "MIDI ファイルを生成しました",
+    "status.loaded": "読み込みました：{name}",
+    "status.loadedEmpty": "{type} を読み込みましたが、表示できる音符がありません",
+    "status.loadFailed": "楽譜の読み込みに失敗：{message}",
+    "status.playUnsupported": "このブラウザは再生に対応していません。",
+    "status.connectingIos": "iOS MIDI に接続中...",
+    "status.webMidiUnsupported": "iPad Safari では Web MIDI を読み取れません。Bluetooth キーボードはネイティブ CoreMIDI App で使用できます。PC の Chrome/Edge、または iPad ネイティブ版を使ってください。",
+    "status.requestingMidi": "MIDI 権限を要求中...",
+    "status.midiDenied": "MIDI 権限がありません：{message}",
+    "status.fullscreenUnsupported": "このブラウザは全画面表示に対応していません。ホーム画面に追加して使ってみてください。",
+    "status.fullscreenFailed": "全画面にできません：{message}",
+    "status.noMidiInput": "MIDI 入力が見つかりません。USB または Bluetooth MIDI を接続してからもう一度押してください。",
+    "status.connected": "接続済み：{name}",
+    "status.cacheFailed": "ページは使用できますが、オフラインキャッシュ登録に失敗しました。",
+    "status.refreshing": "最新版を取得中...",
+    "status.reloading": "ページを再読み込み中..."
+  },
+  en: {
+    "label.language": "Language",
+    "label.midiInput": "MIDI Input",
+    "label.noteMark": "Note Label",
+    "label.leftPedal": "Left Pedal Page",
+    "label.sustainPedal": "Sustain Pedal Page",
+    "label.autoFollow": "Auto Follow",
+    "label.tolerance": "Tolerance",
+    "label.timeSignature": "Time Signature",
+    "label.keySignature": "Key",
+    "button.connect": "Connect MIDI",
+    "button.record": "Record MIDI",
+    "button.stopRecord": "Stop MIDI",
+    "button.saveRecord": "Save MIDI",
+    "button.loadScore": "Load Score",
+    "button.fullscreen": "Fullscreen",
+    "button.exitFullscreen": "Exit Fullscreen",
+    "button.refresh": "Update",
+    "button.install": "Install",
+    "button.degree": "Degree",
+    "button.pitch": "Pitch",
+    "button.none": "None",
+    "button.measure": "Measure",
+    "button.halfMeasure": "Half",
+    "button.off": "Off",
+    "button.halfPage": "Half Page",
+    "button.page": "Page",
+    "button.byBeat": "By Beat",
+    "button.start": "Start",
+    "button.play": "Play",
+    "button.stop": "Stop",
+    "option.autoSelect": "Auto Select",
+    "status.waiting": "Waiting for MIDI keyboard",
+    "status.live": "Live View",
+    "status.measure": "{range} / {total} measures · {matched}/{visible}",
+    "status.recording": "Recording...",
+    "status.recorded": "Recorded {count} notes. Save MIDI when ready",
+    "status.recordedEmpty": "Recording finished: no notes captured",
+    "status.savingIos": "Opening iOS save panel...",
+    "status.midiGenerated": "MIDI file generated",
+    "status.loaded": "Loaded: {name}",
+    "status.loadedEmpty": "{type} loaded, but no displayable notes were found",
+    "status.loadFailed": "Score load failed: {message}",
+    "status.playUnsupported": "This browser does not support web playback.",
+    "status.connectingIos": "Connecting iOS MIDI...",
+    "status.webMidiUnsupported": "iPad Safari cannot read Web MIDI. A Bluetooth keyboard can be used by native CoreMIDI apps. Use Chrome/Edge on a computer, or the native iPad app.",
+    "status.requestingMidi": "Requesting MIDI permission...",
+    "status.midiDenied": "MIDI permission is not enabled: {message}",
+    "status.fullscreenUnsupported": "This browser does not support web fullscreen. Try adding it to the Home Screen.",
+    "status.fullscreenFailed": "Could not enter fullscreen: {message}",
+    "status.noMidiInput": "No MIDI input found. Connect USB or Bluetooth MIDI, then tap Connect again.",
+    "status.connected": "Connected: {name}",
+    "status.cacheFailed": "The page works, but offline cache registration failed.",
+    "status.refreshing": "Getting the latest version...",
+    "status.reloading": "Reloading page..."
+  }
+};
 const STAFF_VIEWBOX = { width: 1760, height: 720 };
 const STAFF_STEP_PX = 20;
 const TREBLE_LINE_YS = [180, 220, 260, 300, 340];
@@ -67,8 +244,21 @@ const BEAT_GRID_BOTTOM_Y = BASS_LINE_YS[4];
 const PEDAL_TRACK_Y = 650;
 const LEDGER_OCTAVE_LIMIT = STAFF_STEP_PX * 6;
 
+function detectDeviceLanguage() {
+  const language = String(navigator.language || navigator.userLanguage || "en").toLowerCase();
+  if (language.startsWith("zh")) return "zh";
+  if (language.startsWith("ja")) return "ja";
+  return "en";
+}
+
+function normalizeLanguage(language) {
+  return Object.prototype.hasOwnProperty.call(I18N, language) ? language : "en";
+}
+
 const state = {
   midiAccess: null,
+  language: detectDeviceLanguage(),
+  statusMessage: { key: "status.waiting", params: {} },
   selectedInputId: "",
   activeNotes: new Map(),
   releasedWhileSustained: new Set(),
@@ -140,6 +330,8 @@ const els = {
   playMeasureButton: document.getElementById("playMeasureButton"),
   measureStatus: document.getElementById("measureStatus"),
   versionBadge: document.getElementById("versionBadge"),
+  languageLabel: document.getElementById("languageLabel"),
+  languageButtons: [...document.querySelectorAll("[data-language]")],
   inputField: document.querySelector(".input-field"),
   inputSelect: document.getElementById("inputSelect"),
   keyButtons: [...document.querySelectorAll("[data-key-signature]")],
@@ -158,6 +350,75 @@ const els = {
 function noteName(note) {
   const octave = Math.floor(note / 12) - 1;
   return `${NOTE_NAMES[note % 12]}${octave}`;
+}
+
+function t(key, params = {}) {
+  const dictionary = I18N[state.language] || I18N.en;
+  const template = dictionary[key] || I18N.en[key] || key;
+  return template.replace(/\{(\w+)\}/g, (_, name) => (
+    Object.prototype.hasOwnProperty.call(params, name) ? params[name] : ""
+  ));
+}
+
+function setStatusKey(key, params = {}) {
+  state.statusMessage = { key, params };
+  els.statusText.textContent = t(key, params);
+}
+
+function updateText(node, text) {
+  if (node) node.textContent = text;
+}
+
+function applyLanguage() {
+  state.language = normalizeLanguage(state.language);
+  document.documentElement.lang = state.language === "zh" ? "zh-Hans" : state.language;
+  document.title = "Easy Piano";
+
+  updateText(els.languageLabel, t("label.language"));
+  updateText(document.querySelector(".input-field span"), t("label.midiInput"));
+  updateText(document.querySelector(".mode-field span"), t("label.noteMark"));
+  updateText(document.querySelector(".pedal-field span"), t("label.leftPedal"));
+  updateText(document.querySelector(".sustain-page-field span"), t("label.sustainPedal"));
+  updateText(document.querySelector(".auto-follow-field span"), t("label.autoFollow"));
+  updateText(document.querySelector(".tolerance-field span"), `${t("label.tolerance")} `);
+  els.toleranceValue.textContent = `${state.autoFollowTolerance}%`;
+  document.querySelector(".tolerance-field span").appendChild(els.toleranceValue);
+  updateText(document.querySelector(".time-field span"), t("label.timeSignature"));
+  updateText(document.querySelector(".key-field span"), t("label.keySignature"));
+
+  updateText(els.connectButton, t("button.connect"));
+  updateText(els.recordButton, t("button.record"));
+  updateText(els.stopRecordButton, t("button.stopRecord"));
+  updateText(els.saveRecordButton, t("button.saveRecord"));
+  updateText(els.loadMidiButton, t("button.loadScore"));
+  updateText(els.refreshButton, t("button.refresh"));
+  updateText(els.installButton, t("button.install"));
+  updateText(els.startMeasureButton, t("button.start"));
+
+  document.querySelector('[data-label-mode="degree"]').textContent = t("button.degree");
+  document.querySelector('[data-label-mode="pitch"]').textContent = t("button.pitch");
+  document.querySelector('[data-label-mode="none"]').textContent = t("button.none");
+  document.querySelector('[data-pedal-step="measure"]').textContent = t("button.measure");
+  document.querySelector('[data-pedal-step="half"]').textContent = t("button.halfMeasure");
+  document.querySelector('[data-sustain-pedal-page="off"]').textContent = t("button.off");
+  document.querySelector('[data-sustain-pedal-page="half"]').textContent = t("button.halfPage");
+  document.querySelector('[data-sustain-pedal-page="page"]').textContent = t("button.page");
+  document.querySelector('[data-auto-follow-mode="off"]').textContent = t("button.off");
+  document.querySelector('[data-auto-follow-mode="beat"]').textContent = t("button.byBeat");
+
+  els.inputSelect.options[0].textContent = t("option.autoSelect");
+  els.languageButtons.forEach((button) => {
+    const active = button.dataset.language === state.language;
+    button.textContent = LANGUAGE_LABELS[button.dataset.language] || button.dataset.language;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+
+  syncFullscreenButton();
+  syncPracticeControls();
+  if (state.statusMessage?.key) {
+    setStatusKey(state.statusMessage.key, state.statusMessage.params);
+  }
 }
 
 function accidentalForNote(note) {
@@ -233,6 +494,7 @@ function readSettings() {
     const autoFollowMode = window.localStorage.getItem(SETTINGS_FIELD_KEYS.autoFollowMode);
     const autoFollowTolerance = window.localStorage.getItem(SETTINGS_FIELD_KEYS.autoFollowTolerance);
     const timeSignature = window.localStorage.getItem(SETTINGS_FIELD_KEYS.timeSignature);
+    const language = window.localStorage.getItem(SETTINGS_FIELD_KEYS.language);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
@@ -242,6 +504,7 @@ function readSettings() {
     if (["off", "beat"].includes(autoFollowMode)) settings.autoFollowMode = autoFollowMode;
     if (autoFollowTolerance !== null) settings.autoFollowTolerance = clampTolerance(autoFollowTolerance);
     if (/^\d+\/\d+$/.test(timeSignature || "")) settings.timeSignature = timeSignature;
+    if (language) settings.language = normalizeLanguage(language);
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -257,7 +520,8 @@ function saveSettings() {
     sustainPedalPage: state.sustainPedalPage,
     autoFollowMode: state.autoFollowMode,
     autoFollowTolerance: state.autoFollowTolerance,
-    timeSignature: timeSignatureKey(state.practice.timeSignature)
+    timeSignature: timeSignatureKey(state.practice.timeSignature),
+    language: state.language
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -270,6 +534,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.autoFollowMode, settings.autoFollowMode);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.autoFollowTolerance, String(settings.autoFollowTolerance));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.timeSignature, settings.timeSignature);
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.language, settings.language);
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -342,10 +607,10 @@ function syncPracticeControls() {
   els.startMeasureButton.disabled = !hasMeasures || (state.practice.viewStartTick || 0) <= 0;
   const measure = state.practice.measures[state.practice.currentMeasure];
   els.playMeasureButton.disabled = !measure || !measure.notes.length;
-  els.playMeasureButton.textContent = state.playback.playing ? "停止" : "播放";
+  els.playMeasureButton.textContent = state.playback.playing ? t("button.stop") : t("button.play");
 
   if (!hasMeasures) {
-    els.measureStatus.textContent = "实时显示";
+    els.measureStatus.textContent = t("status.live");
     return;
   }
 
@@ -356,11 +621,19 @@ function syncPracticeControls() {
   const endMeasure = Math.min(total, Math.floor(((state.practice.viewStartTick || 0) + measureTicks - 1) / measureTicks) + 1);
   const rangeLabel = startMeasure === endMeasure ? `${startMeasure}` : `${startMeasure}-${endMeasure}`;
   const matched = visibleNotes.filter((note) => isAutoFollowTargetMatched(note)).length;
-  els.measureStatus.textContent = `${rangeLabel} / ${total} 小节 · ${matched}/${visibleNotes.length}`;
+  els.measureStatus.textContent = t("status.measure", {
+    range: rangeLabel,
+    total,
+    matched,
+    visible: visibleNotes.length
+  });
 }
 
 function applySavedSettings() {
   const settings = readSettings();
+  if (typeof settings.language === "string") {
+    state.language = normalizeLanguage(settings.language);
+  }
   if (MAJOR_KEY_SIGNATURES[settings.keySignature]) {
     state.keySignature = settings.keySignature;
   }
@@ -890,18 +1163,19 @@ function buildKeyboard() {
   for (let note = min; note <= max; note += 1) {
     if (isWhite(note)) whiteNotes.push(note);
   }
-  const whiteWidth = 100 / whiteNotes.length;
+  const whiteWidth = keyboardWhiteWidth();
   const whiteIndex = new Map(whiteNotes.map((note, index) => [note, index]));
 
   els.keyboard.replaceChildren();
-  els.keyboard.style.minWidth = `${whiteNotes.length * WHITE_KEY_WIDTH_PX}px`;
+  els.keyboard.style.width = `${whiteNotes.length * whiteWidth}px`;
+  els.keyboard.style.minWidth = `${whiteNotes.length * whiteWidth}px`;
 
   for (let note = min; note <= max; note += 1) {
     if (!isWhite(note)) continue;
     const key = makeKey(note, "white-key");
     const left = whiteIndex.get(note) * whiteWidth;
-    key.style.left = `${left}%`;
-    key.style.width = `${whiteWidth}%`;
+    key.style.left = `${left}px`;
+    key.style.width = `${whiteWidth}px`;
     els.keyboard.appendChild(key);
   }
 
@@ -912,12 +1186,17 @@ function buildKeyboard() {
     const left = (whiteIndex.get(previousWhite) + 0.72) * whiteWidth;
     const blackWidth = whiteWidth * 0.598;
     const key = makeKey(note, "black-key");
-    key.style.left = `${left}%`;
-    key.style.width = `${blackWidth}%`;
+    key.style.left = `${left}px`;
+    key.style.width = `${blackWidth}px`;
     els.keyboard.appendChild(key);
   }
   updateKeyboardActive();
   requestAnimationFrame(centerKeyboardOnMiddleC);
+}
+
+function keyboardWhiteWidth() {
+  const boardWidth = els.keyboard.parentElement?.clientWidth || window.innerWidth || 1024;
+  return Math.max(18, Math.min(DEFAULT_WHITE_KEY_WIDTH_PX, boardWidth / VISIBLE_OCTAVE_WHITE_KEYS));
 }
 
 function centerKeyboardOnMiddleC() {
@@ -938,9 +1217,10 @@ function makeKey(note, className) {
   const key = document.createElement("button");
   key.type = "button";
   key.className = `key ${className}`;
+  if (note === 60) key.classList.add("middle-c-key");
   key.dataset.note = String(note);
   key.setAttribute("aria-label", noteName(note));
-  key.textContent = className === "black-key" ? "" : note % 12 === 0 ? noteName(note) : "";
+  key.textContent = className === "black-key" ? "" : note === 60 ? "C4" : note % 12 === 0 ? noteName(note) : "";
   key.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     key.setPointerCapture(event.pointerId);
@@ -989,7 +1269,7 @@ function startRecording() {
   state.recording.startedAt = performance.now();
   state.recording.events = [];
   syncRecordingControls();
-  setStatus("录制中...");
+  setStatusKey("status.recording");
 }
 
 function stopRecording() {
@@ -1000,7 +1280,7 @@ function stopRecording() {
   state.recording.active = false;
   syncRecordingControls();
   const count = state.recording.events.filter((event) => event.type === "noteon").length;
-  setStatus(count ? `录制完成：${count} 个音，点击保存 MIDI` : "录制完成：没有记录到音符");
+  setStatusKey(count ? "status.recorded" : "status.recordedEmpty", { count });
 }
 
 function recordMidiEvent(type, detail) {
@@ -1024,7 +1304,7 @@ function saveRecording() {
       base64: bytesToBase64(bytes)
     });
     state.recording.takeNumber += 1;
-    setStatus("正在打开 iOS 保存面板...");
+    setStatusKey("status.savingIos");
     return;
   }
 
@@ -1039,7 +1319,7 @@ function saveRecording() {
   anchor.click();
   anchor.remove();
   state.recording.takeNumber += 1;
-  setStatus("MIDI 文件已生成");
+  setStatusKey("status.midiGenerated");
 }
 
 function timestampFilename(date) {
@@ -1083,9 +1363,10 @@ function applyParsedScore(parsed, filename, typeLabel) {
   state.practice.measures = buildMeasuresFromPracticeNotes(state.practice.notes);
   resetAutoFollowBeat(0, { clearPlayed: true });
   const displayName = displayFilename(state.practice.filename, typeLabel);
-  setStatus(parsed.measures.length
-    ? `已载入：${displayName}`
-    : `${typeLabel} 已载入，但没有找到可显示的音符`);
+  setStatusKey(parsed.measures.length ? "status.loaded" : "status.loadedEmpty", {
+    name: displayName,
+    type: typeLabel
+  });
   updateAll();
   scheduleAutoFollowEmptyBeatCheck();
 }
@@ -1159,7 +1440,7 @@ async function loadScoreFile(file) {
     state.practice.currentMeasure = 0;
     state.practice.viewStartTick = 0;
     resetAutoFollowBeat(null, { clearPlayed: true });
-    setStatus(`乐谱读取失败：${error.message || "文件格式不支持"}`);
+    setStatusKey("status.loadFailed", { message: error.message || "文件格式不支持" });
     updateAll();
   } finally {
     els.midiFileInput.value = "";
@@ -1385,7 +1666,7 @@ async function playCurrentMeasure() {
   if (!measure || !measure.notes.length) return;
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextClass) {
-    setStatus("当前浏览器不支持网页播放。");
+    setStatusKey("status.playUnsupported");
     return;
   }
 
@@ -1878,26 +2159,26 @@ function updateKeyboardActive() {
 async function connectMidi() {
   els.connectButton.disabled = true;
   if (window.webkit?.messageHandlers?.midiBridge) {
-    setStatus("正在连接 iOS MIDI...");
+    setStatusKey("status.connectingIos");
     window.webkit.messageHandlers.midiBridge.postMessage({ type: "connect" });
     els.connectButton.disabled = false;
     return;
   }
 
   if (!("requestMIDIAccess" in navigator)) {
-    setStatus("iPad Safari 不能让网页读取 MIDI。蓝牙键盘已连接也只能给原生 CoreMIDI App 使用；请用电脑 Chrome/Edge，或做 iPad 原生版。");
+    setStatusKey("status.webMidiUnsupported");
     els.connectButton.disabled = false;
     return;
   }
 
   try {
-    setStatus("正在请求 MIDI 权限...");
+    setStatusKey("status.requestingMidi");
     state.midiAccess = await navigator.requestMIDIAccess({ sysex: false });
     state.midiAccess.onstatechange = refreshMidiInputs;
     refreshMidiInputs();
     attachSelectedInput();
   } catch (error) {
-    setStatus(`MIDI 权限未开启：${error.message || "浏览器拒绝访问"}`);
+    setStatusKey("status.midiDenied", { message: error.message || "浏览器拒绝访问" });
   } finally {
     els.connectButton.disabled = false;
   }
@@ -1927,23 +2208,23 @@ async function toggleFullscreen() {
     } else if (target.webkitRequestFullscreen) {
       target.webkitRequestFullscreen();
     } else {
-      setStatus("当前浏览器不支持网页全屏，可以尝试添加到主屏幕使用。");
+      setStatusKey("status.fullscreenUnsupported");
     }
   } catch (error) {
-    setStatus(`无法进入全屏：${error.message || "浏览器需要手动允许"}`);
+    setStatusKey("status.fullscreenFailed", { message: error.message || "浏览器需要手动允许" });
   }
 }
 
 function syncFullscreenButton() {
   const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
-  els.fullscreenButton.textContent = fullscreenElement ? "退出全屏" : "全屏";
+  els.fullscreenButton.textContent = fullscreenElement ? t("button.exitFullscreen") : t("button.fullscreen");
 }
 
 function refreshMidiInputs() {
   const previous = state.selectedInputId || els.inputSelect.value;
   const inputs = [...state.midiAccess.inputs.values()];
   els.inputField.classList.toggle("hidden", inputs.length <= 1);
-  els.inputSelect.replaceChildren(new Option("自动选择", ""));
+  els.inputSelect.replaceChildren(new Option(t("option.autoSelect"), ""));
   inputs.forEach((input) => {
     const label = input.name || input.manufacturer || input.id;
     els.inputSelect.appendChild(new Option(label, input.id));
@@ -1972,12 +2253,12 @@ function attachSelectedInput() {
   state.selectedInputId = selectedId;
   saveSettings();
   if (!input) {
-    setStatus("没有发现 MIDI 输入。USB 线或蓝牙 MIDI 配对后再点连接。");
+    setStatusKey("status.noMidiInput");
     return;
   }
 
   input.onmidimessage = handleMidiMessage;
-  setStatus(`已连接：${input.name || input.manufacturer || "MIDI 输入"}`);
+  setStatusKey("status.connected", { name: input.name || input.manufacturer || "MIDI 输入" });
 }
 
 function handleMidiMessage(event) {
@@ -2047,13 +2328,14 @@ window.PianoMidiNative = {
 };
 
 function setStatus(text) {
+  state.statusMessage = null;
   els.statusText.textContent = text;
 }
 
 function setupPwa() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {
-      setStatus("页面可使用，但离线缓存注册失败。");
+      setStatusKey("status.cacheFailed");
     });
   }
 
@@ -2065,7 +2347,7 @@ function setupPwa() {
 }
 
 async function forceRefreshApp() {
-  setStatus("正在获取最新版本...");
+  setStatusKey("status.refreshing");
 
   try {
     if ("serviceWorker" in navigator) {
@@ -2078,7 +2360,7 @@ async function forceRefreshApp() {
       await Promise.all(keys.map((key) => caches.delete(key)));
     }
   } catch {
-    setStatus("正在重新载入页面...");
+    setStatusKey("status.reloading");
   }
 
   const url = new URL(window.location.href);
@@ -2182,6 +2464,13 @@ function setupEvents() {
     saveSettings();
     attachSelectedInput();
   });
+  els.languageButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.language = normalizeLanguage(button.dataset.language);
+      applyLanguage();
+      saveSettings();
+    });
+  });
   els.keyButtons.forEach((button) => {
     button.addEventListener("click", () => {
       state.keySignature = button.dataset.keySignature;
@@ -2243,6 +2532,9 @@ function setupEvents() {
   window.addEventListener("pagehide", () => {
     saveSettings();
   });
+  window.addEventListener("resize", () => {
+    buildKeyboard();
+  });
   window.addEventListener("beforeunload", () => {
     stopMeasurePlayback();
     revokeRecordingUrl();
@@ -2265,6 +2557,7 @@ function setupEvents() {
 
 applySavedSettings();
 els.versionBadge.textContent = APP_VERSION;
+applyLanguage();
 syncRecordingControls();
 syncFullscreenButton();
 syncPracticeControls();

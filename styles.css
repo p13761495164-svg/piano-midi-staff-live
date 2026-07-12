@@ -228,6 +228,10 @@ button:disabled {
   width: min(190px, 100%);
 }
 
+.language-field {
+  width: min(190px, 100%);
+}
+
 .tolerance-field {
   width: min(220px, 100%);
 }
@@ -607,7 +611,7 @@ select {
 
 .keyboard {
   position: relative;
-  height: clamp(150px, 24vh, 230px);
+  height: clamp(132px, 20vh, 205px);
   min-width: 900px;
   user-select: none;
 }
@@ -624,6 +628,16 @@ select {
   letter-spacing: 0;
   touch-action: none;
   color: transparent;
+}
+
+.middle-c-key {
+  color: #c8322a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.key.active.middle-c-key {
+  color: #c8322a;
 }
 
 .white-key {
