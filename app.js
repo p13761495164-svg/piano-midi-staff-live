@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v67";
+const APP_VERSION = "v68";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -321,7 +321,7 @@ function parseTimeSignatureKey(value) {
 }
 
 function clampTolerance(value) {
-  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+  return Math.max(0, Math.min(50, Math.round((Number(value) || 0) / 10) * 10));
 }
 
 function syncRecordingControls() {
@@ -350,7 +350,7 @@ function syncPracticeControls() {
   const startMeasure = Math.max(1, Math.floor((state.practice.viewStartTick || 0) / measureTicks) + 1);
   const endMeasure = Math.min(total, Math.floor(((state.practice.viewStartTick || 0) + measureTicks - 1) / measureTicks) + 1);
   const rangeLabel = startMeasure === endMeasure ? `${startMeasure}` : `${startMeasure}-${endMeasure}`;
-  const matched = visibleNotes.filter((note) => isPracticeNoteActive(note.note)).length;
+  const matched = visibleNotes.filter((note) => isPracticeTargetMatched(note)).length;
   els.measureStatus.textContent = `${rangeLabel} / ${total} 小节 · ${matched}/${visibleNotes.length}`;
 }
 
@@ -596,7 +596,7 @@ function buildPracticeNoteItems() {
         durationKind,
         octaveMark: display.octaveMark,
         targetId: target.id,
-        matched: isPracticeNoteActive(target.note),
+        matched: isPracticeTargetMatched(target),
         isPractice: true,
         trackIndex: target.trackIndex ?? 0,
         channel: target.channel ?? 0,
@@ -1234,14 +1234,20 @@ function targetForPlayedNote(note, currentBeatStart) {
   const beatTicks = practiceBeatTicks();
   const viewStartTick = state.practice.viewStartTick || 0;
   const viewEndTick = viewStartTick + Math.max(1, state.practice.measureTicks || beatTicks);
-  const earliestTick = Math.max(0, currentBeatStart - beatTicks * 0.25);
+  const currentBeatEnd = currentBeatStart + beatTicks;
   const candidates = (state.practice.notes || [])
     .filter((target) => (
       target.note === note &&
-      target.startTick >= earliestTick &&
+      target.startTick >= currentBeatStart &&
       target.startTick < viewEndTick
     ))
-    .sort((a, b) => Math.abs(a.startTick - viewStartTick) - Math.abs(b.startTick - viewStartTick) || a.startTick - b.startTick);
+    .sort((a, b) => {
+      const aInCurrentBeat = a.startTick < currentBeatEnd ? 0 : 1;
+      const bInCurrentBeat = b.startTick < currentBeatEnd ? 0 : 1;
+      return aInCurrentBeat - bInCurrentBeat ||
+        Math.abs(a.startTick - viewStartTick) - Math.abs(b.startTick - viewStartTick) ||
+        a.startTick - b.startTick;
+    });
   return candidates[0] || null;
 }
 
@@ -1293,6 +1299,13 @@ function evaluateAutoFollowBeat(options = {}) {
 function isAutoFollowTargetMatched(target) {
   const notes = state.autoFollow.playedNotesByBeat.get(String(beatStartForTick(target.startTick)));
   return notes?.has(target.note) || false;
+}
+
+function isPracticeTargetMatched(target) {
+  if (state.autoFollowMode === "beat" && state.practice.measures.length) {
+    return isAutoFollowTargetMatched(target);
+  }
+  return isPracticeNoteActive(target.note);
 }
 
 function requiredAutoFollowMatches(targetCount) {
