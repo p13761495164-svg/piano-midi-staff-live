@@ -1,13 +1,13 @@
 "use strict";
 
-const APP_VERSION = "v75";
+const APP_VERSION = "v76";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
 const LANDSCAPE_VISIBLE_WHITE_KEYS = 42;
 const TABLET_PORTRAIT_VISIBLE_WHITE_KEYS = 28;
 const PHONE_PORTRAIT_VISIBLE_WHITE_KEYS = 21;
-const LEFT_PEDAL_CONTROLLERS = new Set([65, 66, 67, 68]);
+const LEFT_PEDAL_CONTROLLERS = new Set([65, 66, 67, 68, 69]);
 const WHITE_PATTERN = new Set([0, 2, 4, 5, 7, 9, 11]);
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const XML_STEP_TO_SEMITONE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -119,6 +119,7 @@ const I18N = {
     "status.fullscreenFailed": "无法进入全屏：{message}",
     "status.noMidiInput": "没有发现 MIDI 输入。USB 线或蓝牙 MIDI 配对后再点连接。",
     "status.connected": "已连接：{name}",
+    "status.leftPedalSignal": "左踏板信号：CC{controller}={value}",
     "status.leftPedalPage": "左踏板翻页：CC{controller}",
     "status.cacheFailed": "页面可使用，但离线缓存注册失败。",
     "status.refreshing": "正在获取最新版本...",
@@ -177,6 +178,7 @@ const I18N = {
     "status.fullscreenFailed": "全画面にできません：{message}",
     "status.noMidiInput": "MIDI 入力が見つかりません。USB または Bluetooth MIDI を接続してからもう一度押してください。",
     "status.connected": "接続済み：{name}",
+    "status.leftPedalSignal": "左ペダル信号：CC{controller}={value}",
     "status.leftPedalPage": "左ペダル送り：CC{controller}",
     "status.cacheFailed": "ページは使用できますが、オフラインキャッシュ登録に失敗しました。",
     "status.refreshing": "最新版を取得中...",
@@ -235,6 +237,7 @@ const I18N = {
     "status.fullscreenFailed": "Could not enter fullscreen: {message}",
     "status.noMidiInput": "No MIDI input found. Connect USB or Bluetooth MIDI, then tap Connect again.",
     "status.connected": "Connected: {name}",
+    "status.leftPedalSignal": "Left pedal signal: CC{controller}={value}",
     "status.leftPedalPage": "Left pedal page: CC{controller}",
     "status.cacheFailed": "The page works, but offline cache registration failed.",
     "status.refreshing": "Getting the latest version...",
@@ -935,7 +938,7 @@ function visiblePracticeTargets() {
   const viewEndTick = viewStartTick + Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
   return state.practice.measures
     .flatMap((measure) => measure.notes)
-    .filter((target) => target.startTick < viewEndTick && target.endTick > viewStartTick);
+    .filter((target) => target.startTick >= viewStartTick && target.startTick < viewEndTick);
 }
 
 function drawNote(svg, item) {
@@ -2329,8 +2332,20 @@ function handleMidiBytes(data) {
   const bytes = Array.from(data || [])
     .map((byte) => Number(byte) & 0xff)
     .filter((byte) => Number.isFinite(byte));
+  if (!bytes.length) return;
+
   let index = 0;
   let runningStatus = 0;
+  const firstStatus = bytes[0];
+  const firstDataLength = firstStatus >= 0x80 && firstStatus < 0xf0
+    ? midiDataLengthForStatus(firstStatus)
+    : 0;
+
+  if (firstDataLength && bytes.length >= firstDataLength + 1) {
+    handleMidiCommand(firstStatus, bytes[1], firstDataLength > 1 ? bytes[2] : 0);
+    index = firstDataLength + 1;
+    runningStatus = firstStatus;
+  }
 
   while (index < bytes.length) {
     let status = bytes[index];
@@ -2397,7 +2412,8 @@ function handleMidiCommand(status, note, value) {
 
   if (command === 0xb0 && LEFT_PEDAL_CONTROLLERS.has(note)) {
     recordMidiEvent("cc", { controller: note, value });
-    const pressed = value >= 64;
+    setStatusKey("status.leftPedalSignal", { controller: note, value });
+    const pressed = value > 0;
     if (pressed && !state.softPedalDown) {
       setStatusKey("status.leftPedalPage", { controller: note });
       advanceByPedalStep();
