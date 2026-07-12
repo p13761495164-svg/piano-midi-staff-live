@@ -1,10 +1,13 @@
 "use strict";
 
-const APP_VERSION = "v73";
+const APP_VERSION = "v74";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
-const VISIBLE_OCTAVE_WHITE_KEYS = 42;
+const LANDSCAPE_VISIBLE_WHITE_KEYS = 42;
+const TABLET_PORTRAIT_VISIBLE_WHITE_KEYS = 28;
+const PHONE_PORTRAIT_VISIBLE_WHITE_KEYS = 21;
+const LEFT_PEDAL_CONTROLLERS = new Set([66, 67]);
 const WHITE_PATTERN = new Set([0, 2, 4, 5, 7, 9, 11]);
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const XML_STEP_TO_SEMITONE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -1196,7 +1199,13 @@ function buildKeyboard() {
 
 function keyboardWhiteWidth() {
   const boardWidth = els.keyboard.parentElement?.clientWidth || window.innerWidth || 1024;
-  return Math.max(18, Math.min(DEFAULT_WHITE_KEY_WIDTH_PX, boardWidth / VISIBLE_OCTAVE_WHITE_KEYS));
+  return Math.max(22, Math.min(DEFAULT_WHITE_KEY_WIDTH_PX, boardWidth / visibleKeyboardWhiteKeys(boardWidth)));
+}
+
+function visibleKeyboardWhiteKeys(boardWidth) {
+  if (boardWidth < 560) return PHONE_PORTRAIT_VISIBLE_WHITE_KEYS;
+  if (boardWidth < 900) return TABLET_PORTRAIT_VISIBLE_WHITE_KEYS;
+  return LANDSCAPE_VISIBLE_WHITE_KEYS;
 }
 
 function centerKeyboardOnMiddleC() {
@@ -1217,10 +1226,12 @@ function makeKey(note, className) {
   const key = document.createElement("button");
   key.type = "button";
   key.className = `key ${className}`;
+  const isC = note % 12 === 0;
+  if (isC) key.classList.add("c-key-label");
   if (note === 60) key.classList.add("middle-c-key");
   key.dataset.note = String(note);
   key.setAttribute("aria-label", noteName(note));
-  key.textContent = className === "black-key" ? "" : note === 60 ? "C4" : note % 12 === 0 ? noteName(note) : "";
+  key.textContent = className === "black-key" ? "" : isC ? noteName(note) : "";
   key.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     key.setPointerCapture(event.pointerId);
@@ -2287,13 +2298,14 @@ function handleMidiBytes(data) {
     return;
   }
 
-  if (command === 0xb0 && note === 67) {
-    recordMidiEvent("cc", { controller: 67, value });
+  if (command === 0xb0 && LEFT_PEDAL_CONTROLLERS.has(note)) {
+    recordMidiEvent("cc", { controller: note, value });
     const pressed = value >= 64;
     if (pressed && !state.softPedalDown) {
       advanceByPedalStep();
     }
     state.softPedalDown = pressed;
+    return;
   }
 }
 

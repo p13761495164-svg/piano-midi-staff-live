@@ -630,6 +630,16 @@ select {
   color: transparent;
 }
 
+.c-key-label {
+  color: #8a8178;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.key.active.c-key-label {
+  color: #8a8178;
+}
+
 .middle-c-key {
   color: #c8322a;
   font-size: 13px;
