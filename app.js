@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v76";
+const APP_VERSION = "v77";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -8,6 +8,16 @@ const LANDSCAPE_VISIBLE_WHITE_KEYS = 42;
 const TABLET_PORTRAIT_VISIBLE_WHITE_KEYS = 28;
 const PHONE_PORTRAIT_VISIBLE_WHITE_KEYS = 21;
 const LEFT_PEDAL_CONTROLLERS = new Set([65, 66, 67, 68, 69]);
+const HARDWARE_PEDAL_KEYS = new Set([
+  "ArrowRight",
+  "ArrowDown",
+  "PageDown",
+  " ",
+  "Spacebar",
+  "Enter",
+  "NumpadEnter",
+  "MediaPlayPause"
+]);
 const WHITE_PATTERN = new Set([0, 2, 4, 5, 7, 9, 11]);
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const XML_STEP_TO_SEMITONE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -121,6 +131,7 @@ const I18N = {
     "status.connected": "已连接：{name}",
     "status.leftPedalSignal": "左踏板信号：CC{controller}={value}",
     "status.leftPedalPage": "左踏板翻页：CC{controller}",
+    "status.leftPedalKeyPage": "左踏板翻页：按键 {key}",
     "status.cacheFailed": "页面可使用，但离线缓存注册失败。",
     "status.refreshing": "正在获取最新版本...",
     "status.reloading": "正在重新载入页面..."
@@ -180,6 +191,7 @@ const I18N = {
     "status.connected": "接続済み：{name}",
     "status.leftPedalSignal": "左ペダル信号：CC{controller}={value}",
     "status.leftPedalPage": "左ペダル送り：CC{controller}",
+    "status.leftPedalKeyPage": "左ペダル送り：キー {key}",
     "status.cacheFailed": "ページは使用できますが、オフラインキャッシュ登録に失敗しました。",
     "status.refreshing": "最新版を取得中...",
     "status.reloading": "ページを再読み込み中..."
@@ -239,6 +251,7 @@ const I18N = {
     "status.connected": "Connected: {name}",
     "status.leftPedalSignal": "Left pedal signal: CC{controller}={value}",
     "status.leftPedalPage": "Left pedal page: CC{controller}",
+    "status.leftPedalKeyPage": "Left pedal page: key {key}",
     "status.cacheFailed": "The page works, but offline cache registration failed.",
     "status.refreshing": "Getting the latest version...",
     "status.reloading": "Reloading page..."
@@ -2410,7 +2423,7 @@ function handleMidiCommand(status, note, value) {
     return;
   }
 
-  if (command === 0xb0 && LEFT_PEDAL_CONTROLLERS.has(note)) {
+  if (command === 0xb0 && isLeftPedalControl(note)) {
     recordMidiEvent("cc", { controller: note, value });
     setStatusKey("status.leftPedalSignal", { controller: note, value });
     const pressed = value > 0;
@@ -2421,6 +2434,11 @@ function handleMidiCommand(status, note, value) {
     state.softPedalDown = pressed;
     return;
   }
+}
+
+function isLeftPedalControl(controller) {
+  if (controller === 64 || controller >= 120) return false;
+  return LEFT_PEDAL_CONTROLLERS.has(controller) || controller < 120;
 }
 
 function advanceByPedalStep() {
@@ -2548,6 +2566,20 @@ function handleScoreClickEnd(event) {
   const rect = els.scoreBoard.getBoundingClientRect();
   const direction = event.clientX < rect.left + rect.width / 2 ? -0.5 : 0.5;
   panPracticeView(direction);
+}
+
+function setupHardwarePedalKeys() {
+  window.addEventListener("keydown", (event) => {
+    const target = event.target;
+    if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) return;
+    if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+    const key = event.key === " " || event.code === "Space" ? " " : event.key;
+    if (!HARDWARE_PEDAL_KEYS.has(key)) return;
+
+    event.preventDefault();
+    setStatusKey("status.leftPedalKeyPage", { key: event.key || event.code || "hardware" });
+    advanceByPedalStep();
+  });
 }
 
 function preventPageZoom() {
@@ -2695,6 +2727,7 @@ setupEvents();
 setupPwa();
 setupWakeLock();
 setupScoreClickPaging();
+setupHardwarePedalKeys();
 preventPageZoom();
 buildKeyboard();
 drawStaff();
