@@ -228,6 +228,29 @@ button:disabled {
   width: min(190px, 100%);
 }
 
+.tolerance-field {
+  width: min(220px, 100%);
+}
+
+.tolerance-field strong {
+  font-weight: 800;
+}
+
+.slider-control {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+
+.slider-control input[type="range"] {
+  width: 100%;
+  accent-color: var(--teal);
+}
+
 .time-field {
   width: min(190px, 100%);
 }

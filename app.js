@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v65";
+const APP_VERSION = "v66";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const WHITE_KEY_WIDTH_PX = 38;
@@ -23,7 +23,7 @@ const SETTINGS_FIELD_KEYS = {
   pedalStep: "piano-midi-staff-pedal-step",
   sustainPedalPage: "piano-midi-staff-sustain-pedal-page",
   autoFollowMode: "piano-midi-staff-auto-follow-mode",
-  looseAutoFollow: "piano-midi-staff-loose-auto-follow"
+  autoFollowTolerance: "piano-midi-staff-auto-follow-tolerance"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const MAJOR_KEY_SIGNATURES = {
@@ -79,7 +79,7 @@ const state = {
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
   autoFollowMode: "off",
-  looseAutoFollow: false,
+  autoFollowTolerance: 10,
   autoFollow: {
     currentBeatStart: null,
     playedTargetIds: new Set(),
@@ -146,7 +146,8 @@ const els = {
   pedalStepButtons: [...document.querySelectorAll("[data-pedal-step]")],
   sustainPedalPageButtons: [...document.querySelectorAll("[data-sustain-pedal-page]")],
   autoFollowButtons: [...document.querySelectorAll("[data-auto-follow-mode]")],
-  looseAutoFollowButtons: [...document.querySelectorAll("[data-loose-auto-follow]")],
+  toleranceSlider: document.getElementById("toleranceSlider"),
+  toleranceValue: document.getElementById("toleranceValue"),
   timeSignatureButtons: [...document.querySelectorAll("[data-time-signature]")],
   scoreBoard: document.querySelector(".score-board"),
   staffSvg: document.getElementById("staffSvg"),
@@ -229,7 +230,7 @@ function readSettings() {
     const pedalStep = window.localStorage.getItem(SETTINGS_FIELD_KEYS.pedalStep);
     const sustainPedalPage = window.localStorage.getItem(SETTINGS_FIELD_KEYS.sustainPedalPage);
     const autoFollowMode = window.localStorage.getItem(SETTINGS_FIELD_KEYS.autoFollowMode);
-    const looseAutoFollow = window.localStorage.getItem(SETTINGS_FIELD_KEYS.looseAutoFollow);
+    const autoFollowTolerance = window.localStorage.getItem(SETTINGS_FIELD_KEYS.autoFollowTolerance);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
@@ -237,7 +238,7 @@ function readSettings() {
     if (["measure", "half"].includes(pedalStep)) settings.pedalStep = pedalStep;
     if (["off", "half", "page"].includes(sustainPedalPage)) settings.sustainPedalPage = sustainPedalPage;
     if (["off", "beat"].includes(autoFollowMode)) settings.autoFollowMode = autoFollowMode;
-    if (looseAutoFollow === "true" || looseAutoFollow === "false") settings.looseAutoFollow = looseAutoFollow === "true";
+    if (autoFollowTolerance !== null) settings.autoFollowTolerance = clampTolerance(autoFollowTolerance);
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -252,7 +253,7 @@ function saveSettings() {
     pedalStep: state.pedalStep,
     sustainPedalPage: state.sustainPedalPage,
     autoFollowMode: state.autoFollowMode,
-    looseAutoFollow: state.looseAutoFollow
+    autoFollowTolerance: state.autoFollowTolerance
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -263,7 +264,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.pedalStep, settings.pedalStep);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.sustainPedalPage, settings.sustainPedalPage);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.autoFollowMode, settings.autoFollowMode);
-    window.localStorage.setItem(SETTINGS_FIELD_KEYS.looseAutoFollow, String(settings.looseAutoFollow));
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.autoFollowTolerance, String(settings.autoFollowTolerance));
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -296,11 +297,8 @@ function syncControlsFromState() {
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
-  els.looseAutoFollowButtons.forEach((button) => {
-    const active = (button.dataset.looseAutoFollow === "on") === state.looseAutoFollow;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", active ? "true" : "false");
-  });
+  els.toleranceSlider.value = String(state.autoFollowTolerance);
+  els.toleranceValue.textContent = `${state.autoFollowTolerance}%`;
   els.timeSignatureButtons.forEach((button) => {
     const active = button.dataset.timeSignature === timeSignatureKey(state.practice.timeSignature);
     button.classList.toggle("active", active);
@@ -320,6 +318,10 @@ function parseTimeSignatureKey(value) {
     numerator: Math.max(1, Number(numeratorText) || 4),
     denominator: Math.max(1, Number(denominatorText) || 4)
   };
+}
+
+function clampTolerance(value) {
+  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
 }
 
 function syncRecordingControls() {
@@ -374,8 +376,8 @@ function applySavedSettings() {
   if (["off", "beat"].includes(settings.autoFollowMode)) {
     state.autoFollowMode = settings.autoFollowMode;
   }
-  if (typeof settings.looseAutoFollow === "boolean") {
-    state.looseAutoFollow = settings.looseAutoFollow;
+  if (Number.isFinite(settings.autoFollowTolerance)) {
+    state.autoFollowTolerance = clampTolerance(settings.autoFollowTolerance);
   }
   syncControlsFromState();
 }
@@ -1256,10 +1258,8 @@ function isAutoFollowTargetMatched(target) {
 }
 
 function requiredAutoFollowMatches(targetCount) {
-  if (!state.looseAutoFollow) return targetCount;
-  if (targetCount <= 1) return targetCount;
-  if (targetCount === 2) return 2;
-  return Math.max(1, Math.round(targetCount * 0.75));
+  const allowedMisses = Math.floor(targetCount * state.autoFollowTolerance / 100);
+  return Math.max(1, targetCount - allowedMisses);
 }
 
 function animatePracticeViewToTick(targetTick) {
@@ -2158,13 +2158,16 @@ function setupEvents() {
       scheduleAutoFollowEmptyBeatCheck();
     });
   });
-  els.looseAutoFollowButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      state.looseAutoFollow = button.dataset.looseAutoFollow === "on";
-      syncControlsFromState();
-      saveSettings();
-      evaluateAutoFollowBeat();
-    });
+  els.toleranceSlider.addEventListener("input", () => {
+    state.autoFollowTolerance = clampTolerance(els.toleranceSlider.value);
+    syncControlsFromState();
+    evaluateAutoFollowBeat();
+  });
+  els.toleranceSlider.addEventListener("change", () => {
+    state.autoFollowTolerance = clampTolerance(els.toleranceSlider.value);
+    syncControlsFromState();
+    saveSettings();
+    evaluateAutoFollowBeat();
   });
   els.timeSignatureButtons.forEach((button) => {
     button.addEventListener("click", () => {
