@@ -1,15 +1,15 @@
 "use strict";
 
-const CACHE_NAME = "easy-piano-v111";
+const CACHE_NAME = "easy-piano-v112";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=111",
-  "./app.js?v=111",
+  "./styles.css?v=112",
+  "./app.js?v=112",
   "./manifest.webmanifest",
-  "./icons/icon.png?v=111",
-  "./icons/icon-192.png?v=111",
-  "./icons/icon-512.png?v=111"
+  "./icons/icon.png?v=112",
+  "./icons/icon-192.png?v=112",
+  "./icons/icon-512.png?v=112"
 ];
 
 self.addEventListener("install", (event) => {

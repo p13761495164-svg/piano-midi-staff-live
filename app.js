@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v111";
+const APP_VERSION = "v112";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1763,7 +1763,7 @@ function nextPracticeCueNotes() {
 }
 
 function nextPracticeCueTargets() {
-  if (!state.practice.measures.length) return [];
+  if (!state.practice.measures.length || state.playback.playing) return [];
   const gridTicks = practiceGridTicks();
   const startTick = currentAutoFollowBeatStart();
   const endTick = practiceEndTick();
