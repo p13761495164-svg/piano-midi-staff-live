@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v107";
+const APP_VERSION = "v108";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -993,7 +993,7 @@ function buildPracticeNoteItems() {
         durationKind,
         octaveMark: display.octaveMark,
         targetId: target.id,
-        matched: isPracticeNoteActive(target.note),
+        matched: isAutoFollowTargetMatched(target),
         isPractice: true,
         trackIndex: target.trackIndex ?? 0,
         channel: target.channel ?? 0,
@@ -1819,6 +1819,9 @@ function targetForPlayedNote(note, currentBeatStart) {
         Math.abs(a.startTick - viewStartTick) - Math.abs(b.startTick - viewStartTick) ||
         a.startTick - b.startTick;
     });
+  const cueGroup = firstUnmatchedTargetGroup(targetsForBeat(currentBeatStart));
+  const cueTarget = cueGroup.find((target) => target.note === note && !isAutoFollowTargetMatched(target));
+  if (cueTarget) return cueTarget;
   return candidates.find((target) => !isAutoFollowTargetMatched(target)) || candidates[0] || null;
 }
 
