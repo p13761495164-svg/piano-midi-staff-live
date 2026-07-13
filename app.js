@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v102";
+const APP_VERSION = "v103";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2663,7 +2663,7 @@ function updateKeyboardActive() {
     const note = Number(key.dataset.note);
     const active = state.activeNotes.has(note) || state.playback.activeNotes.has(note);
     key.classList.toggle("active", active);
-    key.classList.toggle("cue", !active && cueNotes.has(note));
+    key.classList.toggle("cue", cueNotes.has(note));
   });
 }
 
