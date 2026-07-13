@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v110";
+const APP_VERSION = "v111";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2022,7 +2022,10 @@ function animatePlaybackView() {
   const step = () => {
     if (!state.playback.playing) return;
     const now = performance.now();
-    const elapsed = Math.max(0, (now - state.playback.startedAtPerformance) / 1000);
+    const audioContext = state.playback.audioContext;
+    const elapsed = audioContext
+      ? Math.max(0, audioContext.currentTime - state.playback.startedAtAudioTime)
+      : Math.max(0, (now - state.playback.startedAtPerformance) / 1000);
     const playbackTick = state.playback.startTick + elapsed / Math.max(0.000001, state.playback.secondsPerTick);
     triggerPendingPlaybackNotes(playbackTick);
     updatePlaybackActiveNotes(playbackTick);
