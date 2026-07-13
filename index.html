@@ -9,9 +9,9 @@
   <meta name="apple-mobile-web-app-title" content="Easy Piano">
   <title>Easy Piano</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon.png?v=81" type="image/png">
-  <link rel="apple-touch-icon" href="icons/icon.png?v=81">
-  <link rel="stylesheet" href="styles.css?v=81">
+  <link rel="icon" href="icons/icon.png?v=82" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon.png?v=82">
+  <link rel="stylesheet" href="styles.css?v=82">
 </head>
 <body>
   <main class="app-shell">
@@ -19,11 +19,11 @@
       <p id="statusText" class="status-banner">等待连接 MIDI 键盘</p>
       <div class="topbar">
         <div class="brand">
-          <img class="brand-mark" src="icons/icon.png?v=81" alt="" aria-hidden="true">
+          <img class="brand-mark" src="icons/icon.png?v=82" alt="" aria-hidden="true">
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
-              <span id="versionBadge" class="version-badge">v81</span>
+              <span id="versionBadge" class="version-badge">v82</span>
             </div>
           </div>
         </div>
@@ -69,8 +69,8 @@
             <div class="field pedal-field">
               <span>左踏板翻页</span>
               <div class="segmented" role="group" aria-label="左踏板翻页">
-                <button class="mode-option active" type="button" data-pedal-step="measure" aria-pressed="true">一小节</button>
-                <button class="mode-option" type="button" data-pedal-step="half" aria-pressed="false">半小节</button>
+                <button class="mode-option active" type="button" data-pedal-step="on" aria-pressed="true">开</button>
+                <button class="mode-option" type="button" data-pedal-step="off" aria-pressed="false">关</button>
               </div>
             </div>
             <div class="field sustain-page-field hidden">
@@ -85,7 +85,7 @@
               <span>自动跟随</span>
               <div class="segmented two-part" role="group" aria-label="自动跟随">
                 <button class="mode-option active" type="button" data-auto-follow-mode="off" aria-pressed="true">关</button>
-                <button class="mode-option" type="button" data-auto-follow-mode="beat" aria-pressed="false">按拍</button>
+                <button class="mode-option" type="button" data-auto-follow-mode="beat" aria-pressed="false">按格</button>
               </div>
             </div>
             <div class="field tolerance-field">
@@ -142,6 +142,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=81"></script>
+  <script src="app.js?v=82"></script>
 </body>
 </html>

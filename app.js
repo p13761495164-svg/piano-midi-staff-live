@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v81";
+const APP_VERSION = "v82";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -133,12 +133,13 @@ const I18N = {
     "button.degree": "级数",
     "button.pitch": "音高",
     "button.none": "无",
+    "button.on": "开",
+    "button.off": "关",
     "button.measure": "一小节",
     "button.halfMeasure": "半小节",
-    "button.off": "关",
     "button.halfPage": "半页",
     "button.page": "一页",
-    "button.byBeat": "按拍",
+    "button.byBeat": "按格",
     "button.start": "开头",
     "button.play": "播放",
     "button.pause": "暂停",
@@ -194,12 +195,13 @@ const I18N = {
     "button.degree": "度数",
     "button.pitch": "音名",
     "button.none": "なし",
+    "button.on": "オン",
+    "button.off": "オフ",
     "button.measure": "1小節",
     "button.halfMeasure": "半小節",
-    "button.off": "オフ",
     "button.halfPage": "半ページ",
     "button.page": "1ページ",
-    "button.byBeat": "拍ごと",
+    "button.byBeat": "コマごと",
     "button.start": "先頭",
     "button.play": "再生",
     "button.pause": "一時停止",
@@ -255,12 +257,13 @@ const I18N = {
     "button.degree": "Degree",
     "button.pitch": "Pitch",
     "button.none": "None",
+    "button.on": "On",
+    "button.off": "Off",
     "button.measure": "Measure",
     "button.halfMeasure": "Half",
-    "button.off": "Off",
     "button.halfPage": "Half Page",
     "button.page": "Page",
-    "button.byBeat": "By Beat",
+    "button.byBeat": "By Cell",
     "button.start": "Start",
     "button.play": "Play",
     "button.pause": "Pause",
@@ -328,7 +331,7 @@ const state = {
   softPedalDown: false,
   keySignature: "C",
   noteLabelMode: "degree",
-  pedalStep: "measure",
+  pedalStep: "on",
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
   lastHardwarePedalAt: 0,
@@ -491,8 +494,8 @@ function applyLanguage() {
   document.querySelector('[data-label-mode="degree"]').textContent = t("button.degree");
   document.querySelector('[data-label-mode="pitch"]').textContent = t("button.pitch");
   document.querySelector('[data-label-mode="none"]').textContent = t("button.none");
-  document.querySelector('[data-pedal-step="measure"]').textContent = t("button.measure");
-  document.querySelector('[data-pedal-step="half"]').textContent = t("button.halfMeasure");
+  document.querySelector('[data-pedal-step="on"]').textContent = t("button.on");
+  document.querySelector('[data-pedal-step="off"]').textContent = t("button.off");
   document.querySelector('[data-sustain-pedal-page="off"]').textContent = t("button.off");
   document.querySelector('[data-sustain-pedal-page="half"]').textContent = t("button.halfPage");
   document.querySelector('[data-sustain-pedal-page="page"]').textContent = t("button.page");
@@ -592,7 +595,8 @@ function readSettings() {
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
     if (selectedInputId !== null) settings.selectedInputId = selectedInputId;
-    if (["measure", "half"].includes(pedalStep)) settings.pedalStep = pedalStep;
+    if (["on", "off"].includes(pedalStep)) settings.pedalStep = pedalStep;
+    if (["measure", "half"].includes(pedalStep)) settings.pedalStep = "on";
     if (["off", "half", "page"].includes(sustainPedalPage)) settings.sustainPedalPage = sustainPedalPage;
     if (["off", "beat"].includes(autoFollowMode)) settings.autoFollowMode = autoFollowMode;
     if (autoFollowTolerance !== null) settings.autoFollowTolerance = clampTolerance(autoFollowTolerance);
@@ -695,8 +699,8 @@ function syncRecordingControls() {
 
 function syncPracticeControls() {
   const hasMeasures = state.practice.measures.length > 0;
-  els.prevMeasureButton.disabled = !hasMeasures || state.practice.currentMeasure <= 0;
-  els.nextMeasureButton.disabled = !hasMeasures || state.practice.currentMeasure >= state.practice.measures.length - 1;
+  els.prevMeasureButton.disabled = !hasMeasures || (state.practice.viewStartTick || 0) <= 0;
+  els.nextMeasureButton.disabled = !hasMeasures || (state.practice.viewStartTick || 0) >= maxPracticeViewStartTick();
   els.startMeasureButton.disabled = !hasMeasures || (state.practice.viewStartTick || 0) <= 0;
   els.playMeasureButton.disabled = !hasMeasures || state.playback.playing;
   els.playMeasureButton.textContent = t("button.play");
@@ -739,8 +743,10 @@ function applySavedSettings() {
   if (typeof settings.selectedInputId === "string") {
     state.selectedInputId = settings.selectedInputId;
   }
-  if (["measure", "half"].includes(settings.pedalStep)) {
+  if (["on", "off"].includes(settings.pedalStep)) {
     state.pedalStep = settings.pedalStep;
+  } else if (["measure", "half"].includes(settings.pedalStep)) {
+    state.pedalStep = "on";
   }
   if (["off", "half", "page"].includes(settings.sustainPedalPage)) {
     state.sustainPedalPage = settings.sustainPedalPage;
@@ -1578,10 +1584,21 @@ function panPracticeView(deltaMeasures) {
   animatePracticeViewToTick(nextStart);
 }
 
+function advancePracticeGrid(deltaCells) {
+  if (!state.practice.measures.length) return;
+  const nextStart = clampPracticeViewStartTick((state.practice.viewStartTick || 0) + deltaCells * practiceGridTicks());
+  if (Math.abs(nextStart - (state.practice.viewStartTick || 0)) < 1) return;
+  animatePracticeViewToTick(nextStart);
+}
+
 function practiceBeatTicks() {
   const timeSignature = state.practice.timeSignature || { numerator: 4, denominator: 4 };
   const denominator = Math.max(1, Number(timeSignature.denominator) || 4);
   return Math.max(1, (state.practice.ticksPerQuarter || MIDI_PPQ) * 4 / denominator);
+}
+
+function practiceGridTicks() {
+  return practiceBeatTicks();
 }
 
 function maxPracticeViewStartTick() {
@@ -1592,8 +1609,8 @@ function maxPracticeViewStartTick() {
 }
 
 function snapTickToBeat(tick) {
-  const beatTicks = practiceBeatTicks();
-  return Math.round(Math.max(0, tick) / beatTicks) * beatTicks;
+  const gridTicks = practiceGridTicks();
+  return Math.round(Math.max(0, tick) / gridTicks) * gridTicks;
 }
 
 function clampPracticeViewStartTick(tick) {
@@ -1620,8 +1637,8 @@ function cancelAutoFollowAnimation() {
 }
 
 function targetsForBeat(beatStart) {
-  const beatTicks = practiceBeatTicks();
-  const beatEnd = beatStart + beatTicks;
+  const gridTicks = practiceGridTicks();
+  const beatEnd = beatStart + gridTicks;
   return (state.practice.notes || [])
     .filter((target) => target.startTick >= beatStart && target.startTick < beatEnd)
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
@@ -1636,10 +1653,10 @@ function markAutoFollowNote(note) {
 }
 
 function targetForPlayedNote(note, currentBeatStart) {
-  const beatTicks = practiceBeatTicks();
+  const gridTicks = practiceGridTicks();
   const viewStartTick = state.practice.viewStartTick || 0;
-  const viewEndTick = viewStartTick + Math.max(1, state.practice.measureTicks || beatTicks);
-  const currentBeatEnd = currentBeatStart + beatTicks;
+  const viewEndTick = viewStartTick + Math.max(1, state.practice.measureTicks || gridTicks);
+  const currentBeatEnd = currentBeatStart + gridTicks;
   const candidates = (state.practice.notes || [])
     .filter((target) => (
       target.note === note &&
@@ -1657,8 +1674,8 @@ function targetForPlayedNote(note, currentBeatStart) {
 }
 
 function beatStartForTick(tick) {
-  const beatTicks = practiceBeatTicks();
-  return Math.floor(Math.max(0, tick) / beatTicks) * beatTicks;
+  const gridTicks = practiceGridTicks();
+  return Math.floor(Math.max(0, tick) / gridTicks) * gridTicks;
 }
 
 function markPlayedNoteForBeat(beatStart, note) {
@@ -1671,7 +1688,7 @@ function markPlayedNoteForBeat(beatStart, note) {
 }
 
 function prunePlayedAutoFollowNotes(currentBeatStart) {
-  const keepFrom = currentBeatStart - practiceBeatTicks();
+  const keepFrom = currentBeatStart - practiceGridTicks();
   [...state.autoFollow.playedNotesByBeat.keys()].forEach((key) => {
     if (Number(key) < keepFrom) state.autoFollow.playedNotesByBeat.delete(key);
   });
@@ -1679,7 +1696,14 @@ function prunePlayedAutoFollowNotes(currentBeatStart) {
 
 function scheduleAutoFollowEmptyBeatCheck() {
   window.clearTimeout(state.autoFollow.emptyAdvanceTimer);
-  state.autoFollow.emptyAdvanceTimer = 0;
+  if (state.autoFollowMode !== "beat" || state.autoFollow.animating || !state.practice.measures.length) {
+    state.autoFollow.emptyAdvanceTimer = 0;
+    return;
+  }
+  state.autoFollow.emptyAdvanceTimer = window.setTimeout(() => {
+    state.autoFollow.emptyAdvanceTimer = 0;
+    evaluateAutoFollowBeat({ advanceEmptyBeat: true });
+  }, 180);
 }
 
 function evaluateAutoFollowBeat(options = {}) {
@@ -1689,11 +1713,12 @@ function evaluateAutoFollowBeat(options = {}) {
 
   const targets = targetsForBeat(beatStart);
   if (!targets.length) {
+    if (options.advanceEmptyBeat) advancePracticeGrid(1);
     return;
   }
   const matchedCount = targets.filter((target) => isAutoFollowTargetMatched(target)).length;
   if (matchedCount < requiredAutoFollowMatches(targets.length)) return;
-  animatePracticeViewToTick((state.practice.viewStartTick || 0) + practiceBeatTicks());
+  advancePracticeGrid(1);
 }
 
 function isAutoFollowTargetMatched(target) {
@@ -2497,11 +2522,8 @@ function isLeftPedalControl(controller) {
 }
 
 function advanceByPedalStep() {
-  if (state.pedalStep === "half") {
-    panPracticeView(0.5);
-    return;
-  }
-  goToMeasure(1);
+  if (state.pedalStep === "off") return;
+  advancePracticeGrid(1);
 }
 
 function advanceBySustainPedalPage() {
@@ -2623,8 +2645,8 @@ function handleScoreClickEnd(event) {
 
   if (Math.abs(dx) > 14 || Math.abs(dy) > 14) return;
   const rect = els.scoreBoard.getBoundingClientRect();
-  const direction = event.clientX < rect.left + rect.width / 2 ? -0.5 : 0.5;
-  panPracticeView(direction);
+  const direction = event.clientX < rect.left + rect.width / 2 ? -1 : 1;
+  advancePracticeGrid(direction);
 }
 
 function setupHardwarePedalKeys() {
@@ -2689,8 +2711,8 @@ function setupEvents() {
   els.saveRecordButton.addEventListener("click", saveRecording);
   els.loadMidiButton.addEventListener("click", () => els.midiFileInput.click());
   els.midiFileInput.addEventListener("change", () => loadScoreFile(els.midiFileInput.files[0]));
-  els.prevMeasureButton.addEventListener("click", () => goToMeasure(-1));
-  els.nextMeasureButton.addEventListener("click", () => goToMeasure(1));
+  els.prevMeasureButton.addEventListener("click", () => advancePracticeGrid(-1));
+  els.nextMeasureButton.addEventListener("click", () => advancePracticeGrid(1));
   els.startMeasureButton.addEventListener("click", goToPracticeStart);
   els.playMeasureButton.addEventListener("click", startContinuousPlayback);
   els.pausePlaybackButton.addEventListener("click", () => {
