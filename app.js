@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v91";
+const APP_VERSION = "v92";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1711,7 +1711,12 @@ function nextPracticeCueNotes() {
   const endTick = practiceEndTick();
   for (let tick = startTick; tick <= endTick; tick += gridTicks) {
     const targets = targetsForBeat(tick);
-    if (targets.length) return new Set(targets.map((target) => target.note));
+    if (targets.length) {
+      const cueTick = Math.min(...targets.map((target) => target.startTick));
+      return new Set(targets
+        .filter((target) => target.startTick === cueTick)
+        .map((target) => target.note));
+    }
   }
   return new Set();
 }
