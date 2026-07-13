@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v113";
+const APP_VERSION = "v114";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -805,6 +805,7 @@ function drawStaff() {
     drawBeatGrid(svg);
     drawPedalTrack(svg);
     const practiceItems = buildPracticeNoteItems();
+    drawPracticeArpeggioMarks(svg, practiceItems);
     practiceItems.forEach((item) => drawNote(svg, item));
     drawPracticeOctaveGroups(svg, practiceItems);
     return;
@@ -1163,6 +1164,47 @@ function drawStem(svg, x, y, clef, matched, trackRole = "primary") {
     y1: y,
     x2: stemX,
     y2: stemEndY,
+    class: classes.join(" ")
+  }));
+}
+
+function drawPracticeArpeggioMarks(svg, items) {
+  const groups = new Map();
+  items.forEach((item) => {
+    const key = `${item.displayStartTick}:${item.clef}:${item.trackRole}:${item.trackIndex}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  });
+
+  groups.forEach((group) => {
+    const startTicks = new Set(group.map((item) => item.startTick));
+    if (group.length < 2 || startTicks.size < 2) return;
+
+    const ys = group.map((item) => yForNote(item.displayNote, item.clef));
+    const x = Math.min(...group.map((item) => item.x)) - 46;
+    drawArpeggioWave(svg, x, Math.min(...ys) - 18, Math.max(...ys) + 18, group[0].trackRole);
+  });
+}
+
+function drawArpeggioWave(svg, x, y1, y2, trackRole = "primary") {
+  const top = Math.min(y1, y2);
+  const bottom = Math.max(y1, y2);
+  const step = 18;
+  const amp = 9;
+  let y = top;
+  let path = `M ${x} ${y}`;
+  let direction = 1;
+  while (y < bottom) {
+    const nextY = Math.min(bottom, y + step);
+    const midY = (y + nextY) / 2;
+    path += ` Q ${x + amp * direction} ${midY} ${x} ${nextY}`;
+    y = nextY;
+    direction *= -1;
+  }
+  const classes = ["arpeggio-mark"];
+  if (trackRole === "secondary") classes.push("secondary-track-line");
+  svg.appendChild(createSvg("path", {
+    d: path,
     class: classes.join(" ")
   }));
 }

@@ -591,6 +591,14 @@ select {
   stroke: #1676a5;
 }
 
+.arpeggio-mark {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .note-stem {
   fill: none;
   stroke: var(--ink);
