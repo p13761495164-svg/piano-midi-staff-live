@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v84";
+const APP_VERSION = "v85";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -401,6 +401,8 @@ const els = {
   startMeasureButton: document.getElementById("startMeasureButton"),
   playMeasureButton: document.getElementById("playMeasureButton"),
   pausePlaybackButton: document.getElementById("pausePlaybackButton"),
+  playbackSlider: document.getElementById("playbackSlider"),
+  playbackTime: document.getElementById("playbackTime"),
   measureStatus: document.getElementById("measureStatus"),
   versionBadge: document.getElementById("versionBadge"),
   settingsSummaryLabel: document.getElementById("settingsSummaryLabel"),
@@ -707,6 +709,7 @@ function syncPracticeControls() {
   els.playMeasureButton.textContent = t("button.play");
   els.pausePlaybackButton.disabled = !state.playback.playing;
   els.pausePlaybackButton.textContent = t("button.pause");
+  syncPlaybackScrubber();
 
   if (!hasMeasures) {
     els.measureStatus.textContent = t("status.live");
@@ -1616,6 +1619,51 @@ function maxPracticeViewStartTick() {
   return Math.max(0, lastMeasure.endTick - measureTicks);
 }
 
+function practiceEndTick() {
+  if (!state.practice.measures.length) return 0;
+  return Math.max(...state.practice.measures.map((measure) => measure.endTick));
+}
+
+function secondsPerPracticeTick() {
+  return (state.practice.microsecondsPerQuarter || 500000) / 1000000 / (state.practice.ticksPerQuarter || MIDI_PPQ);
+}
+
+function formatClockTime(seconds) {
+  const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+function syncPlaybackScrubber() {
+  if (!els.playbackSlider || !els.playbackTime) return;
+  const maxTick = Math.round(maxPracticeViewStartTick());
+  const currentTick = Math.round(Math.max(0, Math.min(maxTick, state.practice.viewStartTick || 0)));
+  els.playbackSlider.disabled = !state.practice.measures.length;
+  els.playbackSlider.max = String(maxTick);
+  els.playbackSlider.value = String(currentTick);
+
+  const secondsPerTick = secondsPerPracticeTick();
+  const currentSeconds = (state.practice.viewStartTick || 0) * secondsPerTick;
+  const totalSeconds = practiceEndTick() * secondsPerTick;
+  els.playbackTime.textContent = `${formatClockTime(currentSeconds)} / ${formatClockTime(totalSeconds)}`;
+}
+
+function seekPracticeView(tick) {
+  if (!state.practice.measures.length) return;
+  stopMeasurePlayback();
+  const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+  const nextTick = clampPracticeViewStartTick(Number(tick) || 0);
+  state.practice.viewStartTick = nextTick;
+  state.practice.currentMeasure = Math.max(0, Math.min(
+    state.practice.measures.length - 1,
+    Math.floor(nextTick / measureTicks)
+  ));
+  state.autoFollow.pausedAfterManualNavigation = true;
+  resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: true });
+  updateAll();
+}
+
 function snapTickToBeat(tick) {
   const gridTicks = practiceGridTicks();
   return Math.round(Math.max(0, tick) / gridTicks) * gridTicks;
@@ -1865,6 +1913,7 @@ function animatePlaybackView() {
       Math.floor(viewTick / measureTicks)
     ));
     updateAll();
+    syncPlaybackScrubber();
 
     if (playbackTick >= state.playback.endTick) {
       stopMeasurePlayback();
@@ -2743,6 +2792,9 @@ function setupEvents() {
   els.pausePlaybackButton.addEventListener("click", () => {
     stopMeasurePlayback();
     syncPracticeControls();
+  });
+  els.playbackSlider.addEventListener("input", () => {
+    seekPracticeView(els.playbackSlider.value);
   });
   els.fullscreenButton.addEventListener("click", toggleFullscreen);
   els.refreshButton.addEventListener("click", forceRefreshApp);
