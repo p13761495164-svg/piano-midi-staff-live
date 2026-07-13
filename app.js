@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v101";
+const APP_VERSION = "v102";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -356,6 +356,7 @@ const state = {
     currentMeasure: 0,
     filename: "",
     timeSignature: { numerator: 4, denominator: 4 },
+    timeSignatureEvents: [],
     ticksPerQuarter: MIDI_PPQ,
     measureTicks: MIDI_PPQ * 4,
     microsecondsPerQuarter: 500000,
@@ -728,9 +729,8 @@ function syncPracticeControls() {
 
   const total = state.practice.measures.length;
   const visibleNotes = visiblePracticeTargets();
-  const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
-  const startMeasure = Math.max(1, Math.floor((state.practice.viewStartTick || 0) / measureTicks) + 1);
-  const endMeasure = Math.min(total, Math.floor(((state.practice.viewStartTick || 0) + measureTicks - 1) / measureTicks) + 1);
+  const startMeasure = measureIndexForTick(state.practice.viewStartTick || 0) + 1;
+  const endMeasure = Math.min(total, measureIndexForTick((state.practice.viewStartTick || 0) + currentViewSpanTicks() - 1) + 1);
   const rangeLabel = startMeasure === endMeasure ? `${startMeasure}` : `${startMeasure}-${endMeasure}`;
   const matched = visibleNotes.filter((note) => isAutoFollowTargetMatched(note)).length;
   els.measureStatus.textContent = t("status.measure", {
@@ -798,6 +798,7 @@ function drawStaff() {
   bass.textContent = "𝄢";
   svg.append(treble, bass);
   drawKeySignature(svg);
+  drawTimeSignature(svg);
 
   const hasPracticeScore = state.practice.measures.length > 0;
   if (hasPracticeScore) {
@@ -849,12 +850,8 @@ function drawStaff() {
 function drawBeatGrid(svg) {
   if (!state.practice.measures.length) return;
 
-  const timeSignature = state.practice.timeSignature || { numerator: 4, denominator: 4 };
-  const numerator = Math.max(1, Number(timeSignature.numerator) || 4);
-  const denominator = Math.max(1, Number(timeSignature.denominator) || 4);
-  const beatTicks = Math.max(1, (state.practice.ticksPerQuarter || MIDI_PPQ) * 4 / denominator);
   const viewStartTick = state.practice.viewStartTick || 0;
-  const viewSpanTicks = Math.max(1, state.practice.measureTicks || beatTicks * numerator);
+  const viewSpanTicks = currentViewSpanTicks();
   const viewEndTick = viewStartTick + viewSpanTicks;
   const xForTick = (tick) => {
     const progress = (tick - viewStartTick) / viewSpanTicks;
@@ -863,6 +860,10 @@ function drawBeatGrid(svg) {
 
   state.practice.measures.forEach((measure) => {
     if (measure.endTick <= viewStartTick || measure.startTick >= viewEndTick) return;
+    const timeSignature = measure.timeSignature || state.practice.timeSignature || { numerator: 4, denominator: 4 };
+    const numerator = Math.max(1, Number(timeSignature.numerator) || 4);
+    const denominator = Math.max(1, Number(timeSignature.denominator) || 4);
+    const beatTicks = Math.max(1, (state.practice.ticksPerQuarter || MIDI_PPQ) * 4 / denominator);
 
     for (let beat = 0; beat <= numerator; beat += 1) {
       const tick = measure.startTick + beat * beatTicks;
@@ -885,7 +886,7 @@ function drawPedalTrack(svg) {
   if (!pedalEvents.length) return;
 
   const viewStartTick = state.practice.viewStartTick || 0;
-  const viewSpanTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+  const viewSpanTicks = currentViewSpanTicks();
   const viewEndTick = viewStartTick + viewSpanTicks;
   const xForTick = (tick) => {
     const progress = (tick - viewStartTick) / viewSpanTicks;
@@ -969,7 +970,7 @@ function buildPracticeNoteItems() {
   if (!visibleNotes.length) return [];
 
   const viewStartTick = state.practice.viewStartTick || 0;
-  const timeSpan = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+  const timeSpan = currentViewSpanTicks();
   const displayStartById = displayStartTicksForTargets(visibleNotes);
   const items = visibleNotes
     .slice()
@@ -1028,7 +1029,7 @@ function displayStartTicksForTargets(targets) {
 function visiblePracticeTargets() {
   if (!state.practice.measures.length) return [];
   const viewStartTick = state.practice.viewStartTick || 0;
-  const viewEndTick = viewStartTick + Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+  const viewEndTick = viewStartTick + currentViewSpanTicks();
   return state.practice.measures
     .flatMap((measure) => measure.notes)
     .filter((target) => target.startTick >= viewStartTick && target.startTick < viewEndTick);
@@ -1256,6 +1257,24 @@ function drawKeySignature(svg) {
   }
 }
 
+function drawTimeSignature(svg) {
+  const signature = timeSignatureAtTick(state.practice.viewStartTick || 0);
+  const numerator = Math.max(1, Number(signature.numerator) || 4);
+  const denominator = Math.max(1, Number(signature.denominator) || 4);
+  const key = MAJOR_KEY_SIGNATURES[state.keySignature] || MAJOR_KEY_SIGNATURES.C;
+  const x = KEY_SIGNATURE_START_X + Math.max(1, key.count || 0) * KEY_SIGNATURE_GAP_X + 38;
+  [
+    { y1: 222, y2: 282 },
+    { y1: 502, y2: 562 }
+  ].forEach(({ y1, y2 }) => {
+    const top = createSvg("text", { x, y: y1, class: "time-signature" });
+    top.textContent = String(numerator);
+    const bottom = createSvg("text", { x, y: y2, class: "time-signature" });
+    bottom.textContent = String(denominator);
+    svg.append(top, bottom);
+  });
+}
+
 function drawLedgerLines(svg, x, y, clef, trackRole = "primary") {
   const lineYs = clef === "bass" ? BASS_LINE_YS : TREBLE_LINE_YS;
   const min = Math.min(...lineYs);
@@ -1478,11 +1497,12 @@ function applyParsedScore(parsed, filename, typeLabel) {
   state.practice.currentMeasure = 0;
   state.practice.filename = filename || typeLabel;
   state.practice.timeSignature = parsed.timeSignature;
+  state.practice.timeSignatureEvents = parsed.timeSignatureEvents || [];
   state.practice.ticksPerQuarter = parsed.ticksPerQuarter;
   state.practice.measureTicks = parsed.measureTicks;
   state.practice.microsecondsPerQuarter = parsed.microsecondsPerQuarter;
   state.practice.viewStartTick = 0;
-  state.practice.measures = buildMeasuresFromPracticeNotes(state.practice.notes);
+  state.practice.measures = parsed.variableMeasures ? parsed.measures : buildMeasuresFromPracticeNotes(state.practice.notes);
   resetAutoFollowBeat(0, { clearPlayed: true });
   const displayName = displayFilename(state.practice.filename, typeLabel);
   setStatusKey(parsed.measures.length ? "status.loaded" : "status.loadedEmpty", {
@@ -1497,13 +1517,11 @@ function updatePracticeTimeSignature(timeSignature) {
   cancelAutoFollowAnimation();
   stopMeasurePlayback();
   state.practice.timeSignature = timeSignature;
+  state.practice.timeSignatureEvents = [];
   state.practice.measureTicks = measureTicksForTimeSignature(timeSignature, state.practice.ticksPerQuarter || MIDI_PPQ);
   state.practice.measures = buildMeasuresFromPracticeNotes(state.practice.notes);
-  state.practice.currentMeasure = Math.max(0, Math.min(
-    state.practice.measures.length - 1,
-    Math.floor((state.practice.viewStartTick || 0) / Math.max(1, state.practice.measureTicks))
-  ));
-  state.practice.viewStartTick = state.practice.currentMeasure * Math.max(1, state.practice.measureTicks);
+  state.practice.currentMeasure = Math.max(0, Math.min(state.practice.measures.length - 1, measureIndexForTick(state.practice.viewStartTick || 0)));
+  state.practice.viewStartTick = state.practice.measures[state.practice.currentMeasure]?.startTick || 0;
   resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: true });
   syncControlsFromState();
   updateAll();
@@ -1538,6 +1556,29 @@ function buildMeasuresFromPracticeNotes(notes) {
   });
 
   return measures;
+}
+
+function measureIndexForTick(tick) {
+  if (!state.practice.measures.length) return 0;
+  const safeTick = Math.max(0, Number(tick) || 0);
+  const index = state.practice.measures.findIndex((measure) => safeTick >= measure.startTick && safeTick < measure.endTick);
+  if (index >= 0) return index;
+  if (safeTick >= state.practice.measures[state.practice.measures.length - 1].endTick) return state.practice.measures.length - 1;
+  return 0;
+}
+
+function currentPracticeMeasure() {
+  return state.practice.measures[measureIndexForTick(state.practice.viewStartTick || 0)] || null;
+}
+
+function currentViewSpanTicks() {
+  const measure = currentPracticeMeasure();
+  return Math.max(1, (measure?.endTick || 0) - (measure?.startTick || 0) || state.practice.measureTicks || MIDI_PPQ * 4);
+}
+
+function timeSignatureAtTick(tick) {
+  const measure = state.practice.measures[measureIndexForTick(tick)] || currentPracticeMeasure();
+  return measure?.timeSignature || state.practice.timeSignature || { numerator: 4, denominator: 4 };
 }
 
 async function loadScoreFile(file) {
@@ -1592,8 +1633,9 @@ function goToPracticeStart() {
 
 function panPracticeView(deltaMeasures) {
   if (!state.practice.measures.length) return;
-  const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
-  const nextStart = clampPracticeViewStartTick((state.practice.viewStartTick || 0) + deltaMeasures * measureTicks);
+  const currentIndex = measureIndexForTick(state.practice.viewStartTick || 0);
+  const nextIndex = Math.max(0, Math.min(state.practice.measures.length - 1, currentIndex + deltaMeasures));
+  const nextStart = clampPracticeViewStartTick(state.practice.measures[nextIndex]?.startTick || 0);
   if (Math.abs(nextStart - (state.practice.viewStartTick || 0)) < 1) return;
   animatePracticeViewToTick(nextStart);
 }
@@ -1612,7 +1654,7 @@ function advancePracticeGrid(deltaCells, options = {}) {
 }
 
 function practiceBeatTicks() {
-  const timeSignature = state.practice.timeSignature || { numerator: 4, denominator: 4 };
+  const timeSignature = timeSignatureAtTick(state.practice.viewStartTick || 0);
   const denominator = Math.max(1, Number(timeSignature.denominator) || 4);
   return Math.max(1, (state.practice.ticksPerQuarter || MIDI_PPQ) * 4 / denominator);
 }
@@ -1623,9 +1665,8 @@ function practiceGridTicks() {
 
 function maxPracticeViewStartTick() {
   if (!state.practice.measures.length) return 0;
-  const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
   const lastMeasure = state.practice.measures[state.practice.measures.length - 1];
-  return Math.max(0, lastMeasure.endTick - measureTicks);
+  return Math.max(0, lastMeasure.startTick);
 }
 
 function practiceEndTick() {
@@ -1661,13 +1702,9 @@ function syncPlaybackScrubber() {
 function seekPracticeView(tick) {
   if (!state.practice.measures.length) return;
   stopMeasurePlayback();
-  const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
   const nextTick = clampPracticeViewStartTick(Number(tick) || 0);
   state.practice.viewStartTick = nextTick;
-  state.practice.currentMeasure = Math.max(0, Math.min(
-    state.practice.measures.length - 1,
-    Math.floor(nextTick / measureTicks)
-  ));
+  state.practice.currentMeasure = measureIndexForTick(nextTick);
   state.autoFollow.pausedAfterManualNavigation = true;
   resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: true });
   updateAll();
@@ -1851,7 +1888,6 @@ function isTargetGroupMatched(targets) {
 
 function animatePracticeViewToTick(targetTick, options = {}) {
   if (!state.practice.measures.length) return;
-  const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
   const startTick = state.practice.viewStartTick || 0;
   const endTick = clampPracticeViewStartTick(targetTick);
   if (Math.abs(endTick - startTick) < 1) return;
@@ -1874,10 +1910,7 @@ function animatePracticeViewToTick(targetTick, options = {}) {
     const progress = Math.min(1, (now - startedAt) / AUTO_FOLLOW_ANIMATION_MS);
     const eased = 1 - Math.pow(1 - progress, 3);
     state.practice.viewStartTick = startTick + (endTick - startTick) * eased;
-    state.practice.currentMeasure = Math.max(0, Math.min(
-      state.practice.measures.length - 1,
-      Math.floor(state.practice.viewStartTick / measureTicks)
-    ));
+    state.practice.currentMeasure = measureIndexForTick(state.practice.viewStartTick);
     updateAll();
 
     if (progress < 1) {
@@ -1886,10 +1919,7 @@ function animatePracticeViewToTick(targetTick, options = {}) {
     }
 
     state.practice.viewStartTick = endTick;
-    state.practice.currentMeasure = Math.max(0, Math.min(
-      state.practice.measures.length - 1,
-      Math.floor(endTick / measureTicks)
-    ));
+    state.practice.currentMeasure = measureIndexForTick(endTick);
     state.autoFollow.animating = false;
     resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: Boolean(options.clearPlayed) });
     updateAll();
@@ -1979,12 +2009,8 @@ function animatePlaybackView() {
     if (now - state.playback.lastVisualFrameAt >= 33 || playbackTick >= state.playback.endTick) {
       state.playback.lastVisualFrameAt = now;
       const viewTick = Math.min(maxPracticeViewStartTick(), playbackTick);
-      const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
       state.practice.viewStartTick = viewTick;
-      state.practice.currentMeasure = Math.max(0, Math.min(
-        state.practice.measures.length - 1,
-        Math.floor(viewTick / measureTicks)
-      ));
+      state.practice.currentMeasure = measureIndexForTick(viewTick);
       updateAll();
       syncPlaybackScrubber();
     }
@@ -2190,36 +2216,29 @@ function parseMidiFile(bytes) {
     const lastNoteTick = Math.max(...notes.map((note) => Math.max(note.endTick, note.startTick + 1)));
     timeSignature = primaryMidiTimeSignature(timeSignatureEvents, lastNoteTick, timeSignature, ticksPerQuarter);
   }
-  const measureTicks = ticksPerQuarter * timeSignature.numerator * 4 / timeSignature.denominator;
-  if (!notes.length) return { measures: [], pedalEvents, ticksPerQuarter, measureTicks, timeSignature, microsecondsPerQuarter, format };
+  if (!notes.length) {
+    const measureTicks = measureTicksForTimeSignature(timeSignature, ticksPerQuarter);
+    return { measures: [], pedalEvents, ticksPerQuarter, measureTicks, timeSignature, timeSignatureEvents: [], microsecondsPerQuarter, format };
+  }
   const trackRoles = trackRolesForNotes(notes);
 
   const lastTick = Math.max(...notes.map((note) => Math.max(note.endTick, note.startTick + 1)));
-  const measureCount = Math.max(1, Math.ceil(lastTick / measureTicks));
-  const measures = Array.from({ length: measureCount }, (_, index) => ({
-    index,
-    startTick: index * measureTicks,
-    endTick: (index + 1) * measureTicks,
-    notes: []
-  }));
-
-  notes.forEach((note, index) => {
-    const measureIndex = Math.max(0, Math.min(measures.length - 1, Math.floor(note.startTick / measureTicks)));
-    measures[measureIndex].notes.push({
-      ...note,
-      trackRole: trackRoles.get(note.trackIndex) || "primary",
-      id: `${measureIndex}-${index}-${note.note}-${note.startTick}`
-    });
-  });
+  const signatureEvents = normalizedMidiTimeSignatureEvents(timeSignatureEvents, lastTick, timeSignature, ticksPerQuarter);
+  timeSignature = signatureEvents[0]?.timeSignature || timeSignature;
+  const measureTicks = measureTicksForTimeSignature(timeSignature, ticksPerQuarter);
+  const measures = buildMidiMeasuresFromTimeSignatures(notes, signatureEvents, lastTick, trackRoles, ticksPerQuarter);
 
   return {
     measures,
+    notes: measures.flatMap((measure) => measure.notes),
     pedalEvents: pedalEvents.sort((a, b) => a.tick - b.tick || a.value - b.value),
     ticksPerQuarter,
     measureTicks,
     timeSignature,
+    timeSignatureEvents: signatureEvents.map((event) => ({ tick: event.tick, ...event.timeSignature })),
     microsecondsPerQuarter,
-    format
+    format,
+    variableMeasures: signatureEvents.length > 1
   };
 }
 
@@ -2385,16 +2404,21 @@ function trackRolesForNotes(notes) {
 }
 
 function primaryMidiTimeSignature(events, lastTick, fallback, ticksPerQuarter) {
+  return normalizedMidiTimeSignatureEvents(events, lastTick, fallback, ticksPerQuarter)[0]?.timeSignature || fallback || { numerator: 4, denominator: 4 };
+}
+
+function normalizedMidiTimeSignatureEvents(events, lastTick, fallback, ticksPerQuarter) {
   const signatures = (events || [])
     .filter((event) => event.numerator > 0 && event.denominator > 0)
-    .sort((a, b) => a.tick - b.tick || a.numerator - b.numerator || a.denominator - b.denominator);
-  if (!signatures.length) return fallback || { numerator: 4, denominator: 4 };
+    .sort((a, b) => a.tick - b.tick || a.numerator - b.numerator || a.denominator - b.denominator)
+    .map((event) => ({ tick: Math.max(0, event.tick || 0), timeSignature: { numerator: event.numerator, denominator: event.denominator } }));
+  if (!signatures.length) return [{ tick: 0, timeSignature: fallback || { numerator: 4, denominator: 4 } }];
 
   const scoreBySignature = new Map();
   signatures.forEach((event, index) => {
     const nextTick = signatures[index + 1]?.tick ?? Math.max(lastTick, event.tick + 1);
     const span = Math.max(1, nextTick - event.tick);
-    const key = `${event.numerator}/${event.denominator}`;
+    const key = timeSignatureKey(event.timeSignature);
     scoreBySignature.set(key, (scoreBySignature.get(key) || 0) + span);
   });
 
@@ -2403,9 +2427,44 @@ function primaryMidiTimeSignature(events, lastTick, fallback, ticksPerQuarter) {
   const selected = best ? parseTimeSignatureKey(best) : fallback;
   const selectedMeasureTicks = measureTicksForTimeSignature(selected, ticksPerQuarter);
   if (selectedMeasureTicks < ticksPerQuarter * 2 && lastTick > selectedMeasureTicks * 24) {
-    return { numerator: 4, denominator: 4 };
+    return [{ tick: 0, timeSignature: { numerator: 4, denominator: 4 } }];
   }
-  return selected;
+  if (signatures[0].tick > 0) {
+    signatures.unshift({ tick: 0, timeSignature: fallback || selected || { numerator: 4, denominator: 4 } });
+  }
+  return signatures;
+}
+
+function buildMidiMeasuresFromTimeSignatures(notes, signatureEvents, lastTick, trackRoles, ticksPerQuarter) {
+  const measures = [];
+  const sortedEvents = signatureEvents.length ? signatureEvents : [{ tick: 0, timeSignature: { numerator: 4, denominator: 4 } }];
+  sortedEvents.forEach((event, index) => {
+    const segmentStart = event.tick;
+    const segmentEnd = Math.max(segmentStart + 1, sortedEvents[index + 1]?.tick ?? lastTick);
+    const measureTicks = measureTicksForTimeSignature(event.timeSignature, ticksPerQuarter);
+    for (let startTick = segmentStart; startTick < segmentEnd; startTick += measureTicks) {
+      measures.push({
+        index: measures.length,
+        startTick,
+        endTick: Math.min(segmentEnd, startTick + measureTicks),
+        measureTicks,
+        timeSignature: event.timeSignature,
+        notes: []
+      });
+    }
+  });
+
+  notes.forEach((note, index) => {
+    const measureIndex = measures.findIndex((measure) => note.startTick >= measure.startTick && note.startTick < measure.endTick);
+    const safeIndex = measureIndex >= 0 ? measureIndex : Math.max(0, measures.length - 1);
+    measures[safeIndex].notes.push({
+      ...note,
+      trackRole: trackRoles.get(note.trackIndex) || "primary",
+      id: `${safeIndex}-${index}-${note.note}-${note.startTick}`
+    });
+  });
+
+  return measures;
 }
 
 function parseMidiTrack(bytes, start, end) {

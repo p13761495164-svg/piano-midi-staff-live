@@ -665,6 +665,15 @@ select {
   dominant-baseline: middle;
 }
 
+.time-signature {
+  fill: var(--ink);
+  font-family: "Times New Roman", Georgia, serif;
+  font-size: 58px;
+  font-weight: 800;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
 .note-inner-label {
   fill: var(--ink);
   font-size: 22px;
