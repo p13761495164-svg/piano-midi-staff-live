@@ -47,7 +47,7 @@ select {
   width: min(1180px, 100%);
   margin: 0 auto;
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .topbar,
@@ -386,8 +386,8 @@ select {
 
 .score-board {
   position: relative;
-  height: clamp(500px, 44vw, 760px);
-  min-height: 500px;
+  aspect-ratio: 1760 / 720;
+  min-height: 0;
   border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--panel);
@@ -820,7 +820,8 @@ select {
   }
 
   .score-board {
-    height: 500px;
+    aspect-ratio: auto;
+    height: clamp(250px, 48vw, 310px);
   }
 
   .measure-tools {
