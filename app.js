@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v121";
+const APP_VERSION = "v122";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -110,6 +110,8 @@ const CHORD_TEMPLATES = [
   { suffix: "9", intervals: [0, 2, 4, 7, 10] },
   { suffix: "mMaj7", intervals: [0, 3, 7, 11] },
   { suffix: "maj7", intervals: [0, 4, 7, 11] },
+  { suffix: "maj7omit3", intervals: [0, 7, 11] },
+  { suffix: "maj7omit5", intervals: [0, 4, 11] },
   { suffix: "∅", intervals: [0, 3, 6, 10] },
   { suffix: "dim7", intervals: [0, 3, 6, 9] },
   { suffix: "m7", intervals: [0, 3, 7, 10] },
