@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v124";
+const APP_VERSION = "v125";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -886,6 +886,7 @@ function drawStaff() {
     const practiceItems = buildPracticeNoteItems();
     drawPracticeArpeggioMarks(svg, practiceItems);
     practiceItems.forEach((item) => drawNote(svg, item));
+    drawActiveInputNotes(svg);
     drawPracticeOctaveGroups(svg, practiceItems);
     return;
   }
@@ -1114,6 +1115,75 @@ function displayStartTicksForTargets(targets) {
   });
 
   return map;
+}
+
+function buildActiveInputNoteItems() {
+  if (!state.practice.measures.length || !state.activeNotes.size) return [];
+  const inputX = Math.max(360, MEASURE_NOTE_LEFT_X - 74);
+  const items = [...state.activeNotes.keys()]
+    .sort((a, b) => a - b)
+    .map((note) => {
+      const display = displayInfoForPracticeNote(note);
+      return {
+        note,
+        displayNote: display.note,
+        clef: display.clef,
+        step: midiToStaffStep(display.note),
+        octaveMark: display.octaveMark,
+        x: inputX,
+        xOffset: 0,
+        trackRole: "input"
+      };
+    });
+
+  for (let index = 0; index < items.length;) {
+    const clusterStart = index;
+    index += 1;
+    while (
+      index < items.length &&
+      items[index].clef === items[index - 1].clef &&
+      items[index].step - items[index - 1].step <= 1
+    ) {
+      index += 1;
+    }
+
+    const cluster = items.slice(clusterStart, index);
+    if (cluster.length > 1) {
+      const spread = 34;
+      cluster.forEach((item, itemIndex) => {
+        item.xOffset = (itemIndex - (cluster.length - 1) / 2) * spread;
+      });
+    }
+  }
+
+  return items.map((item) => ({ ...item, x: item.x + item.xOffset }));
+}
+
+function drawActiveInputNotes(svg) {
+  const inputItems = buildActiveInputNoteItems();
+  inputItems.forEach((item) => {
+    const y = yForNote(item.displayNote, item.clef);
+    drawLedgerLines(svg, item.x, y, item.clef);
+    svg.appendChild(createSvg("circle", {
+      cx: item.x,
+      cy: y,
+      r: NOTE_RADIUS,
+      class: "note-head active-input-note",
+      "data-active-input-note": item.note
+    }));
+    const innerLabel = noteInnerLabel(item.note);
+    if (innerLabel) {
+      const text = createSvg("text", {
+        x: item.x,
+        y,
+        class: "note-inner-label active-input-label",
+        "data-active-input-label": innerLabel
+      });
+      text.textContent = innerLabel;
+      svg.appendChild(text);
+    }
+  });
+  drawPracticeOctaveGroups(svg, inputItems);
 }
 
 function arpeggioGroupingWindowTicks() {
@@ -2878,6 +2948,7 @@ function updateKeyboardActive() {
     const note = Number(key.dataset.note);
     const active = state.activeNotes.has(note) || state.playback.activeNotes.has(note);
     key.classList.toggle("active", active);
+    key.classList.toggle("input-active", state.activeNotes.has(note));
     key.classList.toggle("cue", cueNotes.has(note));
   });
 }
