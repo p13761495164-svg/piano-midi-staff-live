@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v129";
+const APP_VERSION = "v130";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -473,7 +473,12 @@ function chordToneLabel(pitchClass) {
 }
 
 function chordSuffixLabel(suffix) {
-  if (state.noteLabelMode === "degree" && suffix === "7") return "Mm7";
+  if (state.noteLabelMode !== "degree") return suffix;
+  if (suffix === "7") return "Mm7";
+  if (suffix === "9") return "Mm9";
+  if (suffix === "maj7") return "M7";
+  if (suffix === "maj9") return "M9";
+  if (suffix === "mMaj7") return "mM7";
   return suffix;
 }
 
@@ -509,7 +514,7 @@ function currentChordName() {
 
 function syncCurrentChord() {
   if (!els.currentChord) return;
-  els.currentChord.textContent = `${t("label.currentChord")} ${currentChordName()}`;
+  els.currentChord.textContent = currentChordName();
 }
 
 function t(key, params = {}) {
