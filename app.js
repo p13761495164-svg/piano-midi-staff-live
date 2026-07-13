@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v80";
+const APP_VERSION = "v81";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1679,11 +1679,7 @@ function prunePlayedAutoFollowNotes(currentBeatStart) {
 
 function scheduleAutoFollowEmptyBeatCheck() {
   window.clearTimeout(state.autoFollow.emptyAdvanceTimer);
-  if (state.autoFollowMode !== "beat" || state.autoFollow.animating || !state.practice.measures.length) return;
-  state.autoFollow.emptyAdvanceTimer = window.setTimeout(() => {
-    state.autoFollow.emptyAdvanceTimer = 0;
-    evaluateAutoFollowBeat({ advanceEmptyBeat: true });
-  }, 120);
+  state.autoFollow.emptyAdvanceTimer = 0;
 }
 
 function evaluateAutoFollowBeat(options = {}) {
@@ -1693,7 +1689,6 @@ function evaluateAutoFollowBeat(options = {}) {
 
   const targets = targetsForBeat(beatStart);
   if (!targets.length) {
-    if (options.advanceEmptyBeat) animatePracticeViewToTick((state.practice.viewStartTick || 0) + practiceBeatTicks());
     return;
   }
   const matchedCount = targets.filter((target) => isAutoFollowTargetMatched(target)).length;
