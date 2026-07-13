@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v132";
+const APP_VERSION = "v133";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1080,7 +1080,7 @@ function buildPracticeNoteItems() {
       const matched = isAutoFollowTargetMatched(target);
       const playbackActive = isPlaybackTargetActive(target);
       const active = playbackActive || (isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick);
-      const cue = cueTargetIds.has(target.id) && !matched;
+      const cue = cueTargetIds.has(target.id) && !matched && !playbackActive;
       return {
         note: target.note,
         displayNote: display.note,
