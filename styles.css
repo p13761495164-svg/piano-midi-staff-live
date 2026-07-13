@@ -102,7 +102,6 @@ h2 {
   margin-bottom: 5px;
 }
 
-.brand p,
 .field span {
   color: var(--muted);
 }
@@ -115,13 +114,26 @@ h2 {
   flex-wrap: wrap;
 }
 
-.brand p {
-  margin-top: 5px;
-  font-size: 14px;
-}
-
 .status-row p {
   margin-top: 0;
+}
+
+#statusText {
+  max-width: min(560px, 100%);
+  border: 1px solid rgba(221, 212, 200, 0.86);
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#statusText.status-alert {
+  border-color: #e7a8a2;
+  background: #fff0ef;
+  color: #b7352c;
+  font-weight: 700;
 }
 
 .version-badge {

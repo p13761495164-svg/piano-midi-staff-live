@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v79";
+const APP_VERSION = "v80";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -166,7 +166,6 @@ const I18N = {
     "status.connected": "已连接：{name}",
     "status.leftPedalSignal": "左踏板信号：CC{controller}={value}",
     "status.leftPedalPage": "左踏板翻页：CC{controller}",
-    "status.hardwareKeySignal": "硬件按键：{key} / {code} / {phase}",
     "status.leftPedalKeyPage": "左踏板翻页：按键 {key}",
     "status.cacheFailed": "页面可使用，但离线缓存注册失败。",
     "status.refreshing": "正在获取最新版本...",
@@ -228,7 +227,6 @@ const I18N = {
     "status.connected": "接続済み：{name}",
     "status.leftPedalSignal": "左ペダル信号：CC{controller}={value}",
     "status.leftPedalPage": "左ペダル送り：CC{controller}",
-    "status.hardwareKeySignal": "ハードキー：{key} / {code} / {phase}",
     "status.leftPedalKeyPage": "左ペダル送り：キー {key}",
     "status.cacheFailed": "ページは使用できますが、オフラインキャッシュ登録に失敗しました。",
     "status.refreshing": "最新版を取得中...",
@@ -290,7 +288,6 @@ const I18N = {
     "status.connected": "Connected: {name}",
     "status.leftPedalSignal": "Left pedal signal: CC{controller}={value}",
     "status.leftPedalPage": "Left pedal page: CC{controller}",
-    "status.hardwareKeySignal": "Hardware key: {key} / {code} / {phase}",
     "status.leftPedalKeyPage": "Left pedal page: key {key}",
     "status.cacheFailed": "The page works, but offline cache registration failed.",
     "status.refreshing": "Getting the latest version...",
@@ -436,6 +433,26 @@ function t(key, params = {}) {
 function setStatusKey(key, params = {}) {
   state.statusMessage = { key, params };
   els.statusText.textContent = t(key, params);
+  setStatusTone(statusToneForKey(key));
+}
+
+function setStatusTone(tone) {
+  els.statusText.classList.toggle("status-alert", tone === "alert");
+}
+
+function statusToneForKey(key) {
+  const alertKeys = new Set([
+    "status.loadedEmpty",
+    "status.loadFailed",
+    "status.playUnsupported",
+    "status.webMidiUnsupported",
+    "status.midiDenied",
+    "status.fullscreenUnsupported",
+    "status.fullscreenFailed",
+    "status.noMidiInput",
+    "status.cacheFailed"
+  ]);
+  return alertKeys.has(key) ? "alert" : "info";
 }
 
 function updateText(node, text) {
@@ -2520,6 +2537,7 @@ window.PianoMidiNative = {
 function setStatus(text) {
   state.statusMessage = null;
   els.statusText.textContent = text;
+  setStatusTone("info");
 }
 
 function setupPwa() {
@@ -2632,8 +2650,6 @@ function setupHardwarePedalKeys() {
 function handleHardwarePedalInput(data) {
   const key = String(data?.key || "Unidentified");
   const code = String(data?.code || "");
-  const phase = String(data?.phase || "native");
-  setStatusKey("status.hardwareKeySignal", { key, code: code || "-", phase });
 
   if (!isHardwarePedalKey(key, code)) return false;
   const now = performance.now();
