@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v120";
+const APP_VERSION = "v121";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2009,7 +2009,7 @@ function evaluateAutoFollowBeat(options = {}) {
     if (options.advanceEmptyBeat) advancePracticeGrid(1);
     return;
   }
-  if (!targetGroupsByStartTick(targets).every((group) => isTargetGroupMatched(group))) return;
+  if (!isTargetGroupMatched(targets)) return;
   advancePracticeGrid(1);
 }
 
