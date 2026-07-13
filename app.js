@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v92";
+const APP_VERSION = "v93";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1710,15 +1710,36 @@ function nextPracticeCueNotes() {
   const startTick = currentAutoFollowBeatStart();
   const endTick = practiceEndTick();
   for (let tick = startTick; tick <= endTick; tick += gridTicks) {
-    const targets = targetsForBeat(tick);
-    if (targets.length) {
-      const cueTick = Math.min(...targets.map((target) => target.startTick));
-      return new Set(targets
-        .filter((target) => target.startTick === cueTick)
-        .map((target) => target.note));
-    }
+    const group = firstUnmatchedTargetGroup(targetsForBeat(tick));
+    if (group.length) return new Set(group.map((target) => target.note));
   }
   return new Set();
+}
+
+function targetGroupsByStartTick(targets) {
+  const groups = [];
+  let currentTick = null;
+  let currentGroup = [];
+  targets.forEach((target) => {
+    if (currentTick === null || target.startTick !== currentTick) {
+      if (currentGroup.length) groups.push(currentGroup);
+      currentTick = target.startTick;
+      currentGroup = [];
+    }
+    currentGroup.push(target);
+  });
+  if (currentGroup.length) groups.push(currentGroup);
+  return groups;
+}
+
+function firstUnmatchedTargetGroup(targets) {
+  const groups = targetGroupsByStartTick(targets);
+  for (const group of groups) {
+    if (!isTargetGroupMatched(group)) {
+      return group.filter((target) => !isAutoFollowTargetMatched(target));
+    }
+  }
+  return [];
 }
 
 function markAutoFollowNote(note) {
@@ -1803,8 +1824,7 @@ function evaluateAutoFollowBeat(options = {}) {
     if (options.advanceEmptyBeat) advancePracticeGrid(1);
     return;
   }
-  const matchedCount = targets.filter((target) => isAutoFollowTargetMatched(target)).length;
-  if (matchedCount < requiredAutoFollowMatches(targets.length)) return;
+  if (!targetGroupsByStartTick(targets).every((group) => isTargetGroupMatched(group))) return;
   advancePracticeGrid(1);
 }
 
@@ -1817,6 +1837,11 @@ function isAutoFollowTargetMatched(target) {
 function requiredAutoFollowMatches(targetCount) {
   const allowedMisses = Math.floor(targetCount * state.autoFollowTolerance / 100);
   return Math.max(1, targetCount - allowedMisses);
+}
+
+function isTargetGroupMatched(targets) {
+  const matchedCount = targets.filter((target) => isAutoFollowTargetMatched(target)).length;
+  return matchedCount >= requiredAutoFollowMatches(targets.length);
 }
 
 function animatePracticeViewToTick(targetTick, options = {}) {
