@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v95";
+const APP_VERSION = "v96";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1057,7 +1057,7 @@ function drawNote(svg, item) {
 
   const innerLabel = noteInnerLabel(note);
   if (innerLabel) {
-    const filledPracticeNote = isPractice && ["quarter", "eighth", "sixteenth"].includes(item.durationKind) && !matched;
+    const filledPracticeNote = isPractice && !matched;
     const noteInnerLabelText = createSvg("text", {
       x,
       y,
@@ -1121,8 +1121,7 @@ function durationKindForTicks(durationTicks) {
 
 function drawPracticeNoteShape(svg, item) {
   const { note, displayNote, x, y, matched, durationKind, targetId } = item;
-  const isFilled = durationKind === "quarter" || durationKind === "eighth" || durationKind === "sixteenth";
-  const classes = ["note-head", "practice-note-head", isFilled ? "filled-note" : "open-note"];
+  const classes = ["note-head", "practice-note-head", "filled-note"];
   if (item.trackRole === "secondary") classes.push("secondary-track-note");
   if (matched) classes.push("matched-note");
   svg.appendChild(createSvg("ellipse", {

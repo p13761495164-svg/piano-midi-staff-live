@@ -558,16 +558,16 @@ select {
 }
 
 .secondary-track-note {
-  stroke: #85817b;
+  stroke: var(--ink);
 }
 
 .secondary-track-note.filled-note {
-  fill: #85817b;
+  fill: var(--ink);
 }
 
 .secondary-track-note.open-note {
   fill: #fffdf8;
-  stroke: #85817b;
+  stroke: var(--ink);
 }
 
 .matched-note {
