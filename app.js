@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v105";
+const APP_VERSION = "v106";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1794,7 +1794,7 @@ function markAutoFollowNote(note) {
   const beatStart = currentAutoFollowBeatStart();
   if (state.autoFollow.currentBeatStart !== beatStart) resetAutoFollowBeat(beatStart);
   const target = targetForPlayedNote(note, beatStart);
-  if (target) markPlayedNoteForBeat(beatStartForTick(target.startTick), note);
+  if (target) markPlayedTargetForBeat(beatStartForTick(target.startTick), target);
 }
 
 function targetForPlayedNote(note, currentBeatStart) {
@@ -1814,7 +1814,7 @@ function targetForPlayedNote(note, currentBeatStart) {
         Math.abs(a.startTick - viewStartTick) - Math.abs(b.startTick - viewStartTick) ||
         a.startTick - b.startTick;
     });
-  return candidates[0] || null;
+  return candidates.find((target) => !isAutoFollowTargetMatched(target)) || candidates[0] || null;
 }
 
 function beatStartForTick(tick) {
@@ -1822,12 +1822,12 @@ function beatStartForTick(tick) {
   return Math.floor(Math.max(0, tick) / gridTicks) * gridTicks;
 }
 
-function markPlayedNoteForBeat(beatStart, note) {
+function markPlayedTargetForBeat(beatStart, target) {
   const key = String(beatStart);
   if (!state.autoFollow.playedNotesByBeat.has(key)) {
     state.autoFollow.playedNotesByBeat.set(key, new Set());
   }
-  state.autoFollow.playedNotesByBeat.get(key).add(note);
+  state.autoFollow.playedNotesByBeat.get(key).add(target.id);
   prunePlayedAutoFollowNotes(beatStart);
 }
 
@@ -1875,8 +1875,8 @@ function evaluateAutoFollowBeat(options = {}) {
 }
 
 function isAutoFollowTargetMatched(target) {
-  const notes = state.autoFollow.playedNotesByBeat.get(String(beatStartForTick(target.startTick)));
-  return notes?.has(target.note) || false;
+  const targetIds = state.autoFollow.playedNotesByBeat.get(String(beatStartForTick(target.startTick)));
+  return targetIds?.has(target.id) || false;
 }
 
 function requiredAutoFollowMatches(targetCount) {
