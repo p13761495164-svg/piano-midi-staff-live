@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v99";
+const APP_VERSION = "v101";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2161,6 +2161,7 @@ function parseMidiFile(bytes) {
   const ticksPerQuarter = division || MIDI_PPQ;
   const noteEvents = [];
   const pedalEvents = [];
+  const timeSignatureEvents = [];
   let timeSignature = { numerator: 4, denominator: 4 };
   let microsecondsPerQuarter = 500000;
 
@@ -2176,15 +2177,20 @@ function parseMidiFile(bytes) {
     const trackResult = parseMidiTrack(bytes, reader.position, trackEnd, ticksPerQuarter);
     noteEvents.push(...trackResult.notes.map((note) => ({ ...note, trackIndex })));
     pedalEvents.push(...trackResult.pedalEvents.map((event) => ({ ...event, trackIndex })));
+    timeSignatureEvents.push(...trackResult.timeSignatureEvents);
     if (trackResult.timeSignature) timeSignature = trackResult.timeSignature;
     if (trackResult.microsecondsPerQuarter) microsecondsPerQuarter = trackResult.microsecondsPerQuarter;
     reader.position = trackEnd;
   }
 
-  const measureTicks = ticksPerQuarter * timeSignature.numerator * 4 / timeSignature.denominator;
   const notes = noteEvents
     .filter((item) => item.note >= MIDI_MIN && item.note <= MIDI_MAX)
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+  if (notes.length) {
+    const lastNoteTick = Math.max(...notes.map((note) => Math.max(note.endTick, note.startTick + 1)));
+    timeSignature = primaryMidiTimeSignature(timeSignatureEvents, lastNoteTick, timeSignature, ticksPerQuarter);
+  }
+  const measureTicks = ticksPerQuarter * timeSignature.numerator * 4 / timeSignature.denominator;
   if (!notes.length) return { measures: [], pedalEvents, ticksPerQuarter, measureTicks, timeSignature, microsecondsPerQuarter, format };
   const trackRoles = trackRolesForNotes(notes);
 
@@ -2378,11 +2384,36 @@ function trackRolesForNotes(notes) {
   return new Map([[noteTracks[0].trackIndex, "secondary"]]);
 }
 
+function primaryMidiTimeSignature(events, lastTick, fallback, ticksPerQuarter) {
+  const signatures = (events || [])
+    .filter((event) => event.numerator > 0 && event.denominator > 0)
+    .sort((a, b) => a.tick - b.tick || a.numerator - b.numerator || a.denominator - b.denominator);
+  if (!signatures.length) return fallback || { numerator: 4, denominator: 4 };
+
+  const scoreBySignature = new Map();
+  signatures.forEach((event, index) => {
+    const nextTick = signatures[index + 1]?.tick ?? Math.max(lastTick, event.tick + 1);
+    const span = Math.max(1, nextTick - event.tick);
+    const key = `${event.numerator}/${event.denominator}`;
+    scoreBySignature.set(key, (scoreBySignature.get(key) || 0) + span);
+  });
+
+  const best = [...scoreBySignature.entries()]
+    .sort((a, b) => b[1] - a[1] || measureTicksForTimeSignature(parseTimeSignatureKey(b[0]), ticksPerQuarter) - measureTicksForTimeSignature(parseTimeSignatureKey(a[0]), ticksPerQuarter))[0]?.[0];
+  const selected = best ? parseTimeSignatureKey(best) : fallback;
+  const selectedMeasureTicks = measureTicksForTimeSignature(selected, ticksPerQuarter);
+  if (selectedMeasureTicks < ticksPerQuarter * 2 && lastTick > selectedMeasureTicks * 24) {
+    return { numerator: 4, denominator: 4 };
+  }
+  return selected;
+}
+
 function parseMidiTrack(bytes, start, end) {
   const reader = makeMidiReader(bytes, start);
   const activeNotes = new Map();
   const notes = [];
   const pedalEvents = [];
+  const timeSignatureEvents = [];
   let tick = 0;
   let runningStatus = 0;
   let timeSignature = null;
@@ -2406,6 +2437,7 @@ function parseMidiTrack(bytes, start, end) {
         const numerator = reader.readUint8();
         const denominatorPower = reader.readUint8();
         timeSignature = { numerator, denominator: 2 ** denominatorPower };
+        timeSignatureEvents.push({ tick, ...timeSignature });
         reader.skip(length - 2);
       } else if (type === 0x51 && length >= 3) {
         microsecondsPerQuarter = (reader.readUint8() << 16) | (reader.readUint8() << 8) | reader.readUint8();
@@ -2447,7 +2479,7 @@ function parseMidiTrack(bytes, start, end) {
     });
   });
 
-  return { notes, pedalEvents, timeSignature, microsecondsPerQuarter };
+  return { notes, pedalEvents, timeSignature, timeSignatureEvents, microsecondsPerQuarter };
 }
 
 function makeMidiReader(bytes, position = 0) {
