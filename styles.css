@@ -502,6 +502,7 @@ select {
   width: 100%;
   height: 100%;
   display: block;
+  transform: translateY(28px);
 }
 
 .staff-line {
@@ -821,7 +822,7 @@ select {
 
   .score-board {
     aspect-ratio: auto;
-    height: clamp(250px, 48vw, 310px);
+    height: clamp(282px, 52vw, 330px);
   }
 
   .measure-tools {
