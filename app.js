@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v94";
+const APP_VERSION = "v95";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -306,6 +306,8 @@ const MEASURE_NOTE_LEFT_X = 500;
 const MEASURE_NOTE_RIGHT_X = 1620;
 const BEAT_GRID_TOP_Y = TREBLE_LINE_YS[0];
 const BEAT_GRID_BOTTOM_Y = BASS_LINE_YS[4];
+const KEY_SIGNATURE_START_X = 270;
+const KEY_SIGNATURE_GAP_X = 20;
 const PEDAL_TRACK_Y = 650;
 const LEDGER_OCTAVE_LIMIT = STAFF_STEP_PX * 6;
 
@@ -1234,7 +1236,7 @@ function drawKeySignature(svg) {
   const symbol = key.accidental === "b" ? "♭" : "♯";
   for (let index = 0; index < key.count; index += 1) {
     const letter = letters[index];
-    const x = 275 + index * 24;
+    const x = KEY_SIGNATURE_START_X + index * KEY_SIGNATURE_GAP_X;
     const trebleMark = createSvg("text", {
       x,
       y: positions.treble[letter],

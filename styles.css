@@ -516,9 +516,9 @@ select {
 
 .beat-grid-line {
   stroke: #8f857a;
-  stroke-width: 2.4;
-  stroke-dasharray: 7 8;
-  opacity: 0.78;
+  stroke-width: 2;
+  stroke-dasharray: 5 10;
+  opacity: 0.46;
 }
 
 .measure-grid-line {
@@ -658,7 +658,7 @@ select {
 .key-signature {
   fill: var(--ink);
   font-family: "Times New Roman", Georgia, serif;
-  font-size: 60px;
+  font-size: 52px;
   font-weight: 700;
   text-anchor: middle;
   dominant-baseline: middle;
