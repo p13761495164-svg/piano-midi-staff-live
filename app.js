@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v128";
+const APP_VERSION = "v129";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -171,7 +171,7 @@ const I18N = {
     "option.autoSelect": "自动选择",
     "status.waiting": "等待连接 MIDI 键盘",
     "status.live": "实时显示",
-    "status.measure": "{range} / {total} 小节 · {matched}/{visible}",
+    "status.measure": "{range} / {total} 小节",
     "status.recording": "录制中...",
     "status.recorded": "录制完成：{count} 个音，点击保存 MIDI",
     "status.recordedEmpty": "录制完成：没有记录到音符",
@@ -234,7 +234,7 @@ const I18N = {
     "option.autoSelect": "自動選択",
     "status.waiting": "MIDI キーボード接続待ち",
     "status.live": "リアルタイム表示",
-    "status.measure": "{range} / {total} 小節 · {matched}/{visible}",
+    "status.measure": "{range} / {total} 小節",
     "status.recording": "録音中...",
     "status.recorded": "録音完了：{count} 音。MIDI を保存できます",
     "status.recordedEmpty": "録音完了：音符は記録されませんでした",
@@ -297,7 +297,7 @@ const I18N = {
     "option.autoSelect": "Auto Select",
     "status.waiting": "Waiting for MIDI keyboard",
     "status.live": "Live View",
-    "status.measure": "{range} / {total} measures · {matched}/{visible}",
+    "status.measure": "{range} / {total} measures",
     "status.recording": "Recording...",
     "status.recorded": "Recorded {count} notes. Save MIDI when ready",
     "status.recordedEmpty": "Recording finished: no notes captured",
@@ -433,7 +433,6 @@ const els = {
   installButton: document.getElementById("installButton"),
   startMeasureButton: document.getElementById("startMeasureButton"),
   playMeasureButton: document.getElementById("playMeasureButton"),
-  pausePlaybackButton: document.getElementById("pausePlaybackButton"),
   playbackSlider: document.getElementById("playbackSlider"),
   playbackTime: document.getElementById("playbackTime"),
   measureStatus: document.getElementById("measureStatus"),
@@ -583,7 +582,6 @@ function applyLanguage() {
   updateText(els.installButton, t("button.install"));
   updateIconButtonLabel(els.startMeasureButton, t("button.start"));
   updateIconButtonLabel(els.playMeasureButton, t("button.play"));
-  updateIconButtonLabel(els.pausePlaybackButton, t("button.pause"));
 
   document.querySelector('[data-label-mode="degree"]').textContent = t("button.degree");
   document.querySelector('[data-label-mode="pitch"]').textContent = t("button.pitch");
@@ -795,10 +793,8 @@ function syncRecordingControls() {
 function syncPracticeControls() {
   const hasMeasures = state.practice.measures.length > 0;
   els.startMeasureButton.disabled = !hasMeasures || (state.practice.viewStartTick || 0) <= 0;
-  els.playMeasureButton.disabled = !hasMeasures || state.playback.playing;
-  updateIconButtonLabel(els.playMeasureButton, t("button.play"));
-  els.pausePlaybackButton.disabled = !state.playback.playing;
-  updateIconButtonLabel(els.pausePlaybackButton, t("button.pause"));
+  els.playMeasureButton.disabled = !hasMeasures;
+  syncPlaybackToggleButton();
   syncPlaybackScrubber();
 
   if (!hasMeasures) {
@@ -807,17 +803,23 @@ function syncPracticeControls() {
   }
 
   const total = state.practice.measures.length;
-  const visibleNotes = visiblePracticeTargets();
   const startMeasure = measureIndexForTick(state.practice.viewStartTick || 0) + 1;
   const endMeasure = Math.min(total, measureIndexForTick((state.practice.viewStartTick || 0) + currentViewSpanTicks() - 1) + 1);
   const rangeLabel = startMeasure === endMeasure ? `${startMeasure}` : `${startMeasure}-${endMeasure}`;
-  const matched = visibleNotes.filter((note) => isAutoFollowTargetMatched(note)).length;
   els.measureStatus.textContent = t("status.measure", {
     range: rangeLabel,
-    total,
-    matched,
-    visible: visibleNotes.length
+    total
   });
+}
+
+function syncPlaybackToggleButton() {
+  const icon = els.playMeasureButton.querySelector(".control-icon");
+  const label = state.playback.playing ? t("button.pause") : t("button.play");
+  if (icon) {
+    icon.classList.toggle("play-icon", !state.playback.playing);
+    icon.classList.toggle("pause-icon", state.playback.playing);
+  }
+  updateIconButtonLabel(els.playMeasureButton, label);
 }
 
 function applySavedSettings() {
@@ -2219,6 +2221,15 @@ function animatePracticeViewToTick(targetTick, options = {}) {
   state.autoFollow.animationFrame = window.requestAnimationFrame(step);
 }
 
+function toggleContinuousPlayback() {
+  if (state.playback.playing) {
+    stopMeasurePlayback();
+    syncPracticeControls();
+    return;
+  }
+  startContinuousPlayback();
+}
+
 async function startContinuousPlayback() {
   if (!state.practice.measures.length || state.playback.playing) return;
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -3363,11 +3374,7 @@ function setupEvents() {
   els.loadMidiButton.addEventListener("click", () => els.midiFileInput.click());
   els.midiFileInput.addEventListener("change", () => loadScoreFile(els.midiFileInput.files[0]));
   els.startMeasureButton.addEventListener("click", goToPracticeStart);
-  els.playMeasureButton.addEventListener("click", startContinuousPlayback);
-  els.pausePlaybackButton.addEventListener("click", () => {
-    stopMeasurePlayback();
-    syncPracticeControls();
-  });
+  els.playMeasureButton.addEventListener("click", toggleContinuousPlayback);
   els.playbackSlider.addEventListener("input", () => {
     seekPracticeView(els.playbackSlider.value);
   });
