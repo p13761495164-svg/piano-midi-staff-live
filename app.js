@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v89";
+const APP_VERSION = "v90";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -362,6 +362,8 @@ const state = {
   playback: {
     audioContext: null,
     activeNodes: [],
+    activeNotes: new Set(),
+    visualNotes: [],
     stopTimer: 0,
     animationFrame: 0,
     playing: false,
@@ -396,8 +398,6 @@ const els = {
   fullscreenButton: document.getElementById("fullscreenButton"),
   refreshButton: document.getElementById("refreshButton"),
   installButton: document.getElementById("installButton"),
-  prevMeasureButton: document.getElementById("prevMeasureButton"),
-  nextMeasureButton: document.getElementById("nextMeasureButton"),
   startMeasureButton: document.getElementById("startMeasureButton"),
   playMeasureButton: document.getElementById("playMeasureButton"),
   pausePlaybackButton: document.getElementById("pausePlaybackButton"),
@@ -708,8 +708,6 @@ function syncRecordingControls() {
 
 function syncPracticeControls() {
   const hasMeasures = state.practice.measures.length > 0;
-  els.prevMeasureButton.disabled = !hasMeasures || (state.practice.viewStartTick || 0) <= 0;
-  els.nextMeasureButton.disabled = !hasMeasures || (state.practice.viewStartTick || 0) >= maxPracticeViewStartTick();
   els.startMeasureButton.disabled = !hasMeasures || (state.practice.viewStartTick || 0) <= 0;
   els.playMeasureButton.disabled = !hasMeasures || state.playback.playing;
   updateIconButtonLabel(els.playMeasureButton, t("button.play"));
@@ -1880,6 +1878,8 @@ async function startContinuousPlayback() {
 
   state.playback.playing = true;
   state.playback.activeNodes = [];
+  state.playback.activeNotes = new Set();
+  state.playback.visualNotes = [];
   state.playback.startTick = playbackStartTick;
   state.playback.endTick = playbackEndTick;
   state.playback.startedAtAudioTime = startAt;
@@ -1895,6 +1895,11 @@ async function startContinuousPlayback() {
       const noteStart = Math.max(0, (audibleStartTick - playbackStartTick) * secondsPerTick);
       const noteDuration = Math.max(0.08, (audibleEndTick - audibleStartTick) * secondsPerTick);
       schedulePracticeTone(audioContext, target.note, startAt + noteStart, noteDuration);
+      state.playback.visualNotes.push({
+        note: target.note,
+        startTick: audibleStartTick,
+        endTick: Math.max(audibleStartTick + 1, audibleEndTick)
+      });
     });
 
   animatePlaybackView();
@@ -1914,6 +1919,7 @@ function animatePlaybackView() {
     if (!state.playback.playing) return;
     const elapsed = Math.max(0, audioContext.currentTime - state.playback.startedAtAudioTime);
     const playbackTick = state.playback.startTick + elapsed / Math.max(0.000001, state.playback.secondsPerTick);
+    updatePlaybackActiveNotes(playbackTick);
     const viewTick = Math.min(maxPracticeViewStartTick(), playbackTick);
     const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
     state.practice.viewStartTick = viewTick;
@@ -1934,6 +1940,16 @@ function animatePlaybackView() {
   };
 
   state.playback.animationFrame = window.requestAnimationFrame(step);
+}
+
+function updatePlaybackActiveNotes(playbackTick) {
+  const activeNotes = new Set();
+  state.playback.visualNotes.forEach((item) => {
+    if (playbackTick >= item.startTick && playbackTick < item.endTick) {
+      activeNotes.add(item.note);
+    }
+  });
+  state.playback.activeNotes = activeNotes;
 }
 
 function pedalIntervalsForPlayback(startTick, endTick) {
@@ -2018,7 +2034,10 @@ function stopMeasurePlayback() {
     }
   });
   state.playback.activeNodes = [];
+  state.playback.activeNotes = new Set();
+  state.playback.visualNotes = [];
   state.playback.playing = false;
+  updateKeyboardActive();
 }
 
 function parseMidiFile(bytes) {
@@ -2441,7 +2460,8 @@ function updateAll() {
 
 function updateKeyboardActive() {
   els.keyboard.querySelectorAll(".key").forEach((key) => {
-    key.classList.toggle("active", state.activeNotes.has(Number(key.dataset.note)));
+    const note = Number(key.dataset.note);
+    key.classList.toggle("active", state.activeNotes.has(note) || state.playback.activeNotes.has(note));
   });
 }
 
@@ -2844,8 +2864,6 @@ function setupEvents() {
   els.saveRecordButton.addEventListener("click", saveRecording);
   els.loadMidiButton.addEventListener("click", () => els.midiFileInput.click());
   els.midiFileInput.addEventListener("change", () => loadScoreFile(els.midiFileInput.files[0]));
-  els.prevMeasureButton.addEventListener("click", () => advancePracticeGrid(-1, { clearPlayed: true, pauseAutoFollow: true }));
-  els.nextMeasureButton.addEventListener("click", () => advancePracticeGrid(1, { clearPlayed: true, pauseAutoFollow: true }));
   els.startMeasureButton.addEventListener("click", goToPracticeStart);
   els.playMeasureButton.addEventListener("click", startContinuousPlayback);
   els.pausePlaybackButton.addEventListener("click", () => {
