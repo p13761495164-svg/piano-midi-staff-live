@@ -9,9 +9,9 @@
   <meta name="apple-mobile-web-app-title" content="Easy Piano">
   <title>Easy Piano</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon.png?v=87" type="image/png">
-  <link rel="apple-touch-icon" href="icons/icon.png?v=87">
-  <link rel="stylesheet" href="styles.css?v=87">
+  <link rel="icon" href="icons/icon.png?v=88" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon.png?v=88">
+  <link rel="stylesheet" href="styles.css?v=88">
 </head>
 <body>
   <main class="app-shell">
@@ -19,23 +19,23 @@
       <p id="statusText" class="status-banner">等待连接 MIDI 键盘</p>
       <div class="topbar">
         <div class="brand">
-          <img class="brand-mark" src="icons/icon.png?v=87" alt="" aria-hidden="true">
+          <img class="brand-mark" src="icons/icon.png?v=88" alt="" aria-hidden="true">
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
-              <span id="versionBadge" class="version-badge">v87</span>
+              <span id="versionBadge" class="version-badge">v88</span>
             </div>
           </div>
         </div>
         <div class="actions">
-          <button id="connectButton" class="primary toolbar-button" type="button" aria-label="连接 MIDI" title="连接 MIDI"><span class="midi-word-icon" aria-hidden="true">MIDI</span></button>
-          <button id="recordButton" class="record-button toolbar-button" type="button" aria-label="录 MIDI" title="录 MIDI"><span class="record-dot-icon" aria-hidden="true"></span><span class="midi-mini-label" aria-hidden="true">MIDI</span></button>
-          <button id="stopRecordButton" class="ghost toolbar-button hidden" type="button" aria-label="停止 MIDI" title="停止 MIDI"><span class="toolbar-stop-icon" aria-hidden="true"></span></button>
-          <button id="saveRecordButton" class="ghost toolbar-button" type="button" aria-label="保存 MIDI" title="保存 MIDI" disabled><span class="save-midi-icon" aria-hidden="true"></span><span class="midi-mini-label" aria-hidden="true">MIDI</span></button>
-          <button id="loadMidiButton" class="ghost toolbar-button" type="button" aria-label="载入乐谱" title="载入乐谱"><span class="folder-icon" aria-hidden="true"></span></button>
-          <button id="fullscreenButton" class="ghost toolbar-button" type="button" aria-label="全屏" title="全屏"><span class="fullscreen-icon" aria-hidden="true"></span></button>
-          <button id="refreshButton" class="ghost toolbar-button" type="button" aria-label="更新" title="更新"><span class="refresh-icon" aria-hidden="true"></span></button>
-          <button id="installButton" class="ghost toolbar-button hidden" type="button" aria-label="安装" title="安装"><span class="install-icon" aria-hidden="true"></span></button>
+          <button id="connectButton" class="primary" type="button">连接 MIDI</button>
+          <button id="recordButton" class="record-button" type="button">录 MIDI</button>
+          <button id="stopRecordButton" class="ghost hidden" type="button">停止 MIDI</button>
+          <button id="saveRecordButton" class="ghost" type="button" disabled>保存 MIDI</button>
+          <button id="loadMidiButton" class="ghost" type="button">载入乐谱</button>
+          <button id="fullscreenButton" class="ghost" type="button">全屏</button>
+          <button id="refreshButton" class="ghost" type="button">更新</button>
+          <button id="installButton" class="ghost hidden" type="button">安装</button>
           <input id="midiFileInput" class="file-input" type="file" accept=".mid,.midi,.musicxml,.xml,audio/midi,audio/x-midi,application/vnd.recordare.musicxml+xml,text/xml,application/xml">
         </div>
       </div>
@@ -148,6 +148,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=87"></script>
+  <script src="app.js?v=88"></script>
 </body>
 </html>

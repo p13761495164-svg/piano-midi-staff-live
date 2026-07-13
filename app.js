@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v87";
+const APP_VERSION = "v88";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -489,13 +489,13 @@ function applyLanguage() {
   updateText(document.querySelector(".time-field span"), t("label.timeSignature"));
   updateText(document.querySelector(".key-field span"), t("label.keySignature"));
 
-  updateIconButtonLabel(els.connectButton, t("button.connect"));
-  updateIconButtonLabel(els.recordButton, t("button.record"));
-  updateIconButtonLabel(els.stopRecordButton, t("button.stopRecord"));
-  updateIconButtonLabel(els.saveRecordButton, t("button.saveRecord"));
-  updateIconButtonLabel(els.loadMidiButton, t("button.loadScore"));
-  updateIconButtonLabel(els.refreshButton, t("button.refresh"));
-  updateIconButtonLabel(els.installButton, t("button.install"));
+  updateText(els.connectButton, t("button.connect"));
+  updateText(els.recordButton, t("button.record"));
+  updateText(els.stopRecordButton, t("button.stopRecord"));
+  updateText(els.saveRecordButton, t("button.saveRecord"));
+  updateText(els.loadMidiButton, t("button.loadScore"));
+  updateText(els.refreshButton, t("button.refresh"));
+  updateText(els.installButton, t("button.install"));
   updateIconButtonLabel(els.startMeasureButton, t("button.start"));
   updateIconButtonLabel(els.playMeasureButton, t("button.play"));
   updateIconButtonLabel(els.pausePlaybackButton, t("button.pause"));
@@ -2454,7 +2454,7 @@ async function toggleFullscreen() {
 
 function syncFullscreenButton() {
   const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
-  updateIconButtonLabel(els.fullscreenButton, fullscreenElement ? t("button.exitFullscreen") : t("button.fullscreen"));
+  els.fullscreenButton.textContent = fullscreenElement ? t("button.exitFullscreen") : t("button.fullscreen");
 }
 
 function refreshMidiInputs() {
