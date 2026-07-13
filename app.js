@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v123";
+const APP_VERSION = "v124";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1629,25 +1629,86 @@ function displayFilename(filename, fallback) {
 
 function applyParsedScore(parsed, filename, typeLabel) {
   cancelAutoFollowAnimation();
-  state.practice.notes = parsed.notes || parsed.measures.flatMap((measure) => measure.notes);
-  state.practice.pedalEvents = parsed.pedalEvents || [];
+  const normalized = trimLeadingScoreSilence(parsed);
+  state.practice.notes = normalized.notes || normalized.measures.flatMap((measure) => measure.notes);
+  state.practice.pedalEvents = normalized.pedalEvents || [];
   state.practice.currentMeasure = 0;
   state.practice.filename = filename || typeLabel;
-  state.practice.timeSignature = parsed.timeSignature;
-  state.practice.timeSignatureEvents = parsed.timeSignatureEvents || [];
-  state.practice.ticksPerQuarter = parsed.ticksPerQuarter;
-  state.practice.measureTicks = parsed.measureTicks;
-  state.practice.microsecondsPerQuarter = parsed.microsecondsPerQuarter;
+  state.practice.timeSignature = normalized.timeSignature;
+  state.practice.timeSignatureEvents = normalized.timeSignatureEvents || [];
+  state.practice.ticksPerQuarter = normalized.ticksPerQuarter;
+  state.practice.measureTicks = normalized.measureTicks;
+  state.practice.microsecondsPerQuarter = normalized.microsecondsPerQuarter;
   state.practice.viewStartTick = 0;
-  state.practice.measures = parsed.variableMeasures ? parsed.measures : buildMeasuresFromPracticeNotes(state.practice.notes);
+  state.practice.measures = normalized.variableMeasures ? normalized.measures : buildMeasuresFromPracticeNotes(state.practice.notes);
   resetAutoFollowBeat(0, { clearPlayed: true });
   const displayName = displayFilename(state.practice.filename, typeLabel);
-  setStatusKey(parsed.measures.length ? "status.loaded" : "status.loadedEmpty", {
+  setStatusKey(normalized.measures.length ? "status.loaded" : "status.loadedEmpty", {
     name: displayName,
     type: typeLabel
   });
   updateAll();
   scheduleAutoFollowEmptyBeatCheck();
+}
+
+function trimLeadingScoreSilence(parsed) {
+  const sourceMeasures = parsed.measures || [];
+  const sourceNotes = parsed.notes || sourceMeasures.flatMap((measure) => measure.notes || []);
+  if (!sourceNotes.length) return parsed;
+
+  const firstStartTick = Math.min(...sourceNotes.map((note) => Math.max(0, note.startTick || 0)));
+  if (!Number.isFinite(firstStartTick) || firstStartTick <= 0) return parsed;
+
+  const shiftTick = (tick) => Math.max(0, (Number(tick) || 0) - firstStartTick);
+  const notesByOldId = new Map();
+  const shiftedNotes = sourceNotes.map((note) => {
+    const shifted = {
+      ...note,
+      startTick: shiftTick(note.startTick),
+      endTick: Math.max(shiftTick(note.startTick) + 1, shiftTick(note.endTick))
+    };
+    notesByOldId.set(note.id, shifted);
+    return shifted;
+  });
+  const shiftedPedalEvents = (parsed.pedalEvents || [])
+    .map((event) => ({ ...event, tick: shiftTick(event.tick) }))
+    .sort((a, b) => a.tick - b.tick || (a.value || 0) - (b.value || 0));
+  const shiftedTimeSignatureEvents = (parsed.timeSignatureEvents || [])
+    .map((event) => ({ ...event, tick: shiftTick(event.tick) }))
+    .sort((a, b) => a.tick - b.tick || (a.numerator || 0) - (b.numerator || 0));
+
+  if (parsed.variableMeasures) {
+    const shiftedMeasures = sourceMeasures
+      .filter((measure) => (measure.endTick || 0) > firstStartTick || (measure.notes || []).length)
+      .map((measure) => {
+        const startTick = shiftTick(measure.startTick);
+        return {
+          ...measure,
+          startTick,
+          endTick: Math.max(startTick + 1, shiftTick(measure.endTick)),
+          notes: (measure.notes || [])
+            .map((note) => notesByOldId.get(note.id))
+            .filter(Boolean)
+        };
+      })
+      .map((measure, index) => ({ ...measure, index }));
+
+    return {
+      ...parsed,
+      notes: shiftedNotes,
+      measures: shiftedMeasures.length ? shiftedMeasures : buildMeasuresFromPracticeNotes(shiftedNotes),
+      pedalEvents: shiftedPedalEvents,
+      timeSignatureEvents: shiftedTimeSignatureEvents
+    };
+  }
+
+  return {
+    ...parsed,
+    notes: shiftedNotes,
+    measures: buildMeasuresFromPracticeNotes(shiftedNotes),
+    pedalEvents: shiftedPedalEvents,
+    timeSignatureEvents: shiftedTimeSignatureEvents
+  };
 }
 
 function updatePracticeTimeSignature(timeSignature) {
