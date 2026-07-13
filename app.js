@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v114";
+const APP_VERSION = "v115";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1805,6 +1805,33 @@ function nextPracticeCueNotes() {
 }
 
 function nextPracticeCueTargets() {
+  const primaryGroup = nextPrimaryCueTargets();
+  if (!primaryGroup.length) return [];
+
+  const cues = [...primaryGroup];
+  const cueIds = new Set(cues.map((target) => target.id));
+  const lanes = new Set(cues.map(targetCueLane));
+  const gridTicks = practiceGridTicks();
+  const startTick = currentAutoFollowBeatStart();
+  const endTick = Math.min(practiceEndTick(), startTick + currentViewSpanTicks());
+
+  for (let tick = startTick; tick <= endTick; tick += gridTicks) {
+    const group = firstUnmatchedTargetGroup(targetsForBeat(tick));
+    if (!group.length) continue;
+    const additions = group.filter((target) => !lanes.has(targetCueLane(target)));
+    additions.forEach((target) => {
+      if (!cueIds.has(target.id)) {
+        cues.push(target);
+        cueIds.add(target.id);
+      }
+      lanes.add(targetCueLane(target));
+    });
+  }
+
+  return cues;
+}
+
+function nextPrimaryCueTargets() {
   if (!state.practice.measures.length || state.playback.playing) return [];
   const gridTicks = practiceGridTicks();
   const startTick = currentAutoFollowBeatStart();
@@ -1814,6 +1841,11 @@ function nextPracticeCueTargets() {
     if (group.length) return group;
   }
   return [];
+}
+
+function targetCueLane(target) {
+  const display = displayInfoForPracticeNote(target.note);
+  return `${target.trackRole || "primary"}:${target.trackIndex ?? 0}:${display.clef}`;
 }
 
 function targetGroupsByStartTick(targets) {
@@ -1854,7 +1886,7 @@ function markAutoFollowNote(note) {
 }
 
 function targetForPlayedNote(note, currentBeatStart) {
-  const cueTarget = nextPracticeCueTargets().find((target) => target.note === note && !isAutoFollowTargetMatched(target));
+  const cueTarget = nextPrimaryCueTargets().find((target) => target.note === note && !isAutoFollowTargetMatched(target));
   if (cueTarget) return cueTarget;
 
   const gridTicks = practiceGridTicks();
