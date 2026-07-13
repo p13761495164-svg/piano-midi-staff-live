@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v115";
+const APP_VERSION = "v116";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -973,6 +973,10 @@ function buildPracticeNoteItems() {
   const viewStartTick = state.practice.viewStartTick || 0;
   const timeSpan = currentViewSpanTicks();
   const displayStartById = displayStartTicksForTargets(visibleNotes);
+  const primaryCueTargets = nextPrimaryCueTargets();
+  const cueBoundaryTick = primaryCueTargets.length
+    ? Math.max(...primaryCueTargets.map((target) => target.startTick))
+    : Infinity;
   const cueTargetIds = new Set(nextPracticeCueTargets().map((target) => target.id));
   const items = visibleNotes
     .slice()
@@ -996,7 +1000,7 @@ function buildPracticeNoteItems() {
         octaveMark: display.octaveMark,
         targetId: target.id,
         matched: isAutoFollowTargetMatched(target),
-        active: isPracticeNoteActive(target.note),
+        active: isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick,
         cue: cueTargetIds.has(target.id),
         isPractice: true,
         trackIndex: target.trackIndex ?? 0,
