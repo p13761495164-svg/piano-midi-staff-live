@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v106";
+const APP_VERSION = "v107";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1013,14 +1013,17 @@ function displayStartTicksForTargets(targets) {
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
 
   let groupStartTick = null;
+  let previousTick = null;
   sorted.forEach((target) => {
     if (
       groupStartTick === null ||
-      target.startTick - groupStartTick > arpeggioWindowTicks
+      previousTick === null ||
+      target.startTick - previousTick > arpeggioWindowTicks
     ) {
       groupStartTick = target.startTick;
     }
     map.set(target.id, groupStartTick);
+    previousTick = target.startTick;
   });
 
   return map;
@@ -1765,15 +1768,17 @@ function nextPracticeCueNotes() {
 function targetGroupsByStartTick(targets) {
   const groups = [];
   let currentTick = null;
+  let previousTick = null;
   let currentGroup = [];
   const arpeggioWindowTicks = arpeggioGroupingWindowTicks();
   targets.forEach((target) => {
-    if (currentTick === null || target.startTick - currentTick > arpeggioWindowTicks) {
+    if (currentTick === null || previousTick === null || target.startTick - previousTick > arpeggioWindowTicks) {
       if (currentGroup.length) groups.push(currentGroup);
       currentTick = target.startTick;
       currentGroup = [];
     }
     currentGroup.push(target);
+    previousTick = target.startTick;
   });
   if (currentGroup.length) groups.push(currentGroup);
   return groups;
