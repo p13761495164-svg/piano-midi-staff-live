@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v82";
+const APP_VERSION = "v84";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -342,7 +342,8 @@ const state = {
     playedNotesByBeat: new Map(),
     animationFrame: 0,
     emptyAdvanceTimer: 0,
-    animating: false
+    animating: false,
+    pausedAfterManualNavigation: false
   },
   deferredInstallPrompt: null,
   wakeLock: null,
@@ -1345,6 +1346,7 @@ function pressNote(note, velocity = 96, source = "midi") {
   recordMidiEvent("noteon", { note, velocity });
   state.releasedWhileSustained.delete(note);
   state.activeNotes.set(note, { velocity, source, startedAt: performance.now() });
+  state.autoFollow.pausedAfterManualNavigation = false;
   markAutoFollowNote(note);
   updateAll();
   evaluateAutoFollowBeat();
@@ -1568,12 +1570,12 @@ function goToMeasure(delta) {
   if (!state.practice.measures.length) return;
   const next = Math.max(0, Math.min(state.practice.measures.length - 1, state.practice.currentMeasure + delta));
   if (next === state.practice.currentMeasure) return;
-  animatePracticeViewToTick(state.practice.measures[next].startTick);
+  animatePracticeViewToTick(state.practice.measures[next].startTick, { clearPlayed: true, pauseAutoFollow: true });
 }
 
 function goToPracticeStart() {
   if (!state.practice.measures.length) return;
-  animatePracticeViewToTick(0);
+  animatePracticeViewToTick(0, { clearPlayed: true, pauseAutoFollow: true });
 }
 
 function panPracticeView(deltaMeasures) {
@@ -1584,11 +1586,17 @@ function panPracticeView(deltaMeasures) {
   animatePracticeViewToTick(nextStart);
 }
 
-function advancePracticeGrid(deltaCells) {
+function advancePracticeGrid(deltaCells, options = {}) {
   if (!state.practice.measures.length) return;
   const nextStart = clampPracticeViewStartTick((state.practice.viewStartTick || 0) + deltaCells * practiceGridTicks());
   if (Math.abs(nextStart - (state.practice.viewStartTick || 0)) < 1) return;
-  animatePracticeViewToTick(nextStart);
+  if (options.clearPlayed) {
+    resetAutoFollowBeat(null, { clearPlayed: true });
+  }
+  if (options.pauseAutoFollow) {
+    state.autoFollow.pausedAfterManualNavigation = true;
+  }
+  animatePracticeViewToTick(nextStart, options);
 }
 
 function practiceBeatTicks() {
@@ -1696,7 +1704,12 @@ function prunePlayedAutoFollowNotes(currentBeatStart) {
 
 function scheduleAutoFollowEmptyBeatCheck() {
   window.clearTimeout(state.autoFollow.emptyAdvanceTimer);
-  if (state.autoFollowMode !== "beat" || state.autoFollow.animating || !state.practice.measures.length) {
+  if (
+    state.autoFollowMode !== "beat" ||
+    state.autoFollow.animating ||
+    state.autoFollow.pausedAfterManualNavigation ||
+    !state.practice.measures.length
+  ) {
     state.autoFollow.emptyAdvanceTimer = 0;
     return;
   }
@@ -1707,7 +1720,12 @@ function scheduleAutoFollowEmptyBeatCheck() {
 }
 
 function evaluateAutoFollowBeat(options = {}) {
-  if (state.autoFollowMode !== "beat" || state.autoFollow.animating || !state.practice.measures.length) return;
+  if (
+    state.autoFollowMode !== "beat" ||
+    state.autoFollow.animating ||
+    state.autoFollow.pausedAfterManualNavigation ||
+    !state.practice.measures.length
+  ) return;
   const beatStart = currentAutoFollowBeatStart();
   if (state.autoFollow.currentBeatStart !== beatStart) resetAutoFollowBeat(beatStart);
 
@@ -1731,12 +1749,19 @@ function requiredAutoFollowMatches(targetCount) {
   return Math.max(1, targetCount - allowedMisses);
 }
 
-function animatePracticeViewToTick(targetTick) {
+function animatePracticeViewToTick(targetTick, options = {}) {
   if (!state.practice.measures.length) return;
   const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
   const startTick = state.practice.viewStartTick || 0;
   const endTick = clampPracticeViewStartTick(targetTick);
   if (Math.abs(endTick - startTick) < 1) return;
+
+  if (options.clearPlayed) {
+    resetAutoFollowBeat(null, { clearPlayed: true });
+  }
+  if (options.pauseAutoFollow) {
+    state.autoFollow.pausedAfterManualNavigation = true;
+  }
 
   stopMeasurePlayback();
   window.cancelAnimationFrame(state.autoFollow.animationFrame);
@@ -1766,7 +1791,7 @@ function animatePracticeViewToTick(targetTick) {
       Math.floor(endTick / measureTicks)
     ));
     state.autoFollow.animating = false;
-    resetAutoFollowBeat(currentAutoFollowBeatStart());
+    resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: Boolean(options.clearPlayed) });
     updateAll();
     scheduleAutoFollowEmptyBeatCheck();
   };
@@ -2523,7 +2548,7 @@ function isLeftPedalControl(controller) {
 
 function advanceByPedalStep() {
   if (state.pedalStep === "off") return;
-  advancePracticeGrid(1);
+  advancePracticeGrid(1, { clearPlayed: true, pauseAutoFollow: true });
 }
 
 function advanceBySustainPedalPage() {
@@ -2646,7 +2671,7 @@ function handleScoreClickEnd(event) {
   if (Math.abs(dx) > 14 || Math.abs(dy) > 14) return;
   const rect = els.scoreBoard.getBoundingClientRect();
   const direction = event.clientX < rect.left + rect.width / 2 ? -1 : 1;
-  advancePracticeGrid(direction);
+  advancePracticeGrid(direction, { clearPlayed: true, pauseAutoFollow: true });
 }
 
 function setupHardwarePedalKeys() {
@@ -2711,8 +2736,8 @@ function setupEvents() {
   els.saveRecordButton.addEventListener("click", saveRecording);
   els.loadMidiButton.addEventListener("click", () => els.midiFileInput.click());
   els.midiFileInput.addEventListener("change", () => loadScoreFile(els.midiFileInput.files[0]));
-  els.prevMeasureButton.addEventListener("click", () => advancePracticeGrid(-1));
-  els.nextMeasureButton.addEventListener("click", () => advancePracticeGrid(1));
+  els.prevMeasureButton.addEventListener("click", () => advancePracticeGrid(-1, { clearPlayed: true, pauseAutoFollow: true }));
+  els.nextMeasureButton.addEventListener("click", () => advancePracticeGrid(1, { clearPlayed: true, pauseAutoFollow: true }));
   els.startMeasureButton.addEventListener("click", goToPracticeStart);
   els.playMeasureButton.addEventListener("click", startContinuousPlayback);
   els.pausePlaybackButton.addEventListener("click", () => {
