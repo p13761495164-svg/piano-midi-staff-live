@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v133";
+const APP_VERSION = "v134";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -896,6 +896,7 @@ function drawStaff() {
     drawPracticeArpeggioMarks(svg, practiceItems);
     practiceItems.forEach((item) => drawNote(svg, item));
     drawActiveInputNotes(svg);
+    drawPlaybackActiveNotes(svg);
     drawPracticeOctaveGroups(svg, practiceItems);
     return;
   }
@@ -1078,15 +1079,14 @@ function buildPracticeNoteItems() {
       const progress = Math.max(0, Math.min(1, (displayStartTick - viewStartTick) / timeSpan));
       const targetX = MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
       const matched = isAutoFollowTargetMatched(target);
-      const playbackActive = isPlaybackTargetActive(target);
-      const active = playbackActive || (isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick);
-      const cue = cueTargetIds.has(target.id) && !matched && !playbackActive;
+      const active = isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick;
+      const cue = cueTargetIds.has(target.id) && !matched;
       return {
         note: target.note,
         displayNote: display.note,
         clef: display.clef,
         step: midiToStaffStep(display.note),
-        x: matched || playbackActive ? inputX : targetX,
+        x: matched ? inputX : targetX,
         startTick: target.startTick,
         displayStartTick,
         endTick: target.endTick,
@@ -1133,10 +1133,23 @@ function displayStartTicksForTargets(targets) {
 
 function buildActiveInputNoteItems() {
   if (!state.practice.measures.length || !state.activeNotes.size) return [];
-  const inputX = activeInputColumnX();
   const currentTargetNotes = new Set(targetsForBeat(currentAutoFollowBeatStart()).map((target) => target.note));
-  const items = [...state.activeNotes.keys()]
-    .filter((note) => !currentTargetNotes.has(note))
+  return buildLeftColumnNoteItems(
+    [...state.activeNotes.keys()].filter((note) => !currentTargetNotes.has(note)),
+    "input"
+  );
+}
+
+function buildPlaybackActiveNoteItems() {
+  if (!state.practice.measures.length || (!state.playback.playing && !state.playback.paused) || !state.playback.activeNotes.size) {
+    return [];
+  }
+  return buildLeftColumnNoteItems([...state.playback.activeNotes], "playback");
+}
+
+function buildLeftColumnNoteItems(notes, trackRole) {
+  const inputX = activeInputColumnX();
+  const items = notes
     .sort((a, b) => a - b)
     .map((note) => {
       const display = displayInfoForPracticeNote(note);
@@ -1148,7 +1161,7 @@ function buildActiveInputNoteItems() {
         octaveMark: display.octaveMark,
         x: inputX,
         xOffset: 0,
-        trackRole: "input"
+        trackRole
       };
     });
 
@@ -1179,13 +1192,16 @@ function activeInputColumnX() {
   return Math.max(360, MEASURE_NOTE_LEFT_X - 74);
 }
 
-function isPlaybackTargetActive(target) {
-  return (state.playback.playing || state.playback.paused) && state.playback.activeTargetIds.has(target.id);
+function drawActiveInputNotes(svg) {
+  drawLeftColumnNotes(svg, buildActiveInputNoteItems());
 }
 
-function drawActiveInputNotes(svg) {
-  const inputItems = buildActiveInputNoteItems();
-  inputItems.forEach((item) => {
+function drawPlaybackActiveNotes(svg) {
+  drawLeftColumnNotes(svg, buildPlaybackActiveNoteItems());
+}
+
+function drawLeftColumnNotes(svg, items) {
+  items.forEach((item) => {
     const y = yForNote(item.displayNote, item.clef);
     drawLedgerLines(svg, item.x, y, item.clef);
     svg.appendChild(createSvg("circle", {
@@ -1207,7 +1223,7 @@ function drawActiveInputNotes(svg) {
       svg.appendChild(text);
     }
   });
-  drawPracticeOctaveGroups(svg, inputItems);
+  drawPracticeOctaveGroups(svg, items);
 }
 
 function arpeggioGroupingWindowTicks() {
