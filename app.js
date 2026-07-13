@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v122";
+const APP_VERSION = "v123";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -115,7 +115,7 @@ const CHORD_TEMPLATES = [
   { suffix: "∅", intervals: [0, 3, 6, 10] },
   { suffix: "dim7", intervals: [0, 3, 6, 9] },
   { suffix: "m7", intervals: [0, 3, 7, 10] },
-  { suffix: "Mm7", intervals: [0, 4, 7, 10] },
+  { suffix: "7", intervals: [0, 4, 7, 10] },
   { suffix: "m6", intervals: [0, 3, 7, 9] },
   { suffix: "6", intervals: [0, 4, 7, 9] },
   { suffix: "sus4", intervals: [0, 5, 7] },
@@ -473,6 +473,11 @@ function chordToneLabel(pitchClass) {
   return chordNoteName(pitchClass);
 }
 
+function chordSuffixLabel(suffix) {
+  if (state.noteLabelMode === "degree" && suffix === "7") return "Mm7";
+  return suffix;
+}
+
 function currentSoundingNotes() {
   const notes = new Set([...state.activeNotes.keys(), ...state.playback.activeNotes]);
   return [...notes].sort((a, b) => a - b);
@@ -499,7 +504,7 @@ function currentChordName() {
   });
 
   if (!best) return "-";
-  const rootName = `${chordToneLabel(best.root)}${best.suffix}`;
+  const rootName = `${chordToneLabel(best.root)}${chordSuffixLabel(best.suffix)}`;
   return best.root === bass ? rootName : `${rootName}/${chordToneLabel(bass)}`;
 }
 
