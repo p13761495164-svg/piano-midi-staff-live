@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v104";
+const APP_VERSION = "v105";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1007,7 +1007,7 @@ function buildPracticeNoteItems() {
 
 function displayStartTicksForTargets(targets) {
   const map = new Map();
-  const arpeggioWindowTicks = Math.max(1, practiceBeatTicks() * ARPEGGIO_DISPLAY_WINDOW_RATIO);
+  const arpeggioWindowTicks = arpeggioGroupingWindowTicks();
   const sorted = targets
     .slice()
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
@@ -1024,6 +1024,10 @@ function displayStartTicksForTargets(targets) {
   });
 
   return map;
+}
+
+function arpeggioGroupingWindowTicks() {
+  return Math.max(1, practiceBeatTicks() * ARPEGGIO_DISPLAY_WINDOW_RATIO);
 }
 
 function visiblePracticeTargets() {
@@ -1762,8 +1766,9 @@ function targetGroupsByStartTick(targets) {
   const groups = [];
   let currentTick = null;
   let currentGroup = [];
+  const arpeggioWindowTicks = arpeggioGroupingWindowTicks();
   targets.forEach((target) => {
-    if (currentTick === null || target.startTick !== currentTick) {
+    if (currentTick === null || target.startTick - currentTick > arpeggioWindowTicks) {
       if (currentGroup.length) groups.push(currentGroup);
       currentTick = target.startTick;
       currentGroup = [];
@@ -1795,13 +1800,12 @@ function markAutoFollowNote(note) {
 function targetForPlayedNote(note, currentBeatStart) {
   const gridTicks = practiceGridTicks();
   const viewStartTick = state.practice.viewStartTick || 0;
-  const viewEndTick = viewStartTick + Math.max(1, state.practice.measureTicks || gridTicks);
   const currentBeatEnd = currentBeatStart + gridTicks;
   const candidates = (state.practice.notes || [])
     .filter((target) => (
       target.note === note &&
       target.startTick >= currentBeatStart &&
-      target.startTick < viewEndTick
+      target.startTick < currentBeatEnd
     ))
     .sort((a, b) => {
       const aInCurrentBeat = a.startTick < currentBeatEnd ? 0 : 1;
@@ -1871,7 +1875,6 @@ function evaluateAutoFollowBeat(options = {}) {
 }
 
 function isAutoFollowTargetMatched(target) {
-  if (isPracticeNoteActive(target.note)) return true;
   const notes = state.autoFollow.playedNotesByBeat.get(String(beatStartForTick(target.startTick)));
   return notes?.has(target.note) || false;
 }
