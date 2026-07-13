@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v130";
+const APP_VERSION = "v131";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -392,6 +392,7 @@ const state = {
     audioContext: null,
     activeNodes: [],
     activeNotes: new Set(),
+    activeTargetIds: new Set(),
     visualNotes: [],
     pendingNotes: [],
     pendingNoteIndex: 0,
@@ -1076,14 +1077,15 @@ function buildPracticeNoteItems() {
       const progress = Math.max(0, Math.min(1, (displayStartTick - viewStartTick) / timeSpan));
       const targetX = MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
       const matched = isAutoFollowTargetMatched(target);
-      const active = isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick;
+      const playbackActive = isPlaybackTargetActive(target);
+      const active = playbackActive || (isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick);
       const cue = cueTargetIds.has(target.id) && !matched;
       return {
         note: target.note,
         displayNote: display.note,
         clef: display.clef,
         step: midiToStaffStep(display.note),
-        x: matched ? inputX : targetX,
+        x: matched || playbackActive ? inputX : targetX,
         startTick: target.startTick,
         displayStartTick,
         endTick: target.endTick,
@@ -1174,6 +1176,10 @@ function buildActiveInputNoteItems() {
 
 function activeInputColumnX() {
   return Math.max(360, MEASURE_NOTE_LEFT_X - 74);
+}
+
+function isPlaybackTargetActive(target) {
+  return state.playback.playing && state.playback.activeTargetIds.has(target.id);
 }
 
 function drawActiveInputNotes(svg) {
@@ -2263,6 +2269,7 @@ async function startContinuousPlayback() {
   state.playback.playing = true;
   state.playback.activeNodes = [];
   state.playback.activeNotes = new Set();
+  state.playback.activeTargetIds = new Set();
   state.playback.visualNotes = [];
   state.playback.pendingNotes = [];
   state.playback.pendingNoteIndex = 0;
@@ -2282,11 +2289,13 @@ async function startContinuousPlayback() {
       const audibleEndTick = Math.min(effectiveEndTick, playbackEndTick);
       const noteDuration = Math.max(0.08, (audibleEndTick - audibleStartTick) * secondsPerTick);
       state.playback.pendingNotes.push({
+        targetId: target.id,
         note: target.note,
         startTick: audibleStartTick,
         duration: noteDuration
       });
       state.playback.visualNotes.push({
+        targetId: target.id,
         note: target.note,
         startTick: audibleStartTick,
         endTick: Math.max(audibleStartTick + 1, audibleEndTick)
@@ -2356,12 +2365,15 @@ function triggerPendingPlaybackNotes(playbackTick) {
 
 function updatePlaybackActiveNotes(playbackTick) {
   const activeNotes = new Set();
+  const activeTargetIds = new Set();
   state.playback.visualNotes.forEach((item) => {
     if (playbackTick >= item.startTick && playbackTick < item.endTick) {
       activeNotes.add(item.note);
+      activeTargetIds.add(item.targetId);
     }
   });
   state.playback.activeNotes = activeNotes;
+  state.playback.activeTargetIds = activeTargetIds;
 }
 
 function pedalIntervalsForPlayback(startTick, endTick) {
@@ -2476,6 +2488,7 @@ function stopMeasurePlayback() {
   });
   state.playback.activeNodes = [];
   state.playback.activeNotes = new Set();
+  state.playback.activeTargetIds = new Set();
   state.playback.visualNotes = [];
   state.playback.pendingNotes = [];
   state.playback.pendingNoteIndex = 0;
