@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v78";
+const APP_VERSION = "v79";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -120,6 +120,7 @@ const I18N = {
     "label.tolerance": "容错",
     "label.timeSignature": "拍号",
     "label.keySignature": "调号",
+    "button.settings": "设置",
     "button.connect": "连接 MIDI",
     "button.record": "录 MIDI",
     "button.stopRecord": "停止 MIDI",
@@ -181,6 +182,7 @@ const I18N = {
     "label.tolerance": "許容",
     "label.timeSignature": "拍子",
     "label.keySignature": "調号",
+    "button.settings": "設定",
     "button.connect": "MIDI 接続",
     "button.record": "MIDI 録音",
     "button.stopRecord": "録音停止",
@@ -242,6 +244,7 @@ const I18N = {
     "label.tolerance": "Tolerance",
     "label.timeSignature": "Time Signature",
     "label.keySignature": "Key",
+    "button.settings": "Settings",
     "button.connect": "Connect MIDI",
     "button.record": "Record MIDI",
     "button.stopRecord": "Stop MIDI",
@@ -399,6 +402,7 @@ const els = {
   pausePlaybackButton: document.getElementById("pausePlaybackButton"),
   measureStatus: document.getElementById("measureStatus"),
   versionBadge: document.getElementById("versionBadge"),
+  settingsSummaryLabel: document.getElementById("settingsSummaryLabel"),
   languageLabel: document.getElementById("languageLabel"),
   languageButtons: [...document.querySelectorAll("[data-language]")],
   inputField: document.querySelector(".input-field"),
@@ -444,6 +448,7 @@ function applyLanguage() {
   document.title = "Easy Piano";
 
   updateText(els.languageLabel, t("label.language"));
+  updateText(els.settingsSummaryLabel, t("button.settings"));
   updateText(document.querySelector(".input-field span"), t("label.midiInput"));
   updateText(document.querySelector(".mode-field span"), t("label.noteMark"));
   updateText(document.querySelector(".pedal-field span"), t("label.leftPedal"));

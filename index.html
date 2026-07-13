@@ -9,21 +9,21 @@
   <meta name="apple-mobile-web-app-title" content="Easy Piano">
   <title>Easy Piano</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon.png?v=78" type="image/png">
-  <link rel="apple-touch-icon" href="icons/icon.png?v=78">
-  <link rel="stylesheet" href="styles.css?v=78">
+  <link rel="icon" href="icons/icon.png?v=79" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon.png?v=79">
+  <link rel="stylesheet" href="styles.css?v=79">
 </head>
 <body>
   <main class="app-shell">
     <section class="stage" aria-label="实时钢琴 MIDI 显示">
       <div class="topbar">
         <div class="brand">
-          <img class="brand-mark" src="icons/icon.png?v=78" alt="" aria-hidden="true">
+          <img class="brand-mark" src="icons/icon.png?v=79" alt="" aria-hidden="true">
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
               <p id="statusText">等待连接 MIDI 键盘</p>
-              <span id="versionBadge" class="version-badge">v78</span>
+              <span id="versionBadge" class="version-badge">v79</span>
             </div>
           </div>
         </div>
@@ -40,85 +40,88 @@
         </div>
       </div>
 
-      <div class="panel-strip" aria-label="连接设置">
-        <div class="control-row">
-          <div class="field language-field">
-            <span id="languageLabel">语言</span>
-            <div class="segmented" role="group" aria-label="语言">
-              <button class="mode-option active" type="button" data-language="zh" aria-pressed="true">中文</button>
-              <button class="mode-option" type="button" data-language="ja" aria-pressed="false">日本語</button>
-              <button class="mode-option" type="button" data-language="en" aria-pressed="false">EN</button>
+      <details class="settings-panel">
+        <summary><span id="settingsSummaryLabel">设置</span></summary>
+        <div class="panel-strip" aria-label="连接设置">
+          <div class="control-row">
+            <div class="field language-field">
+              <span id="languageLabel">语言</span>
+              <div class="segmented" role="group" aria-label="语言">
+                <button class="mode-option active" type="button" data-language="zh" aria-pressed="true">中文</button>
+                <button class="mode-option" type="button" data-language="ja" aria-pressed="false">日本語</button>
+                <button class="mode-option" type="button" data-language="en" aria-pressed="false">EN</button>
+              </div>
+            </div>
+            <label class="field input-field hidden">
+              <span>MIDI 输入</span>
+              <select id="inputSelect">
+                <option value="">自动选择</option>
+              </select>
+            </label>
+            <div class="field mode-field">
+              <span>音符标记</span>
+              <div class="segmented" role="group" aria-label="音符标记">
+                <button class="mode-option active" type="button" data-label-mode="degree" aria-pressed="true">级数</button>
+                <button class="mode-option" type="button" data-label-mode="pitch" aria-pressed="false">音高</button>
+                <button class="mode-option" type="button" data-label-mode="none" aria-pressed="false">无</button>
+              </div>
+            </div>
+            <div class="field pedal-field">
+              <span>左踏板翻页</span>
+              <div class="segmented" role="group" aria-label="左踏板翻页">
+                <button class="mode-option active" type="button" data-pedal-step="measure" aria-pressed="true">一小节</button>
+                <button class="mode-option" type="button" data-pedal-step="half" aria-pressed="false">半小节</button>
+              </div>
+            </div>
+            <div class="field sustain-page-field hidden">
+              <span>延音踏板翻页</span>
+              <div class="segmented" role="group" aria-label="延音踏板翻页">
+                <button class="mode-option active" type="button" data-sustain-pedal-page="off" aria-pressed="true">关</button>
+                <button class="mode-option" type="button" data-sustain-pedal-page="half" aria-pressed="false">半页</button>
+                <button class="mode-option" type="button" data-sustain-pedal-page="page" aria-pressed="false">一页</button>
+              </div>
+            </div>
+            <div class="field auto-follow-field">
+              <span>自动跟随</span>
+              <div class="segmented two-part" role="group" aria-label="自动跟随">
+                <button class="mode-option active" type="button" data-auto-follow-mode="off" aria-pressed="true">关</button>
+                <button class="mode-option" type="button" data-auto-follow-mode="beat" aria-pressed="false">按拍</button>
+              </div>
+            </div>
+            <div class="field tolerance-field">
+              <span>容错 <strong id="toleranceValue">50%</strong></span>
+              <div class="slider-control">
+                <input id="toleranceSlider" type="range" min="0" max="50" step="10" value="50" aria-label="容错百分比">
+              </div>
+            </div>
+            <div class="field time-field">
+              <span>拍号</span>
+              <div class="segmented" role="group" aria-label="拍号">
+                <button class="mode-option active" type="button" data-time-signature="4/4" aria-pressed="true">4/4</button>
+                <button class="mode-option" type="button" data-time-signature="3/4" aria-pressed="false">3/4</button>
+                <button class="mode-option" type="button" data-time-signature="6/8" aria-pressed="false">6/8</button>
+              </div>
             </div>
           </div>
-          <label class="field input-field hidden">
-            <span>MIDI 输入</span>
-            <select id="inputSelect">
-              <option value="">自动选择</option>
-            </select>
-          </label>
-          <div class="field mode-field">
-            <span>音符标记</span>
-            <div class="segmented" role="group" aria-label="音符标记">
-              <button class="mode-option active" type="button" data-label-mode="degree" aria-pressed="true">级数</button>
-              <button class="mode-option" type="button" data-label-mode="pitch" aria-pressed="false">音高</button>
-              <button class="mode-option" type="button" data-label-mode="none" aria-pressed="false">无</button>
-            </div>
-          </div>
-          <div class="field pedal-field">
-            <span>左踏板翻页</span>
-            <div class="segmented" role="group" aria-label="左踏板翻页">
-              <button class="mode-option active" type="button" data-pedal-step="measure" aria-pressed="true">一小节</button>
-              <button class="mode-option" type="button" data-pedal-step="half" aria-pressed="false">半小节</button>
-            </div>
-          </div>
-          <div class="field sustain-page-field hidden">
-            <span>延音踏板翻页</span>
-            <div class="segmented" role="group" aria-label="延音踏板翻页">
-              <button class="mode-option active" type="button" data-sustain-pedal-page="off" aria-pressed="true">关</button>
-              <button class="mode-option" type="button" data-sustain-pedal-page="half" aria-pressed="false">半页</button>
-              <button class="mode-option" type="button" data-sustain-pedal-page="page" aria-pressed="false">一页</button>
-            </div>
-          </div>
-          <div class="field auto-follow-field">
-            <span>自动跟随</span>
-            <div class="segmented two-part" role="group" aria-label="自动跟随">
-              <button class="mode-option active" type="button" data-auto-follow-mode="off" aria-pressed="true">关</button>
-              <button class="mode-option" type="button" data-auto-follow-mode="beat" aria-pressed="false">按拍</button>
-            </div>
-          </div>
-          <div class="field tolerance-field">
-            <span>容错 <strong id="toleranceValue">50%</strong></span>
-            <div class="slider-control">
-              <input id="toleranceSlider" type="range" min="0" max="50" step="10" value="50" aria-label="容错百分比">
-            </div>
-          </div>
-          <div class="field time-field">
-            <span>拍号</span>
-            <div class="segmented" role="group" aria-label="拍号">
-              <button class="mode-option active" type="button" data-time-signature="4/4" aria-pressed="true">4/4</button>
-              <button class="mode-option" type="button" data-time-signature="3/4" aria-pressed="false">3/4</button>
-              <button class="mode-option" type="button" data-time-signature="6/8" aria-pressed="false">6/8</button>
+          <div class="field key-field">
+            <span>调号</span>
+            <div class="key-options" role="group" aria-label="调号">
+              <button class="key-option active" type="button" data-key-signature="C" aria-pressed="true">C</button>
+              <button class="key-option" type="button" data-key-signature="Db" aria-pressed="false">Db</button>
+              <button class="key-option" type="button" data-key-signature="D" aria-pressed="false">D</button>
+              <button class="key-option" type="button" data-key-signature="Eb" aria-pressed="false">Eb</button>
+              <button class="key-option" type="button" data-key-signature="E" aria-pressed="false">E</button>
+              <button class="key-option" type="button" data-key-signature="F" aria-pressed="false">F</button>
+              <button class="key-option" type="button" data-key-signature="Gb" aria-pressed="false">Gb</button>
+              <button class="key-option" type="button" data-key-signature="G" aria-pressed="false">G</button>
+              <button class="key-option" type="button" data-key-signature="Ab" aria-pressed="false">Ab</button>
+              <button class="key-option" type="button" data-key-signature="A" aria-pressed="false">A</button>
+              <button class="key-option" type="button" data-key-signature="Bb" aria-pressed="false">Bb</button>
+              <button class="key-option" type="button" data-key-signature="B" aria-pressed="false">B</button>
             </div>
           </div>
         </div>
-        <div class="field key-field">
-          <span>调号</span>
-          <div class="key-options" role="group" aria-label="调号">
-            <button class="key-option active" type="button" data-key-signature="C" aria-pressed="true">C</button>
-            <button class="key-option" type="button" data-key-signature="Db" aria-pressed="false">Db</button>
-            <button class="key-option" type="button" data-key-signature="D" aria-pressed="false">D</button>
-            <button class="key-option" type="button" data-key-signature="Eb" aria-pressed="false">Eb</button>
-            <button class="key-option" type="button" data-key-signature="E" aria-pressed="false">E</button>
-            <button class="key-option" type="button" data-key-signature="F" aria-pressed="false">F</button>
-            <button class="key-option" type="button" data-key-signature="Gb" aria-pressed="false">Gb</button>
-            <button class="key-option" type="button" data-key-signature="G" aria-pressed="false">G</button>
-            <button class="key-option" type="button" data-key-signature="Ab" aria-pressed="false">Ab</button>
-            <button class="key-option" type="button" data-key-signature="A" aria-pressed="false">A</button>
-            <button class="key-option" type="button" data-key-signature="Bb" aria-pressed="false">Bb</button>
-            <button class="key-option" type="button" data-key-signature="B" aria-pressed="false">B</button>
-          </div>
-        </div>
-      </div>
+      </details>
 
       <section class="score-board" aria-label="五线谱">
         <button id="prevMeasureButton" class="measure-nav measure-nav-left" type="button" aria-label="上一小节" disabled>‹</button>
@@ -139,6 +142,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=78"></script>
+  <script src="app.js?v=79"></script>
 </body>
 </html>

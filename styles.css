@@ -51,7 +51,7 @@ select {
 }
 
 .topbar,
-.panel-strip {
+.settings-panel {
   background: rgba(255, 253, 248, 0.86);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
@@ -59,8 +59,8 @@ select {
 }
 
 .topbar {
-  min-height: 86px;
-  padding: 16px;
+  min-height: 72px;
+  padding: 12px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -75,11 +75,12 @@ select {
 }
 
 .brand-mark {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   border-radius: 12px;
   display: block;
   flex: 0 0 auto;
+  background: #080807;
   box-shadow: 0 8px 18px rgba(41, 37, 34, 0.16);
 }
 
@@ -142,10 +143,10 @@ h2 {
 }
 
 button {
-  min-height: 42px;
+  min-height: 38px;
   border: 1px solid transparent;
   border-radius: 8px;
-  padding: 0 14px;
+  padding: 0 12px;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -187,7 +188,42 @@ button:disabled {
   display: none;
 }
 
+.settings-panel {
+  overflow: hidden;
+}
+
+.settings-panel summary {
+  min-height: 44px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.settings-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-panel summary::after {
+  content: "v";
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+
+.settings-panel[open] summary::after {
+  transform: rotate(180deg);
+}
+
 .panel-strip {
+  border-top: 1px solid var(--line);
+  background: rgba(255, 253, 248, 0.62);
   padding: 12px;
   display: grid;
   grid-template-columns: 1fr;
@@ -337,8 +373,8 @@ select {
 
 .score-board {
   position: relative;
-  height: clamp(460px, 41vw, 720px);
-  min-height: 460px;
+  height: clamp(500px, 44vw, 760px);
+  min-height: 500px;
   border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--panel);
@@ -686,14 +722,19 @@ select {
   .topbar {
     align-items: stretch;
     flex-direction: column;
+    min-height: 0;
   }
 
   .actions {
     justify-content: stretch;
+    gap: 7px;
   }
 
   .actions button {
-    flex: 1 1 130px;
+    flex: 1 1 112px;
+    padding: 0 10px;
+    min-height: 36px;
+    font-size: 14px;
   }
 
   .panel-strip {
@@ -713,7 +754,7 @@ select {
   }
 
   .score-board {
-    height: 460px;
+    height: 500px;
   }
 
   .keyboard {
