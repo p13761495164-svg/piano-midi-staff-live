@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v118";
+const APP_VERSION = "v119";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -466,6 +466,11 @@ function chordNoteName(pitchClass) {
   return names[((pitchClass % 12) + 12) % 12];
 }
 
+function chordToneLabel(pitchClass) {
+  if (state.noteLabelMode === "degree") return degreeForNote(((pitchClass % 12) + 12) % 12 + 60);
+  return chordNoteName(pitchClass);
+}
+
 function currentSoundingNotes() {
   const notes = new Set([...state.activeNotes.keys(), ...state.playback.activeNotes]);
   return [...notes].sort((a, b) => a - b);
@@ -492,8 +497,8 @@ function currentChordName() {
   });
 
   if (!best) return "-";
-  const rootName = `${chordNoteName(best.root)}${best.suffix}`;
-  return best.root === bass ? rootName : `${rootName}/${chordNoteName(bass)}`;
+  const rootName = `${chordToneLabel(best.root)}${best.suffix}`;
+  return best.root === bass ? rootName : `${rootName}/${chordToneLabel(bass)}`;
 }
 
 function syncCurrentChord() {
@@ -3239,6 +3244,7 @@ function setupEvents() {
       syncControlsFromState();
       saveSettings();
       drawStaff();
+      syncCurrentChord();
     });
   });
   els.modeButtons.forEach((button) => {
@@ -3247,6 +3253,7 @@ function setupEvents() {
       syncControlsFromState();
       saveSettings();
       drawStaff();
+      syncCurrentChord();
     });
   });
   els.pedalStepButtons.forEach((button) => {

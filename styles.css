@@ -461,8 +461,11 @@ select {
 .chord-status {
   color: var(--ink);
   font-weight: 800;
-  min-width: 74px;
+  flex: 0 0 132px;
+  width: 132px;
+  overflow: hidden;
   text-align: center;
+  text-overflow: ellipsis;
 }
 
 .measure-play {
