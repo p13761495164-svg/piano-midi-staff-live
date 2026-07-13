@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v85";
+const APP_VERSION = "v86";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -465,6 +465,12 @@ function updateText(node, text) {
   if (node) node.textContent = text;
 }
 
+function updateIconButtonLabel(node, text) {
+  if (!node) return;
+  node.setAttribute("aria-label", text);
+  node.setAttribute("title", text);
+}
+
 function applyLanguage() {
   state.language = normalizeLanguage(state.language);
   document.documentElement.lang = state.language === "zh" ? "zh-Hans" : state.language;
@@ -490,9 +496,9 @@ function applyLanguage() {
   updateText(els.loadMidiButton, t("button.loadScore"));
   updateText(els.refreshButton, t("button.refresh"));
   updateText(els.installButton, t("button.install"));
-  updateText(els.startMeasureButton, t("button.start"));
-  updateText(els.playMeasureButton, t("button.play"));
-  updateText(els.pausePlaybackButton, t("button.pause"));
+  updateIconButtonLabel(els.startMeasureButton, t("button.start"));
+  updateIconButtonLabel(els.playMeasureButton, t("button.play"));
+  updateIconButtonLabel(els.pausePlaybackButton, t("button.pause"));
 
   document.querySelector('[data-label-mode="degree"]').textContent = t("button.degree");
   document.querySelector('[data-label-mode="pitch"]').textContent = t("button.pitch");
@@ -706,9 +712,9 @@ function syncPracticeControls() {
   els.nextMeasureButton.disabled = !hasMeasures || (state.practice.viewStartTick || 0) >= maxPracticeViewStartTick();
   els.startMeasureButton.disabled = !hasMeasures || (state.practice.viewStartTick || 0) <= 0;
   els.playMeasureButton.disabled = !hasMeasures || state.playback.playing;
-  els.playMeasureButton.textContent = t("button.play");
+  updateIconButtonLabel(els.playMeasureButton, t("button.play"));
   els.pausePlaybackButton.disabled = !state.playback.playing;
-  els.pausePlaybackButton.textContent = t("button.pause");
+  updateIconButtonLabel(els.pausePlaybackButton, t("button.pause"));
   syncPlaybackScrubber();
 
   if (!hasMeasures) {
@@ -1788,6 +1794,7 @@ function evaluateAutoFollowBeat(options = {}) {
 }
 
 function isAutoFollowTargetMatched(target) {
+  if (isPracticeNoteActive(target.note)) return true;
   const notes = state.autoFollow.playedNotesByBeat.get(String(beatStartForTick(target.startTick)));
   return notes?.has(target.note) || false;
 }

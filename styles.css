@@ -450,9 +450,8 @@ select {
   grid-template-columns: minmax(130px, 1fr) auto;
   align-items: center;
   gap: 8px;
-  border: 1px solid var(--line);
-  background: rgba(255, 253, 248, 0.9);
-  padding: 4px 8px;
+  background: transparent;
+  padding: 2px 0;
 }
 
 .playback-scrubber input[type="range"] {
@@ -484,10 +483,45 @@ select {
 }
 
 .measure-play {
-  min-height: 28px;
+  min-height: 30px;
   padding: 0 10px;
   color: var(--ink);
   box-shadow: none;
+}
+
+.icon-button {
+  width: 34px;
+  min-width: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.control-icon {
+  display: block;
+}
+
+.stop-icon {
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+}
+
+.play-icon {
+  width: 0;
+  height: 0;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-left: 13px solid currentColor;
+  margin-left: 2px;
+}
+
+.pause-icon {
+  width: 14px;
+  height: 14px;
+  border-left: 5px solid currentColor;
+  border-right: 5px solid currentColor;
 }
 
 #staffSvg {
