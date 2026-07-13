@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v125";
+const APP_VERSION = "v126";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1120,7 +1120,9 @@ function displayStartTicksForTargets(targets) {
 function buildActiveInputNoteItems() {
   if (!state.practice.measures.length || !state.activeNotes.size) return [];
   const inputX = Math.max(360, MEASURE_NOTE_LEFT_X - 74);
+  const currentTargetNotes = new Set(targetsForBeat(currentAutoFollowBeatStart()).map((target) => target.note));
   const items = [...state.activeNotes.keys()]
+    .filter((note) => !currentTargetNotes.has(note))
     .sort((a, b) => a - b)
     .map((note) => {
       const display = displayInfoForPracticeNote(note);
