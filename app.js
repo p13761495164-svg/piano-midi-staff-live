@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v93";
+const APP_VERSION = "v94";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -364,12 +364,16 @@ const state = {
     activeNodes: [],
     activeNotes: new Set(),
     visualNotes: [],
+    pendingNotes: [],
+    pendingNoteIndex: 0,
     stopTimer: 0,
     animationFrame: 0,
     playing: false,
     startTick: 0,
     endTick: 0,
     startedAtAudioTime: 0,
+    startedAtPerformance: 0,
+    lastVisualFrameAt: 0,
     secondsPerTick: 0
   },
   scorePointer: {
@@ -1910,9 +1914,10 @@ async function startContinuousPlayback() {
   if (audioContext.state === "suspended") {
     await audioContext.resume();
   }
+  unlockPlaybackAudio(audioContext);
 
   const secondsPerTick = (state.practice.microsecondsPerQuarter || 500000) / 1000000 / (state.practice.ticksPerQuarter || MIDI_PPQ);
-  const startAt = audioContext.currentTime + 0.06;
+  const startAt = audioContext.currentTime + 0.08;
   const playbackStartTick = currentAutoFollowBeatStart();
   const lastMeasure = state.practice.measures[state.practice.measures.length - 1];
   const playbackEndTick = Math.max(playbackStartTick + 1, lastMeasure?.endTick || playbackStartTick + practiceBeatTicks());
@@ -1922,9 +1927,13 @@ async function startContinuousPlayback() {
   state.playback.activeNodes = [];
   state.playback.activeNotes = new Set();
   state.playback.visualNotes = [];
+  state.playback.pendingNotes = [];
+  state.playback.pendingNoteIndex = 0;
   state.playback.startTick = playbackStartTick;
   state.playback.endTick = playbackEndTick;
   state.playback.startedAtAudioTime = startAt;
+  state.playback.startedAtPerformance = performance.now() + 80;
+  state.playback.lastVisualFrameAt = 0;
   state.playback.secondsPerTick = secondsPerTick;
 
   const pedalIntervals = pedalIntervalsForPlayback(playbackStartTick, playbackEndTick);
@@ -1934,15 +1943,19 @@ async function startContinuousPlayback() {
       const audibleStartTick = Math.max(target.startTick, playbackStartTick);
       const effectiveEndTick = sustainedPlaybackEndTick(target, pedalIntervals);
       const audibleEndTick = Math.min(effectiveEndTick, playbackEndTick);
-      const noteStart = Math.max(0, (audibleStartTick - playbackStartTick) * secondsPerTick);
       const noteDuration = Math.max(0.08, (audibleEndTick - audibleStartTick) * secondsPerTick);
-      schedulePracticeTone(audioContext, target.note, startAt + noteStart, noteDuration);
+      state.playback.pendingNotes.push({
+        note: target.note,
+        startTick: audibleStartTick,
+        duration: noteDuration
+      });
       state.playback.visualNotes.push({
         note: target.note,
         startTick: audibleStartTick,
         endTick: Math.max(audibleStartTick + 1, audibleEndTick)
       });
     });
+  state.playback.pendingNotes.sort((a, b) => a.startTick - b.startTick || a.note - b.note);
 
   animatePlaybackView();
   state.playback.stopTimer = window.setTimeout(() => {
@@ -1954,23 +1967,26 @@ async function startContinuousPlayback() {
 
 function animatePlaybackView() {
   window.cancelAnimationFrame(state.playback.animationFrame);
-  const audioContext = state.playback.audioContext;
-  if (!audioContext) return;
 
   const step = () => {
     if (!state.playback.playing) return;
-    const elapsed = Math.max(0, audioContext.currentTime - state.playback.startedAtAudioTime);
+    const now = performance.now();
+    const elapsed = Math.max(0, (now - state.playback.startedAtPerformance) / 1000);
     const playbackTick = state.playback.startTick + elapsed / Math.max(0.000001, state.playback.secondsPerTick);
+    triggerPendingPlaybackNotes(playbackTick);
     updatePlaybackActiveNotes(playbackTick);
-    const viewTick = Math.min(maxPracticeViewStartTick(), playbackTick);
-    const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
-    state.practice.viewStartTick = viewTick;
-    state.practice.currentMeasure = Math.max(0, Math.min(
-      state.practice.measures.length - 1,
-      Math.floor(viewTick / measureTicks)
-    ));
-    updateAll();
-    syncPlaybackScrubber();
+    if (now - state.playback.lastVisualFrameAt >= 33 || playbackTick >= state.playback.endTick) {
+      state.playback.lastVisualFrameAt = now;
+      const viewTick = Math.min(maxPracticeViewStartTick(), playbackTick);
+      const measureTicks = Math.max(1, state.practice.measureTicks || MIDI_PPQ * 4);
+      state.practice.viewStartTick = viewTick;
+      state.practice.currentMeasure = Math.max(0, Math.min(
+        state.practice.measures.length - 1,
+        Math.floor(viewTick / measureTicks)
+      ));
+      updateAll();
+      syncPlaybackScrubber();
+    }
 
     if (playbackTick >= state.playback.endTick) {
       stopMeasurePlayback();
@@ -1982,6 +1998,24 @@ function animatePlaybackView() {
   };
 
   state.playback.animationFrame = window.requestAnimationFrame(step);
+}
+
+function triggerPendingPlaybackNotes(playbackTick) {
+  const audioContext = state.playback.audioContext;
+  if (!audioContext || audioContext.state === "suspended") return;
+  const lookaheadSeconds = 0.12;
+  const lookaheadTicks = lookaheadSeconds / Math.max(0.000001, state.playback.secondsPerTick);
+  const endTick = playbackTick + lookaheadTicks;
+
+  while (
+    state.playback.pendingNoteIndex < state.playback.pendingNotes.length &&
+    state.playback.pendingNotes[state.playback.pendingNoteIndex].startTick <= endTick
+  ) {
+    const item = state.playback.pendingNotes[state.playback.pendingNoteIndex];
+    const offsetSeconds = Math.max(0.006, (item.startTick - playbackTick) * state.playback.secondsPerTick);
+    schedulePracticeTone(audioContext, item.note, audioContext.currentTime + offsetSeconds, item.duration);
+    state.playback.pendingNoteIndex += 1;
+  }
 }
 
 function updatePlaybackActiveNotes(playbackTick) {
@@ -2012,52 +2046,48 @@ function sustainedPlaybackEndTick(target, pedalIntervals) {
 
 function schedulePracticeTone(audioContext, note, startAt, duration) {
   const frequency = 440 * 2 ** ((note - 69) / 12);
+  const safeStartAt = Math.max(audioContext.currentTime + 0.004, startAt);
   const output = audioContext.createGain();
   const filter = audioContext.createBiquadFilter();
-  const dry = audioContext.createGain();
-  const shimmer = audioContext.createGain();
-  const releaseAt = startAt + Math.max(0.12, duration);
-  const tailEnd = releaseAt + 0.48;
+  const oscillator = audioContext.createOscillator();
+  const releaseAt = safeStartAt + Math.max(0.12, duration);
+  const tailEnd = releaseAt + 0.32;
 
   filter.type = "lowpass";
-  filter.frequency.setValueAtTime(Math.min(7200, frequency * 10), startAt);
+  filter.frequency.setValueAtTime(Math.min(5600, frequency * 9), safeStartAt);
   filter.frequency.exponentialRampToValueAtTime(Math.max(1200, frequency * 4), releaseAt);
-  filter.Q.setValueAtTime(0.7, startAt);
+  filter.Q.setValueAtTime(0.7, safeStartAt);
 
-  output.gain.setValueAtTime(0.0001, startAt);
-  output.gain.exponentialRampToValueAtTime(0.18, startAt + 0.012);
-  output.gain.exponentialRampToValueAtTime(0.07, startAt + 0.11);
-  output.gain.exponentialRampToValueAtTime(0.026, releaseAt);
+  output.gain.setValueAtTime(0.0001, safeStartAt);
+  output.gain.exponentialRampToValueAtTime(0.2, safeStartAt + 0.014);
+  output.gain.exponentialRampToValueAtTime(0.072, safeStartAt + 0.12);
+  output.gain.exponentialRampToValueAtTime(0.028, releaseAt);
   output.gain.exponentialRampToValueAtTime(0.0001, tailEnd);
 
-  const partials = [
-    { ratio: 1, gain: 0.72, detune: -2, type: "triangle" },
-    { ratio: 2.01, gain: 0.18, detune: 3, type: "sine" },
-    { ratio: 3.02, gain: 0.08, detune: -4, type: "sine" }
-  ];
-
-  partials.forEach((partial) => {
-    const oscillator = audioContext.createOscillator();
-    const partialGain = audioContext.createGain();
-    oscillator.type = partial.type;
-    oscillator.frequency.setValueAtTime(frequency * partial.ratio, startAt);
-    oscillator.detune.setValueAtTime(partial.detune, startAt);
-    partialGain.gain.setValueAtTime(partial.gain, startAt);
-    oscillator.connect(partialGain);
-    partialGain.connect(filter);
-    oscillator.start(startAt);
-    oscillator.stop(tailEnd + 0.02);
-    state.playback.activeNodes.push(oscillator, partialGain);
-  });
-
-  dry.gain.setValueAtTime(0.78, startAt);
-  shimmer.gain.setValueAtTime(0.1, startAt);
-  filter.connect(dry);
-  filter.connect(shimmer);
-  dry.connect(output);
-  shimmer.connect(output);
+  oscillator.type = "triangle";
+  oscillator.frequency.setValueAtTime(frequency, safeStartAt);
+  oscillator.connect(filter);
+  filter.connect(output);
   output.connect(audioContext.destination);
-  state.playback.activeNodes.push(filter, dry, shimmer, output);
+  oscillator.start(safeStartAt);
+  oscillator.stop(tailEnd + 0.02);
+  state.playback.activeNodes.push(oscillator, filter, output);
+}
+
+function unlockPlaybackAudio(audioContext) {
+  try {
+    const now = audioContext.currentTime;
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.025);
+    state.playback.activeNodes.push(oscillator, gain);
+  } catch {
+    // Some older browsers are picky about audio warmup; playback can still try normally.
+  }
 }
 
 function stopMeasurePlayback() {
@@ -2078,6 +2108,8 @@ function stopMeasurePlayback() {
   state.playback.activeNodes = [];
   state.playback.activeNotes = new Set();
   state.playback.visualNotes = [];
+  state.playback.pendingNotes = [];
+  state.playback.pendingNoteIndex = 0;
   state.playback.playing = false;
   updateKeyboardActive();
 }
