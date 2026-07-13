@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v131";
+const APP_VERSION = "v132";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -399,6 +399,7 @@ const state = {
     stopTimer: 0,
     animationFrame: 0,
     playing: false,
+    paused: false,
     startTick: 0,
     endTick: 0,
     startedAtAudioTime: 0,
@@ -1179,7 +1180,7 @@ function activeInputColumnX() {
 }
 
 function isPlaybackTargetActive(target) {
-  return state.playback.playing && state.playback.activeTargetIds.has(target.id);
+  return (state.playback.playing || state.playback.paused) && state.playback.activeTargetIds.has(target.id);
 }
 
 function drawActiveInputNotes(svg) {
@@ -2234,7 +2235,7 @@ function animatePracticeViewToTick(targetTick, options = {}) {
 
 function toggleContinuousPlayback() {
   if (state.playback.playing) {
-    stopMeasurePlayback();
+    pauseMeasurePlayback();
     syncPracticeControls();
     return;
   }
@@ -2267,6 +2268,7 @@ async function startContinuousPlayback() {
   const playbackDuration = Math.max(0.1, (playbackEndTick - playbackStartTick) * secondsPerTick);
 
   state.playback.playing = true;
+  state.playback.paused = false;
   state.playback.activeNodes = [];
   state.playback.activeNotes = new Set();
   state.playback.activeTargetIds = new Set();
@@ -2478,6 +2480,32 @@ function stopMeasurePlayback() {
     window.clearTimeout(state.playback.stopTimer);
     state.playback.stopTimer = 0;
   }
+  stopPlaybackAudioNodes();
+  state.playback.activeNotes = new Set();
+  state.playback.activeTargetIds = new Set();
+  state.playback.visualNotes = [];
+  state.playback.pendingNotes = [];
+  state.playback.pendingNoteIndex = 0;
+  state.playback.playing = false;
+  state.playback.paused = false;
+  updateKeyboardActive();
+  syncCurrentChord();
+}
+
+function pauseMeasurePlayback() {
+  window.cancelAnimationFrame(state.playback.animationFrame);
+  state.playback.animationFrame = 0;
+  if (state.playback.stopTimer) {
+    window.clearTimeout(state.playback.stopTimer);
+    state.playback.stopTimer = 0;
+  }
+  stopPlaybackAudioNodes();
+  state.playback.playing = false;
+  state.playback.paused = true;
+  updateAll();
+}
+
+function stopPlaybackAudioNodes() {
   state.playback.activeNodes.forEach((node) => {
     try {
       if (typeof node.stop === "function") node.stop();
@@ -2487,14 +2515,6 @@ function stopMeasurePlayback() {
     }
   });
   state.playback.activeNodes = [];
-  state.playback.activeNotes = new Set();
-  state.playback.activeTargetIds = new Set();
-  state.playback.visualNotes = [];
-  state.playback.pendingNotes = [];
-  state.playback.pendingNoteIndex = 0;
-  state.playback.playing = false;
-  updateKeyboardActive();
-  syncCurrentChord();
 }
 
 function parseMidiFile(bytes) {
