@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v127";
+const APP_VERSION = "v128";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1070,13 +1070,13 @@ function buildPracticeNoteItems() {
       const targetX = MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
       const matched = isAutoFollowTargetMatched(target);
       const active = isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick;
-      const played = matched || active;
+      const cue = cueTargetIds.has(target.id) && !matched;
       return {
         note: target.note,
         displayNote: display.note,
         clef: display.clef,
         step: midiToStaffStep(display.note),
-        x: played ? inputX : targetX,
+        x: matched ? inputX : targetX,
         startTick: target.startTick,
         displayStartTick,
         endTick: target.endTick,
@@ -1085,7 +1085,7 @@ function buildPracticeNoteItems() {
         targetId: target.id,
         matched,
         active,
-        cue: cueTargetIds.has(target.id),
+        cue,
         isPractice: true,
         trackIndex: target.trackIndex ?? 0,
         channel: target.channel ?? 0,
