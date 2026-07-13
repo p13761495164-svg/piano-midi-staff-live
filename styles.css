@@ -572,13 +572,23 @@ select {
 }
 
 .matched-note {
-  fill: #8fd19b;
-  stroke: #17653a;
+  fill: var(--ink);
+  stroke: var(--ink);
 }
 
 .secondary-track-note.matched-note {
-  fill: #8fd19b;
-  stroke: #17653a;
+  fill: var(--ink);
+  stroke: var(--ink);
+}
+
+.practice-note-head.active-note {
+  fill: var(--active);
+  stroke: #80530d;
+}
+
+.practice-note-head.cue-note {
+  fill: #7fc7e8;
+  stroke: #1676a5;
 }
 
 .note-stem {

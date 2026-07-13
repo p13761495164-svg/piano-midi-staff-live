@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v108";
+const APP_VERSION = "v109";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -972,6 +972,7 @@ function buildPracticeNoteItems() {
   const viewStartTick = state.practice.viewStartTick || 0;
   const timeSpan = currentViewSpanTicks();
   const displayStartById = displayStartTicksForTargets(visibleNotes);
+  const cueTargetIds = new Set(nextPracticeCueTargets().map((target) => target.id));
   const items = visibleNotes
     .slice()
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
@@ -994,6 +995,8 @@ function buildPracticeNoteItems() {
         octaveMark: display.octaveMark,
         targetId: target.id,
         matched: isAutoFollowTargetMatched(target),
+        active: isPracticeNoteActive(target.note) || state.playback.activeNotes.has(target.note),
+        cue: cueTargetIds.has(target.id),
         isPractice: true,
         trackIndex: target.trackIndex ?? 0,
         channel: target.channel ?? 0,
@@ -1065,7 +1068,7 @@ function drawNote(svg, item) {
 
   const innerLabel = noteInnerLabel(note);
   if (innerLabel) {
-    const filledPracticeNote = isPractice && !matched;
+    const filledPracticeNote = isPractice && !matched && !item.active && !item.cue;
     const noteInnerLabelText = createSvg("text", {
       x,
       y,
@@ -1132,6 +1135,8 @@ function drawPracticeNoteShape(svg, item) {
   const classes = ["note-head", "practice-note-head", "filled-note"];
   if (item.trackRole === "secondary") classes.push("secondary-track-note");
   if (matched) classes.push("matched-note");
+  if (item.active) classes.push("active-note");
+  if (item.cue) classes.push("cue-note");
   svg.appendChild(createSvg("ellipse", {
     cx: x,
     cy: y,
@@ -1754,15 +1759,19 @@ function targetsForBeat(beatStart) {
 }
 
 function nextPracticeCueNotes() {
-  if (!state.practice.measures.length) return new Set();
+  return new Set(nextPracticeCueTargets().map((target) => target.note));
+}
+
+function nextPracticeCueTargets() {
+  if (!state.practice.measures.length) return [];
   const gridTicks = practiceGridTicks();
   const startTick = currentAutoFollowBeatStart();
   const endTick = practiceEndTick();
   for (let tick = startTick; tick <= endTick; tick += gridTicks) {
     const group = firstUnmatchedTargetGroup(targetsForBeat(tick));
-    if (group.length) return new Set(group.map((target) => target.note));
+    if (group.length) return group;
   }
-  return new Set();
+  return [];
 }
 
 function targetGroupsByStartTick(targets) {
