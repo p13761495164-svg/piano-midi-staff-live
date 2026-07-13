@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v88";
+const APP_VERSION = "v89";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1885,11 +1885,13 @@ async function startContinuousPlayback() {
   state.playback.startedAtAudioTime = startAt;
   state.playback.secondsPerTick = secondsPerTick;
 
+  const pedalIntervals = pedalIntervalsForPlayback(playbackStartTick, playbackEndTick);
   state.practice.notes
     .filter((target) => target.endTick > playbackStartTick && target.startTick < playbackEndTick)
     .forEach((target) => {
       const audibleStartTick = Math.max(target.startTick, playbackStartTick);
-      const audibleEndTick = Math.min(target.endTick, playbackEndTick);
+      const effectiveEndTick = sustainedPlaybackEndTick(target, pedalIntervals);
+      const audibleEndTick = Math.min(effectiveEndTick, playbackEndTick);
       const noteStart = Math.max(0, (audibleStartTick - playbackStartTick) * secondsPerTick);
       const noteDuration = Math.max(0.08, (audibleEndTick - audibleStartTick) * secondsPerTick);
       schedulePracticeTone(audioContext, target.note, startAt + noteStart, noteDuration);
@@ -1934,20 +1936,70 @@ function animatePlaybackView() {
   state.playback.animationFrame = window.requestAnimationFrame(step);
 }
 
+function pedalIntervalsForPlayback(startTick, endTick) {
+  return pedalIntervalsForView(startTick, endTick)
+    .filter((interval) => interval.endTick > startTick && interval.startTick < endTick)
+    .sort((a, b) => a.startTick - b.startTick || a.endTick - b.endTick);
+}
+
+function sustainedPlaybackEndTick(target, pedalIntervals) {
+  let endTick = Math.max(target.endTick, target.startTick + 1);
+  pedalIntervals.forEach((interval) => {
+    if (endTick >= interval.startTick && endTick <= interval.endTick) {
+      endTick = Math.max(endTick, interval.endTick);
+    }
+  });
+  return endTick;
+}
+
 function schedulePracticeTone(audioContext, note, startAt, duration) {
-  const oscillator = audioContext.createOscillator();
-  const gain = audioContext.createGain();
   const frequency = 440 * 2 ** ((note - 69) / 12);
-  oscillator.type = "triangle";
-  oscillator.frequency.setValueAtTime(frequency, startAt);
-  gain.gain.setValueAtTime(0.0001, startAt);
-  gain.gain.exponentialRampToValueAtTime(0.12, startAt + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
-  oscillator.connect(gain);
-  gain.connect(audioContext.destination);
-  oscillator.start(startAt);
-  oscillator.stop(startAt + duration + 0.04);
-  state.playback.activeNodes.push(oscillator, gain);
+  const output = audioContext.createGain();
+  const filter = audioContext.createBiquadFilter();
+  const dry = audioContext.createGain();
+  const shimmer = audioContext.createGain();
+  const releaseAt = startAt + Math.max(0.12, duration);
+  const tailEnd = releaseAt + 0.48;
+
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(Math.min(7200, frequency * 10), startAt);
+  filter.frequency.exponentialRampToValueAtTime(Math.max(1200, frequency * 4), releaseAt);
+  filter.Q.setValueAtTime(0.7, startAt);
+
+  output.gain.setValueAtTime(0.0001, startAt);
+  output.gain.exponentialRampToValueAtTime(0.18, startAt + 0.012);
+  output.gain.exponentialRampToValueAtTime(0.07, startAt + 0.11);
+  output.gain.exponentialRampToValueAtTime(0.026, releaseAt);
+  output.gain.exponentialRampToValueAtTime(0.0001, tailEnd);
+
+  const partials = [
+    { ratio: 1, gain: 0.72, detune: -2, type: "triangle" },
+    { ratio: 2.01, gain: 0.18, detune: 3, type: "sine" },
+    { ratio: 3.02, gain: 0.08, detune: -4, type: "sine" }
+  ];
+
+  partials.forEach((partial) => {
+    const oscillator = audioContext.createOscillator();
+    const partialGain = audioContext.createGain();
+    oscillator.type = partial.type;
+    oscillator.frequency.setValueAtTime(frequency * partial.ratio, startAt);
+    oscillator.detune.setValueAtTime(partial.detune, startAt);
+    partialGain.gain.setValueAtTime(partial.gain, startAt);
+    oscillator.connect(partialGain);
+    partialGain.connect(filter);
+    oscillator.start(startAt);
+    oscillator.stop(tailEnd + 0.02);
+    state.playback.activeNodes.push(oscillator, partialGain);
+  });
+
+  dry.gain.setValueAtTime(0.78, startAt);
+  shimmer.gain.setValueAtTime(0.1, startAt);
+  filter.connect(dry);
+  filter.connect(shimmer);
+  dry.connect(output);
+  shimmer.connect(output);
+  output.connect(audioContext.destination);
+  state.playback.activeNodes.push(filter, dry, shimmer, output);
 }
 
 function stopMeasurePlayback() {
