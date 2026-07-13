@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v112";
+const APP_VERSION = "v113";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -995,7 +995,7 @@ function buildPracticeNoteItems() {
         octaveMark: display.octaveMark,
         targetId: target.id,
         matched: isAutoFollowTargetMatched(target),
-        active: isPracticeNoteActive(target.note) || state.playback.activeNotes.has(target.note),
+        active: isPracticeNoteActive(target.note),
         cue: cueTargetIds.has(target.id),
         isPractice: true,
         trackIndex: target.trackIndex ?? 0,
