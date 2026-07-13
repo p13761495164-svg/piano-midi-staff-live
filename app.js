@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v109";
+const APP_VERSION = "v110";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1812,6 +1812,9 @@ function markAutoFollowNote(note) {
 }
 
 function targetForPlayedNote(note, currentBeatStart) {
+  const cueTarget = nextPracticeCueTargets().find((target) => target.note === note && !isAutoFollowTargetMatched(target));
+  if (cueTarget) return cueTarget;
+
   const gridTicks = practiceGridTicks();
   const viewStartTick = state.practice.viewStartTick || 0;
   const currentBeatEnd = currentBeatStart + gridTicks;
@@ -1828,9 +1831,6 @@ function targetForPlayedNote(note, currentBeatStart) {
         Math.abs(a.startTick - viewStartTick) - Math.abs(b.startTick - viewStartTick) ||
         a.startTick - b.startTick;
     });
-  const cueGroup = firstUnmatchedTargetGroup(targetsForBeat(currentBeatStart));
-  const cueTarget = cueGroup.find((target) => target.note === note && !isAutoFollowTargetMatched(target));
-  if (cueTarget) return cueTarget;
   return candidates.find((target) => !isAutoFollowTargetMatched(target)) || candidates[0] || null;
 }
 
