@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v96";
+const APP_VERSION = "v97";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2050,29 +2050,62 @@ function schedulePracticeTone(audioContext, note, startAt, duration) {
   const safeStartAt = Math.max(audioContext.currentTime + 0.004, startAt);
   const output = audioContext.createGain();
   const filter = audioContext.createBiquadFilter();
-  const oscillator = audioContext.createOscillator();
-  const releaseAt = safeStartAt + Math.max(0.12, duration);
-  const tailEnd = releaseAt + 0.32;
+  const mainOscillator = audioContext.createOscillator();
+  const mainGain = audioContext.createGain();
+  const harmonicOscillator = audioContext.createOscillator();
+  const harmonicGain = audioContext.createGain();
+  const attackClick = audioContext.createBufferSource();
+  const clickGain = audioContext.createGain();
+  const isHighNote = note >= 72;
+  const sustainTime = Math.min(Math.max(0.1, duration), isHighNote ? 0.55 : 1.35);
+  const releaseAt = safeStartAt + sustainTime;
+  const tailEnd = releaseAt + (isHighNote ? 0.2 : 0.34);
+  const clickBuffer = audioContext.createBuffer(1, Math.max(1, Math.floor(audioContext.sampleRate * 0.018)), audioContext.sampleRate);
+  const clickData = clickBuffer.getChannelData(0);
+  for (let index = 0; index < clickData.length; index += 1) {
+    const fade = 1 - index / clickData.length;
+    clickData[index] = (Math.random() * 2 - 1) * fade * fade;
+  }
 
   filter.type = "lowpass";
-  filter.frequency.setValueAtTime(Math.min(5600, frequency * 9), safeStartAt);
-  filter.frequency.exponentialRampToValueAtTime(Math.max(1200, frequency * 4), releaseAt);
-  filter.Q.setValueAtTime(0.7, safeStartAt);
+  filter.frequency.setValueAtTime(Math.min(isHighNote ? 3600 : 6200, frequency * (isHighNote ? 5.2 : 8.5)), safeStartAt);
+  filter.frequency.exponentialRampToValueAtTime(Math.max(650, frequency * (isHighNote ? 1.8 : 3.2)), releaseAt);
+  filter.Q.setValueAtTime(0.62, safeStartAt);
 
   output.gain.setValueAtTime(0.0001, safeStartAt);
-  output.gain.exponentialRampToValueAtTime(0.2, safeStartAt + 0.014);
-  output.gain.exponentialRampToValueAtTime(0.072, safeStartAt + 0.12);
-  output.gain.exponentialRampToValueAtTime(0.028, releaseAt);
+  output.gain.exponentialRampToValueAtTime(isHighNote ? 0.13 : 0.2, safeStartAt + 0.012);
+  output.gain.exponentialRampToValueAtTime(isHighNote ? 0.034 : 0.07, safeStartAt + 0.11);
+  output.gain.exponentialRampToValueAtTime(isHighNote ? 0.008 : 0.026, releaseAt);
   output.gain.exponentialRampToValueAtTime(0.0001, tailEnd);
 
-  oscillator.type = "triangle";
-  oscillator.frequency.setValueAtTime(frequency, safeStartAt);
-  oscillator.connect(filter);
+  mainOscillator.type = "triangle";
+  mainOscillator.frequency.setValueAtTime(frequency, safeStartAt);
+  mainGain.gain.setValueAtTime(0.86, safeStartAt);
+  mainOscillator.connect(mainGain);
+  mainGain.connect(filter);
+
+  harmonicOscillator.type = "sine";
+  harmonicOscillator.frequency.setValueAtTime(frequency * 2.01, safeStartAt);
+  harmonicGain.gain.setValueAtTime(isHighNote ? 0.035 : 0.12, safeStartAt);
+  harmonicGain.gain.exponentialRampToValueAtTime(0.0001, safeStartAt + (isHighNote ? 0.16 : 0.42));
+  harmonicOscillator.connect(harmonicGain);
+  harmonicGain.connect(filter);
+
+  attackClick.buffer = clickBuffer;
+  clickGain.gain.setValueAtTime(isHighNote ? 0.012 : 0.022, safeStartAt);
+  clickGain.gain.exponentialRampToValueAtTime(0.0001, safeStartAt + 0.018);
+  attackClick.connect(clickGain);
+  clickGain.connect(filter);
+
   filter.connect(output);
   output.connect(audioContext.destination);
-  oscillator.start(safeStartAt);
-  oscillator.stop(tailEnd + 0.02);
-  state.playback.activeNodes.push(oscillator, filter, output);
+  mainOscillator.start(safeStartAt);
+  harmonicOscillator.start(safeStartAt);
+  attackClick.start(safeStartAt);
+  mainOscillator.stop(tailEnd + 0.02);
+  harmonicOscillator.stop(tailEnd + 0.02);
+  attackClick.stop(safeStartAt + 0.024);
+  state.playback.activeNodes.push(mainOscillator, mainGain, harmonicOscillator, harmonicGain, attackClick, clickGain, filter, output);
 }
 
 function unlockPlaybackAudio(audioContext) {
