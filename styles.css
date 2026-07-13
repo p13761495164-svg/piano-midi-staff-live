@@ -441,6 +441,7 @@ select {
 }
 
 .measure-status,
+.chord-status,
 .measure-play {
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -451,9 +452,17 @@ select {
   white-space: nowrap;
 }
 
-.measure-status {
+.measure-status,
+.chord-status {
   padding: 5px 12px;
   pointer-events: none;
+}
+
+.chord-status {
+  color: var(--ink);
+  font-weight: 800;
+  min-width: 74px;
+  text-align: center;
 }
 
 .measure-play {

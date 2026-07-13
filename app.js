@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v117";
+const APP_VERSION = "v118";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -104,6 +104,27 @@ const KEY_SIGNATURE_ORDER = {
   "#": ["F", "C", "G", "D", "A", "E", "B"],
   b: ["B", "E", "A", "D", "G", "C", "F"]
 };
+const CHORD_TEMPLATES = [
+  { suffix: "maj9", intervals: [0, 2, 4, 7, 11] },
+  { suffix: "m9", intervals: [0, 2, 3, 7, 10] },
+  { suffix: "9", intervals: [0, 2, 4, 7, 10] },
+  { suffix: "mMaj7", intervals: [0, 3, 7, 11] },
+  { suffix: "maj7", intervals: [0, 4, 7, 11] },
+  { suffix: "m7b5", intervals: [0, 3, 6, 10] },
+  { suffix: "dim7", intervals: [0, 3, 6, 9] },
+  { suffix: "m7", intervals: [0, 3, 7, 10] },
+  { suffix: "7", intervals: [0, 4, 7, 10] },
+  { suffix: "m6", intervals: [0, 3, 7, 9] },
+  { suffix: "6", intervals: [0, 4, 7, 9] },
+  { suffix: "sus4", intervals: [0, 5, 7] },
+  { suffix: "sus2", intervals: [0, 2, 7] },
+  { suffix: "aug", intervals: [0, 4, 8] },
+  { suffix: "dim", intervals: [0, 3, 6] },
+  { suffix: "m", intervals: [0, 3, 7] },
+  { suffix: "", intervals: [0, 4, 7] }
+];
+const CHORD_NAMES_SHARP = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+const CHORD_NAMES_FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 const LANGUAGE_LABELS = {
   zh: "中文",
   ja: "日本語",
@@ -120,6 +141,7 @@ const I18N = {
     "label.tolerance": "容错",
     "label.timeSignature": "拍号",
     "label.keySignature": "调号",
+    "label.currentChord": "和弦",
     "button.settings": "设置",
     "button.connect": "连接 MIDI",
     "button.record": "录 MIDI",
@@ -182,6 +204,7 @@ const I18N = {
     "label.tolerance": "許容",
     "label.timeSignature": "拍子",
     "label.keySignature": "調号",
+    "label.currentChord": "コード",
     "button.settings": "設定",
     "button.connect": "MIDI 接続",
     "button.record": "MIDI 録音",
@@ -244,6 +267,7 @@ const I18N = {
     "label.tolerance": "Tolerance",
     "label.timeSignature": "Time Signature",
     "label.keySignature": "Key",
+    "label.currentChord": "Chord",
     "button.settings": "Settings",
     "button.connect": "Connect MIDI",
     "button.record": "Record MIDI",
@@ -411,6 +435,7 @@ const els = {
   playbackSlider: document.getElementById("playbackSlider"),
   playbackTime: document.getElementById("playbackTime"),
   measureStatus: document.getElementById("measureStatus"),
+  currentChord: document.getElementById("currentChord"),
   versionBadge: document.getElementById("versionBadge"),
   settingsSummaryLabel: document.getElementById("settingsSummaryLabel"),
   languageLabel: document.getElementById("languageLabel"),
@@ -433,6 +458,47 @@ const els = {
 function noteName(note) {
   const octave = Math.floor(note / 12) - 1;
   return `${NOTE_NAMES[note % 12]}${octave}`;
+}
+
+function chordNoteName(pitchClass) {
+  const key = MAJOR_KEY_SIGNATURES[state.keySignature] || MAJOR_KEY_SIGNATURES.C;
+  const names = key.accidental === "b" ? CHORD_NAMES_FLAT : CHORD_NAMES_SHARP;
+  return names[((pitchClass % 12) + 12) % 12];
+}
+
+function currentSoundingNotes() {
+  const notes = new Set([...state.activeNotes.keys(), ...state.playback.activeNotes]);
+  return [...notes].sort((a, b) => a - b);
+}
+
+function currentChordName() {
+  const notes = currentSoundingNotes();
+  if (notes.length < 3) return "-";
+  const pitchClasses = [...new Set(notes.map((note) => note % 12))].sort((a, b) => a - b);
+  if (pitchClasses.length < 3) return "-";
+  const bass = notes[0] % 12;
+  let best = null;
+
+  pitchClasses.forEach((root) => {
+    CHORD_TEMPLATES.forEach((template, templateIndex) => {
+      const required = template.intervals.map((interval) => (root + interval) % 12);
+      if (!required.every((pitchClass) => pitchClasses.includes(pitchClass))) return;
+      const extras = pitchClasses.filter((pitchClass) => !required.includes(pitchClass)).length;
+      const score = template.intervals.length * 10 - extras * 3 + (root === bass ? 4 : 0) - templateIndex * 0.01;
+      if (!best || score > best.score) {
+        best = { root, suffix: template.suffix, score };
+      }
+    });
+  });
+
+  if (!best) return "-";
+  const rootName = `${chordNoteName(best.root)}${best.suffix}`;
+  return best.root === bass ? rootName : `${rootName}/${chordNoteName(bass)}`;
+}
+
+function syncCurrentChord() {
+  if (!els.currentChord) return;
+  els.currentChord.textContent = `${t("label.currentChord")} ${currentChordName()}`;
 }
 
 function t(key, params = {}) {
@@ -528,6 +594,7 @@ function applyLanguage() {
 
   syncFullscreenButton();
   syncPracticeControls();
+  syncCurrentChord();
   if (state.statusMessage?.key) {
     setStatusKey(state.statusMessage.key, state.statusMessage.params);
   }
@@ -2245,6 +2312,7 @@ function stopMeasurePlayback() {
   state.playback.pendingNoteIndex = 0;
   state.playback.playing = false;
   updateKeyboardActive();
+  syncCurrentChord();
 }
 
 function parseMidiFile(bytes) {
@@ -2727,6 +2795,7 @@ function updateAll() {
   syncControlsFromState();
   drawStaff();
   updateKeyboardActive();
+  syncCurrentChord();
   syncPracticeControls();
 }
 
