@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v156";
+const APP_VERSION = "v157";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -77,7 +77,8 @@ const SETTINGS_FIELD_KEYS = {
   timeSignature: "piano-midi-staff-time-signature",
   language: "piano-midi-staff-language",
   playbackInstrument: "piano-midi-staff-playback-instrument",
-  liveInputSound: "piano-midi-staff-live-input-sound"
+  liveInputSound: "piano-midi-staff-live-input-sound",
+  silentPlayback: "piano-midi-staff-silent-playback"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const KEY_SIGNATURE_BY_FIFTHS = {
@@ -179,6 +180,7 @@ const I18N = {
     "label.keySignature": "调号",
     "label.currentChord": "和弦",
     "label.liveInputSound": "弹奏时设备发声",
+    "label.silentPlayback": "无声播放",
     "label.tempo": "速度",
     "button.settings": "设置",
     "button.connect": "连接 MIDI",
@@ -244,6 +246,7 @@ const I18N = {
     "label.keySignature": "調号",
     "label.currentChord": "コード",
     "label.liveInputSound": "演奏時に端末発音",
+    "label.silentPlayback": "無音再生",
     "label.tempo": "テンポ",
     "button.settings": "設定",
     "button.connect": "MIDI 接続",
@@ -309,6 +312,7 @@ const I18N = {
     "label.keySignature": "Key",
     "label.currentChord": "Chord",
     "label.liveInputSound": "Input Sound",
+    "label.silentPlayback": "Silent Play",
     "label.tempo": "Tempo",
     "button.settings": "Settings",
     "button.connect": "Connect MIDI",
@@ -425,6 +429,7 @@ const state = {
   noteLabelMode: "degree",
   playbackInstrument: "kalimba",
   liveInputSound: false,
+  silentPlayback: false,
   pedalStep: "on",
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
@@ -466,6 +471,7 @@ const state = {
     animationFrame: 0,
     playing: false,
     paused: false,
+    silent: false,
     startTick: 0,
     endTick: 0,
     startedAtAudioTime: 0,
@@ -506,6 +512,8 @@ const els = {
   installButton: document.getElementById("installButton"),
   startMeasureButton: document.getElementById("startMeasureButton"),
   playMeasureButton: document.getElementById("playMeasureButton"),
+  silentPlaybackToggle: document.getElementById("silentPlaybackToggle"),
+  silentPlaybackToggleLabel: document.getElementById("silentPlaybackToggleLabel"),
   tempoDownButton: document.getElementById("tempoDownButton"),
   tempoValue: document.getElementById("tempoValue"),
   tempoUpButton: document.getElementById("tempoUpButton"),
@@ -657,6 +665,7 @@ function applyLanguage() {
   updateText(document.querySelector(".time-field span"), t("label.timeSignature"));
   updateText(document.querySelector(".key-field span"), t("label.keySignature"));
   updateText(els.liveSoundToggleLabel, t("label.liveInputSound"));
+  updateText(els.silentPlaybackToggleLabel, t("label.silentPlayback"));
 
   updateText(els.connectButton, t("button.connect"));
   updateText(els.recordButton, t("button.record"));
@@ -772,6 +781,7 @@ function readSettings() {
     const language = window.localStorage.getItem(SETTINGS_FIELD_KEYS.language);
     const playbackInstrument = window.localStorage.getItem(SETTINGS_FIELD_KEYS.playbackInstrument);
     const liveInputSound = window.localStorage.getItem(SETTINGS_FIELD_KEYS.liveInputSound);
+    const silentPlayback = window.localStorage.getItem(SETTINGS_FIELD_KEYS.silentPlayback);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
@@ -785,6 +795,7 @@ function readSettings() {
     if (language) settings.language = normalizeLanguage(language);
     if (playbackInstrumentId(playbackInstrument)) settings.playbackInstrument = playbackInstrument;
     if (liveInputSound === "true" || liveInputSound === "false") settings.liveInputSound = liveInputSound === "true";
+    if (silentPlayback === "true" || silentPlayback === "false") settings.silentPlayback = silentPlayback === "true";
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -803,7 +814,8 @@ function saveSettings() {
     timeSignature: timeSignatureKey(state.practice.timeSignature),
     language: state.language,
     playbackInstrument: state.playbackInstrument,
-    liveInputSound: state.liveInputSound
+    liveInputSound: state.liveInputSound,
+    silentPlayback: state.silentPlayback
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -819,6 +831,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.language, settings.language);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.playbackInstrument, settings.playbackInstrument);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.liveInputSound, String(settings.liveInputSound));
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.silentPlayback, String(settings.silentPlayback));
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -865,6 +878,15 @@ function syncControlsFromState() {
     els.liveSoundToggle.checked = state.liveInputSound;
     const wrapper = els.liveSoundToggle.closest(".live-sound-toggle");
     if (wrapper) wrapper.classList.toggle("active", state.liveInputSound);
+  }
+  if (els.silentPlaybackToggle) {
+    els.silentPlaybackToggle.checked = state.silentPlayback;
+    els.silentPlaybackToggle.disabled = state.playback.playing;
+    const wrapper = els.silentPlaybackToggle.closest(".silent-playback-toggle");
+    if (wrapper) {
+      wrapper.classList.toggle("active", state.silentPlayback);
+      wrapper.classList.toggle("disabled", state.playback.playing);
+    }
   }
 }
 
@@ -944,6 +966,9 @@ function applySavedSettings() {
   if (typeof settings.liveInputSound === "boolean") {
     state.liveInputSound = settings.liveInputSound;
   }
+  if (typeof settings.silentPlayback === "boolean") {
+    state.silentPlayback = settings.silentPlayback;
+  }
   if (typeof settings.selectedInputId === "string") {
     state.selectedInputId = settings.selectedInputId;
   }
@@ -993,6 +1018,7 @@ function drawStaff() {
   const hasPracticeScore = state.practice.measures.length > 0;
   if (hasPracticeScore) {
     drawBeatGrid(svg);
+    drawPracticePlayhead(svg);
     drawPedalTrack(svg);
     const practiceItems = buildPracticeNoteItems();
     drawPracticeArpeggioMarks(svg, practiceItems);
@@ -1038,6 +1064,16 @@ function drawStaff() {
   noteItems.forEach((item) => {
     drawNote(svg, { ...item, x: chordX + item.xOffset });
   });
+}
+
+function drawPracticePlayhead(svg) {
+  svg.appendChild(createSvg("line", {
+    x1: MEASURE_NOTE_LEFT_X,
+    y1: BEAT_GRID_TOP_Y - 54,
+    x2: MEASURE_NOTE_LEFT_X,
+    y2: BEAT_GRID_BOTTOM_Y + 54,
+    class: "practice-playhead-line"
+  }));
 }
 
 function drawBeatGrid(svg) {
@@ -2444,23 +2480,24 @@ function toggleContinuousPlayback() {
 async function startContinuousPlayback() {
   if (!state.practice.measures.length || state.playback.playing) return;
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) {
+  const silent = state.silentPlayback;
+  if (!silent && !AudioContextClass) {
     setStatusKey("status.playUnsupported");
     return;
   }
 
   stopMeasurePlayback();
-  if (!state.playback.audioContext) {
+  if (!silent && !state.playback.audioContext) {
     state.playback.audioContext = new AudioContextClass();
   }
-  const audioContext = state.playback.audioContext;
-  if (audioContext.state === "suspended") {
+  const audioContext = silent ? null : state.playback.audioContext;
+  if (audioContext && audioContext.state === "suspended") {
     await audioContext.resume();
   }
-  unlockPlaybackAudio(audioContext);
+  if (audioContext) unlockPlaybackAudio(audioContext);
 
   const secondsPerTick = (state.practice.microsecondsPerQuarter || 500000) / 1000000 / (state.practice.ticksPerQuarter || MIDI_PPQ);
-  const startAt = audioContext.currentTime + 0.08;
+  const startAt = audioContext ? audioContext.currentTime + 0.08 : 0;
   const playbackStartTick = currentAutoFollowBeatStart();
   const lastMeasure = state.practice.measures[state.practice.measures.length - 1];
   const playbackEndTick = Math.max(playbackStartTick + 1, lastMeasure?.endTick || playbackStartTick + practiceBeatTicks());
@@ -2476,6 +2513,7 @@ async function startContinuousPlayback() {
   state.playback.pendingNoteIndex = 0;
   state.playback.startTick = playbackStartTick;
   state.playback.endTick = playbackEndTick;
+  state.playback.silent = silent;
   state.playback.startedAtAudioTime = startAt;
   state.playback.startedAtPerformance = performance.now() + 80;
   state.playback.lastVisualFrameAt = 0;
@@ -2518,13 +2556,18 @@ function animatePlaybackView() {
   const step = () => {
     if (!state.playback.playing) return;
     const now = performance.now();
-    const audioContext = state.playback.audioContext;
+    const audioContext = state.playback.silent ? null : state.playback.audioContext;
     const elapsed = audioContext
       ? Math.max(0, audioContext.currentTime - state.playback.startedAtAudioTime)
       : Math.max(0, (now - state.playback.startedAtPerformance) / 1000);
     const playbackTick = state.playback.startTick + elapsed / Math.max(0.000001, state.playback.secondsPerTick);
-    triggerPendingPlaybackNotes(playbackTick);
-    updatePlaybackActiveNotes(playbackTick);
+    if (state.playback.silent) {
+      state.playback.activeNotes = new Set();
+      state.playback.activeTargetIds = new Set();
+    } else {
+      triggerPendingPlaybackNotes(playbackTick);
+      updatePlaybackActiveNotes(playbackTick);
+    }
     if (now - state.playback.lastVisualFrameAt >= PLAYBACK_VISUAL_FRAME_MS || playbackTick >= state.playback.endTick) {
       state.playback.lastVisualFrameAt = now;
       const viewTick = Math.min(maxPracticeViewStartTick(), playbackTick);
@@ -2866,6 +2909,7 @@ function stopMeasurePlayback() {
   state.playback.pendingNoteIndex = 0;
   state.playback.playing = false;
   state.playback.paused = false;
+  state.playback.silent = false;
   updateKeyboardActive();
   syncCurrentChord();
 }
@@ -3884,6 +3928,11 @@ function setupEvents() {
   els.playMeasureButton.addEventListener("click", toggleContinuousPlayback);
   els.tempoDownButton.addEventListener("click", () => adjustPracticeTempo(-1));
   els.tempoUpButton.addEventListener("click", () => adjustPracticeTempo(1));
+  els.silentPlaybackToggle.addEventListener("change", () => {
+    state.silentPlayback = els.silentPlaybackToggle.checked;
+    syncControlsFromState();
+    saveSettings();
+  });
   els.playbackInstrumentSelect.addEventListener("change", () => {
     state.playbackInstrument = playbackInstrumentId(els.playbackInstrumentSelect.value) || "kalimba";
     syncControlsFromState();

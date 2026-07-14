@@ -445,6 +445,7 @@ select {
 .measure-play,
 .tempo-control,
 .playback-instrument-select,
+.silent-playback-toggle,
 .live-sound-toggle {
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -525,6 +526,7 @@ select {
   font-size: 12px;
 }
 
+.silent-playback-toggle,
 .live-sound-toggle {
   height: 34px;
   min-height: 34px;
@@ -537,6 +539,7 @@ select {
   user-select: none;
 }
 
+.silent-playback-toggle input,
 .live-sound-toggle input {
   width: 15px;
   height: 15px;
@@ -544,15 +547,24 @@ select {
   accent-color: var(--accent);
 }
 
+.silent-playback-toggle.active,
+.silent-playback-toggle:has(input:checked),
 .live-sound-toggle.active,
 .live-sound-toggle:has(input:checked) {
   border-color: var(--accent);
   background: rgba(31, 127, 132, 0.12);
 }
 
+.silent-playback-toggle span,
 .live-sound-toggle span {
   font-size: 12px;
   font-weight: 700;
+}
+
+.silent-playback-toggle.disabled,
+.silent-playback-toggle:has(input:disabled) {
+  opacity: 0.56;
+  cursor: not-allowed;
 }
 
 .icon-button {
@@ -612,6 +624,12 @@ select {
   stroke-width: 2;
   stroke-dasharray: 5 10;
   opacity: 0.46;
+}
+
+.practice-playhead-line {
+  stroke: var(--accent);
+  stroke-width: 5;
+  opacity: 0.86;
 }
 
 .measure-grid-line {
