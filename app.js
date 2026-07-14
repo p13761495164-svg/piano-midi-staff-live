@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v159";
+const APP_VERSION = "v160";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1238,7 +1238,7 @@ function buildPracticeNoteItems() {
       const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
       const progress = Math.max(0, Math.min(1, (displayStartTick - viewStartTick) / timeSpan));
       const targetX = MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
-      const matched = isAutoFollowTargetMatched(target);
+      const matched = isAutoFollowTargetDisplayMatched(target);
       const active = isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick;
       const cue = cueTargetIds.has(target.id) && !matched;
       return {
@@ -2419,6 +2419,16 @@ function evaluateAutoFollowBeat(options = {}) {
 function isAutoFollowTargetMatched(target) {
   const targetIds = state.autoFollow.playedNotesByBeat.get(String(beatStartForTick(target.startTick)));
   return targetIds?.has(target.id) || false;
+}
+
+function isAutoFollowTargetDisplayMatched(target) {
+  if (state.autoFollowTolerance !== 0) return isAutoFollowTargetMatched(target);
+  return isTargetGroupMatched(targetGroupForTarget(target));
+}
+
+function targetGroupForTarget(target) {
+  const groups = targetGroupsByStartTick(targetsForBeat(beatStartForTick(target.startTick)));
+  return groups.find((group) => group.some((item) => item.id === target.id)) || [target];
 }
 
 function requiredAutoFollowMatches(targetCount) {
