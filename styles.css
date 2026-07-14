@@ -384,6 +384,47 @@ select {
   color: white;
 }
 
+.mistake-log {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.mistake-log-title {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.mistake-log-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mistake-log-empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.mistake-log-button {
+  appearance: none;
+  border: 1px solid #e4a6a0;
+  background: #fff5f3;
+  color: #b7352c;
+  border-radius: 6px;
+  min-height: 32px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mistake-log-button:active {
+  transform: translateY(1px);
+}
+
 .score-board {
   position: relative;
   aspect-ratio: 1760 / 880;

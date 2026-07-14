@@ -9,9 +9,9 @@
   <meta name="apple-mobile-web-app-title" content="Easy Piano">
   <title>Easy Piano</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon.png?v=160" type="image/png">
-  <link rel="apple-touch-icon" href="icons/icon.png?v=160">
-  <link rel="stylesheet" href="styles.css?v=160">
+  <link rel="icon" href="icons/icon.png?v=161" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon.png?v=161">
+  <link rel="stylesheet" href="styles.css?v=161">
 </head>
 <body>
   <main class="app-shell">
@@ -19,11 +19,11 @@
       <p id="statusText" class="status-banner">等待连接 MIDI 键盘</p>
       <div class="topbar">
         <div class="brand">
-          <img class="brand-mark" src="icons/icon.png?v=160" alt="" aria-hidden="true">
+          <img class="brand-mark" src="icons/icon.png?v=161" alt="" aria-hidden="true">
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
-              <span id="versionBadge" class="version-badge">v160</span>
+              <span id="versionBadge" class="version-badge">v161</span>
             </div>
           </div>
         </div>
@@ -120,6 +120,12 @@
               <button class="key-option" type="button" data-key-signature="B" aria-pressed="false">B</button>
             </div>
           </div>
+          <div class="mistake-log" aria-live="polite">
+            <div id="mistakeLogTitle" class="mistake-log-title">弹错记录</div>
+            <div id="mistakeLogList" class="mistake-log-list">
+              <span id="mistakeLogEmpty" class="mistake-log-empty">暂无</span>
+            </div>
+          </div>
         </div>
       </details>
 
@@ -160,6 +166,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=160"></script>
+  <script src="app.js?v=161"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v160";
+const APP_VERSION = "v161";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -182,6 +182,9 @@ const I18N = {
     "label.liveInputSound": "弹奏时设备发声",
     "label.silentPlayback": "无声播放",
     "label.tempo": "速度",
+    "label.mistakes": "弹错记录",
+    "label.noMistakes": "暂无",
+    "label.mistakeItem": "{measure}小节 第{beat}格 {note}",
     "button.settings": "设置",
     "button.connect": "连接 MIDI",
     "button.record": "录 MIDI",
@@ -248,6 +251,9 @@ const I18N = {
     "label.liveInputSound": "演奏時に端末発音",
     "label.silentPlayback": "無音再生",
     "label.tempo": "テンポ",
+    "label.mistakes": "ミス記録",
+    "label.noMistakes": "なし",
+    "label.mistakeItem": "{measure}小節 {beat}拍目 {note}",
     "button.settings": "設定",
     "button.connect": "MIDI 接続",
     "button.record": "MIDI 録音",
@@ -314,6 +320,9 @@ const I18N = {
     "label.liveInputSound": "Input Sound",
     "label.silentPlayback": "Silent Play",
     "label.tempo": "Tempo",
+    "label.mistakes": "Mistakes",
+    "label.noMistakes": "None",
+    "label.mistakeItem": "Bar {measure} Beat {beat} {note}",
     "button.settings": "Settings",
     "button.connect": "Connect MIDI",
     "button.record": "Record MIDI",
@@ -444,6 +453,8 @@ const state = {
     animating: false,
     pausedAfterManualNavigation: false
   },
+  mistakes: [],
+  mistakeCounter: 0,
   deferredInstallPrompt: null,
   wakeLock: null,
   practice: {
@@ -537,6 +548,9 @@ const els = {
   autoFollowButtons: [...document.querySelectorAll("[data-auto-follow-mode]")],
   toleranceSlider: document.getElementById("toleranceSlider"),
   toleranceValue: document.getElementById("toleranceValue"),
+  mistakeLogTitle: document.getElementById("mistakeLogTitle"),
+  mistakeLogList: document.getElementById("mistakeLogList"),
+  mistakeLogEmpty: document.getElementById("mistakeLogEmpty"),
   timeSignatureButtons: [...document.querySelectorAll("[data-time-signature]")],
   scoreBoard: document.querySelector(".score-board"),
   staffSvg: document.getElementById("staffSvg"),
@@ -666,6 +680,8 @@ function applyLanguage() {
   updateText(document.querySelector(".key-field span"), t("label.keySignature"));
   updateText(els.liveSoundToggleLabel, t("label.liveInputSound"));
   updateText(els.silentPlaybackToggleLabel, t("label.silentPlayback"));
+  updateText(els.mistakeLogTitle, t("label.mistakes"));
+  updateText(els.mistakeLogEmpty, t("label.noMistakes"));
 
   updateText(els.connectButton, t("button.connect"));
   updateText(els.recordButton, t("button.record"));
@@ -700,6 +716,7 @@ function applyLanguage() {
   syncFullscreenButton();
   syncPracticeControls();
   syncCurrentChord();
+  renderMistakeLog();
   if (state.statusMessage?.key) {
     setStatusKey(state.statusMessage.key, state.statusMessage.params);
   }
@@ -916,7 +933,7 @@ function syncRecordingControls() {
 
 function syncPracticeControls() {
   const hasMeasures = state.practice.measures.length > 0;
-  els.startMeasureButton.disabled = !hasMeasures || (state.practice.viewStartTick || 0) <= 0;
+  els.startMeasureButton.disabled = !hasMeasures || ((state.practice.viewStartTick || 0) <= 0 && !state.mistakes.length);
   els.playMeasureButton.disabled = !hasMeasures;
   syncPlaybackToggleButton();
   syncPlaybackScrubber();
@@ -935,6 +952,55 @@ function syncPracticeControls() {
     range: rangeLabel,
     total
   });
+}
+
+function recordMistake(note) {
+  if (!state.practice.measures.length) return;
+  const tick = currentAutoFollowBeatStart();
+  const measureIndex = measureIndexForTick(tick);
+  const measure = state.practice.measures[measureIndex];
+  const gridTicks = practiceGridTicks();
+  const beatIndex = measure ? Math.floor(Math.max(0, tick - measure.startTick) / gridTicks) + 1 : 1;
+  state.mistakes.push({
+    id: ++state.mistakeCounter,
+    tick,
+    measure: measureIndex + 1,
+    beat: beatIndex,
+    note
+  });
+  renderMistakeLog();
+  syncPracticeControls();
+}
+
+function clearMistakes() {
+  if (!state.mistakes.length) return;
+  state.mistakes = [];
+  renderMistakeLog();
+  syncPracticeControls();
+}
+
+function renderMistakeLog() {
+  if (!els.mistakeLogList || !els.mistakeLogEmpty) return;
+  els.mistakeLogList.querySelectorAll(".mistake-log-button").forEach((button) => button.remove());
+  els.mistakeLogEmpty.hidden = state.mistakes.length > 0;
+  state.mistakes.forEach((entry) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "mistake-log-button";
+    button.dataset.mistakeId = String(entry.id);
+    button.textContent = t("label.mistakeItem", {
+      measure: entry.measure,
+      beat: entry.beat,
+      note: noteName(entry.note)
+    });
+    els.mistakeLogList.appendChild(button);
+  });
+}
+
+function jumpToMistake(id) {
+  const entry = state.mistakes.find((item) => item.id === id);
+  if (!entry) return;
+  seekPracticeView(entry.tick);
 }
 
 function syncPlaybackToggleButton() {
@@ -1795,6 +1861,7 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   state.releasedWhileSustained.delete(note);
   const wrong = isWrongPracticeInputNote(note);
   state.activeNotes.set(note, { velocity, source, channel, startedAt: performance.now(), wrong });
+  if (wrong) recordMistake(note);
   startLiveInputTone(note, velocity);
   state.autoFollow.pausedAfterManualNavigation = false;
   markAutoFollowNote(note);
@@ -1924,6 +1991,7 @@ function displayFilename(filename, fallback) {
 
 function applyParsedScore(parsed, filename, typeLabel) {
   cancelAutoFollowAnimation();
+  clearMistakes();
   const normalized = trimLeadingScoreSilence(parsed);
   state.practice.notes = normalized.notes || normalized.measures.flatMap((measure) => measure.notes);
   state.practice.pedalEvents = normalized.pedalEvents || [];
@@ -2124,6 +2192,7 @@ function goToMeasure(delta) {
 }
 
 function goToPracticeStart() {
+  clearMistakes();
   if (!state.practice.measures.length) return;
   animatePracticeViewToTick(0, { clearPlayed: true, pauseAutoFollow: true });
 }
@@ -3942,6 +4011,11 @@ function setupEvents() {
   els.midiFileInput.addEventListener("change", () => loadScoreFile(els.midiFileInput.files[0]));
   els.startMeasureButton.addEventListener("click", goToPracticeStart);
   els.playMeasureButton.addEventListener("click", toggleContinuousPlayback);
+  els.mistakeLogList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-mistake-id]");
+    if (!button) return;
+    jumpToMistake(Number(button.dataset.mistakeId));
+  });
   els.tempoDownButton.addEventListener("click", () => adjustPracticeTempo(-1));
   els.tempoUpButton.addEventListener("click", () => adjustPracticeTempo(1));
   els.silentPlaybackToggle.addEventListener("change", () => {
