@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v134";
+const APP_VERSION = "v135";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1144,7 +1144,11 @@ function buildPlaybackActiveNoteItems() {
   if (!state.practice.measures.length || (!state.playback.playing && !state.playback.paused) || !state.playback.activeNotes.size) {
     return [];
   }
-  return buildLeftColumnNoteItems([...state.playback.activeNotes], "playback");
+  const cueNotes = nextPracticeCueNotes();
+  return buildLeftColumnNoteItems(
+    [...state.playback.activeNotes].filter((note) => !cueNotes.has(note)),
+    "playback"
+  );
 }
 
 function buildLeftColumnNoteItems(notes, trackRole) {
@@ -3023,7 +3027,7 @@ function updateKeyboardActive() {
     const note = Number(key.dataset.note);
     const active = state.activeNotes.has(note) || state.playback.activeNotes.has(note);
     key.classList.toggle("active", active);
-    key.classList.toggle("input-active", state.activeNotes.has(note));
+    key.classList.toggle("input-active", state.activeNotes.has(note) && !cueNotes.has(note));
     key.classList.toggle("cue", cueNotes.has(note));
   });
 }
