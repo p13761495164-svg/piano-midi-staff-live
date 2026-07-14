@@ -614,6 +614,12 @@ select {
   stroke-width: 3;
 }
 
+.active-input-note.wrong-note {
+  fill: #f07a72;
+  stroke: #b7352c;
+  stroke-width: 3;
+}
+
 .active-input-label {
   fill: #1f1b17;
 }
@@ -851,6 +857,13 @@ select {
   background: linear-gradient(180deg, #f5c96a 0%, #c9851f 100%);
   border-color: #80530d;
   box-shadow: inset 0 -8px 14px rgba(255, 244, 210, 0.24), 0 0 0 2px rgba(240, 184, 78, 0.28);
+}
+
+.key.wrong,
+.black-key.wrong {
+  background: linear-gradient(180deg, #ffaaa3 0%, #d9473b 100%);
+  border-color: #a62d24;
+  box-shadow: inset 0 -8px 14px rgba(255, 235, 232, 0.28), 0 0 0 2px rgba(217, 71, 59, 0.24);
 }
 
 @media (max-width: 760px) {

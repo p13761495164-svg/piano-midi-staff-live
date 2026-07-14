@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v148";
+const APP_VERSION = "v149";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1206,10 +1206,14 @@ function displayStartTicksForTargets(targets) {
 
 function buildActiveInputNoteItems() {
   if (!state.practice.measures.length || !state.activeNotes.size) return [];
-  const currentTargetNotes = new Set(targetsForBeat(currentAutoFollowBeatStart()).map((target) => target.note));
+  const cueNotes = nextPracticeCueNotes();
+  const currentTargetNotes = cueNotes.size
+    ? cueNotes
+    : new Set(targetsForBeat(currentAutoFollowBeatStart()).map((target) => target.note));
   return buildLeftColumnNoteItems(
     [...state.activeNotes.keys()].filter((note) => !currentTargetNotes.has(note)),
-    "input"
+    "input",
+    { wrongNotes: cueNotes.size ? new Set([...state.activeNotes.keys()].filter((note) => !cueNotes.has(note))) : new Set() }
   );
 }
 
@@ -1220,8 +1224,9 @@ function buildPlaybackActiveNoteItems() {
   return buildLeftColumnNoteItems([...state.playback.activeNotes], "playback");
 }
 
-function buildLeftColumnNoteItems(notes, trackRole) {
+function buildLeftColumnNoteItems(notes, trackRole, options = {}) {
   const inputX = activeInputColumnX();
+  const wrongNotes = options.wrongNotes || new Set();
   const items = notes
     .sort((a, b) => a - b)
     .map((note) => {
@@ -1234,7 +1239,8 @@ function buildLeftColumnNoteItems(notes, trackRole) {
         octaveMark: display.octaveMark,
         x: inputX,
         xOffset: 0,
-        trackRole
+        trackRole,
+        wrong: wrongNotes.has(note)
       };
     });
 
@@ -1277,11 +1283,13 @@ function drawLeftColumnNotes(svg, items) {
   items.forEach((item) => {
     const y = yForNote(item.displayNote, item.clef);
     drawLedgerLines(svg, item.x, y, item.clef);
-    svg.appendChild(createSvg("circle", {
+    svg.appendChild(createSvg("ellipse", {
       cx: item.x,
       cy: y,
-      r: NOTE_RADIUS,
-      class: "note-head active-input-note",
+      rx: 21,
+      ry: 14,
+      transform: `rotate(-18 ${item.x} ${y})`,
+      class: `note-head active-input-note${item.wrong ? " wrong-note" : ""}`,
       "data-active-input-note": item.note
     }));
     const innerLabel = noteInnerLabel(item.note);
@@ -1398,7 +1406,7 @@ function durationKindForTicks(durationTicks) {
 }
 
 function drawPracticeNoteShape(svg, item) {
-  const { note, displayNote, x, y, matched, durationKind, targetId } = item;
+  const { note, displayNote, x, y, matched, targetId } = item;
   const classes = ["note-head", "practice-note-head", "filled-note"];
   if (item.trackRole === "secondary") classes.push("secondary-track-note");
   if (matched) classes.push("matched-note");
@@ -3225,13 +3233,15 @@ function updateAll() {
 }
 
 function updateKeyboardActive() {
-  const cueNotes = nextPracticeCueNotes();
+  const cueNoteSet = nextPracticeCueNotes();
   els.keyboard.querySelectorAll(".key").forEach((key) => {
     const note = Number(key.dataset.note);
     const active = state.activeNotes.has(note) || state.playback.activeNotes.has(note);
+    const wrong = state.activeNotes.has(note) && cueNoteSet.size > 0 && !cueNoteSet.has(note);
     key.classList.toggle("active", active);
-    key.classList.toggle("input-active", state.activeNotes.has(note) && !cueNotes.has(note));
-    key.classList.toggle("cue", cueNotes.has(note));
+    key.classList.toggle("input-active", state.activeNotes.has(note) && !cueNoteSet.has(note));
+    key.classList.toggle("cue", cueNoteSet.has(note));
+    key.classList.toggle("wrong", wrong);
   });
 }
 
