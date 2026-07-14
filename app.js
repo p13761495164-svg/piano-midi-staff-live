@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v154";
+const APP_VERSION = "v155";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1764,9 +1764,9 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
 
 function isWrongPracticeInputNote(note) {
   if (!state.practice.measures.length || state.playback.playing) return false;
-  const cueTargets = nextPrimaryCueTargets();
-  if (!cueTargets.length) return false;
-  return !targetForPlayedNote(note, currentAutoFollowBeatStart());
+  if (state.autoFollowTolerance !== 0) return false;
+  const cueNotes = nextPracticeCueNotes();
+  return cueNotes.size > 0 && !cueNotes.has(note);
 }
 
 function releaseNote(note, source = "midi", channel = 0) {
