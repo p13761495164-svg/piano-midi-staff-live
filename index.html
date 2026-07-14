@@ -9,9 +9,9 @@
   <meta name="apple-mobile-web-app-title" content="Easy Piano">
   <title>Easy Piano</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon.png?v=151" type="image/png">
-  <link rel="apple-touch-icon" href="icons/icon.png?v=151">
-  <link rel="stylesheet" href="styles.css?v=151">
+  <link rel="icon" href="icons/icon.png?v=152" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon.png?v=152">
+  <link rel="stylesheet" href="styles.css?v=152">
 </head>
 <body>
   <main class="app-shell">
@@ -19,11 +19,11 @@
       <p id="statusText" class="status-banner">等待连接 MIDI 键盘</p>
       <div class="topbar">
         <div class="brand">
-          <img class="brand-mark" src="icons/icon.png?v=138" alt="" aria-hidden="true">
+          <img class="brand-mark" src="icons/icon.png?v=152" alt="" aria-hidden="true">
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
-              <span id="versionBadge" class="version-badge">v151</span>
+              <span id="versionBadge" class="version-badge">v152</span>
             </div>
           </div>
         </div>
@@ -132,6 +132,11 @@
           <div class="measure-actions">
             <button id="startMeasureButton" class="measure-play icon-button" type="button" aria-label="开头" title="开头" disabled><span class="control-icon stop-icon" aria-hidden="true"></span></button>
             <button id="playMeasureButton" class="measure-play icon-button" type="button" aria-label="播放" title="播放" disabled><span class="control-icon play-icon" aria-hidden="true"></span></button>
+            <div class="tempo-control" aria-label="速度">
+              <button id="tempoDownButton" class="tempo-step" type="button" aria-label="放慢" title="放慢" disabled>-</button>
+              <span id="tempoValue">120</span>
+              <button id="tempoUpButton" class="tempo-step" type="button" aria-label="加快" title="加快" disabled>+</button>
+            </div>
             <select id="playbackInstrumentSelect" class="playback-instrument-select" aria-label="播放音色"></select>
             <label class="live-sound-toggle">
               <input id="liveSoundToggle" type="checkbox">
@@ -151,6 +156,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=151"></script>
+  <script src="app.js?v=152"></script>
 </body>
 </html>

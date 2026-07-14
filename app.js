@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v151";
+const APP_VERSION = "v152";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -80,6 +80,23 @@ const SETTINGS_FIELD_KEYS = {
   liveInputSound: "piano-midi-staff-live-input-sound"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
+const KEY_SIGNATURE_BY_FIFTHS = {
+  "-7": "B",
+  "-6": "Gb",
+  "-5": "Db",
+  "-4": "Ab",
+  "-3": "Eb",
+  "-2": "Bb",
+  "-1": "F",
+  0: "C",
+  1: "G",
+  2: "D",
+  3: "A",
+  4: "E",
+  5: "B",
+  6: "Gb",
+  7: "Db"
+};
 const MAJOR_KEY_SIGNATURES = {
   C: { tones: [0, 2, 4, 5, 7, 9, 11], accidental: "", count: 0 },
   G: { tones: [7, 9, 11, 0, 2, 4, 6], accidental: "#", count: 1 },
@@ -162,6 +179,7 @@ const I18N = {
     "label.keySignature": "调号",
     "label.currentChord": "和弦",
     "label.liveInputSound": "设备发声",
+    "label.tempo": "速度",
     "button.settings": "设置",
     "button.connect": "连接 MIDI",
     "button.record": "录 MIDI",
@@ -226,6 +244,7 @@ const I18N = {
     "label.keySignature": "調号",
     "label.currentChord": "コード",
     "label.liveInputSound": "端末発音",
+    "label.tempo": "テンポ",
     "button.settings": "設定",
     "button.connect": "MIDI 接続",
     "button.record": "MIDI 録音",
@@ -290,6 +309,7 @@ const I18N = {
     "label.keySignature": "Key",
     "label.currentChord": "Chord",
     "label.liveInputSound": "Device Sound",
+    "label.tempo": "Tempo",
     "button.settings": "Settings",
     "button.connect": "Connect MIDI",
     "button.record": "Record MIDI",
@@ -486,6 +506,9 @@ const els = {
   installButton: document.getElementById("installButton"),
   startMeasureButton: document.getElementById("startMeasureButton"),
   playMeasureButton: document.getElementById("playMeasureButton"),
+  tempoDownButton: document.getElementById("tempoDownButton"),
+  tempoValue: document.getElementById("tempoValue"),
+  tempoUpButton: document.getElementById("tempoUpButton"),
   playbackInstrumentSelect: document.getElementById("playbackInstrumentSelect"),
   liveSoundToggle: document.getElementById("liveSoundToggle"),
   liveSoundToggleLabel: document.getElementById("liveSoundToggleLabel"),
@@ -875,6 +898,7 @@ function syncPracticeControls() {
   els.playMeasureButton.disabled = !hasMeasures;
   syncPlaybackToggleButton();
   syncPlaybackScrubber();
+  syncTempoControls();
 
   if (!hasMeasures) {
     els.measureStatus.textContent = t("status.live");
@@ -1866,6 +1890,10 @@ function applyParsedScore(parsed, filename, typeLabel) {
   state.practice.microsecondsPerQuarter = normalized.microsecondsPerQuarter;
   state.practice.viewStartTick = 0;
   state.practice.measures = normalized.variableMeasures ? normalized.measures : buildMeasuresFromPracticeNotes(state.practice.notes);
+  if (normalized.keySignature && MAJOR_KEY_SIGNATURES[normalized.keySignature]) {
+    state.keySignature = normalized.keySignature;
+    saveSettings();
+  }
   resetAutoFollowBeat(0, { clearPlayed: true });
   const displayName = displayFilename(state.practice.filename, typeLabel);
   setStatusKey(normalized.measures.length ? "status.loaded" : "status.loadedEmpty", {
@@ -2099,6 +2127,40 @@ function practiceEndTick() {
 
 function secondsPerPracticeTick() {
   return (state.practice.microsecondsPerQuarter || 500000) / 1000000 / (state.practice.ticksPerQuarter || MIDI_PPQ);
+}
+
+function bpmFromMicroseconds(microsecondsPerQuarter) {
+  return Math.max(20, Math.min(300, Math.round(60000000 / (Number(microsecondsPerQuarter) || 500000))));
+}
+
+function microsecondsFromBpm(bpm) {
+  return Math.round(60000000 / Math.max(20, Math.min(300, Math.round(Number(bpm) || 120))));
+}
+
+function currentTempoBpm() {
+  return bpmFromMicroseconds(state.practice.microsecondsPerQuarter || 500000);
+}
+
+function adjustPracticeTempo(delta) {
+  if (!state.practice.measures.length) return;
+  stopMeasurePlayback();
+  const nextBpm = Math.max(20, Math.min(300, currentTempoBpm() + delta));
+  state.practice.microsecondsPerQuarter = microsecondsFromBpm(nextBpm);
+  syncPracticeControls();
+}
+
+function syncTempoControls() {
+  const hasMeasures = state.practice.measures.length > 0;
+  const bpm = currentTempoBpm();
+  if (els.tempoValue) els.tempoValue.textContent = String(bpm);
+  if (els.tempoDownButton) {
+    els.tempoDownButton.disabled = !hasMeasures || bpm <= 20;
+    updateIconButtonLabel(els.tempoDownButton, `${t("label.tempo")} -1`);
+  }
+  if (els.tempoUpButton) {
+    els.tempoUpButton.disabled = !hasMeasures || bpm >= 300;
+    updateIconButtonLabel(els.tempoUpButton, `${t("label.tempo")} +1`);
+  }
 }
 
 function formatClockTime(seconds) {
@@ -2819,6 +2881,23 @@ function stopPlaybackAudioNodes() {
   stopAudioNodes(state.playback.activeNodes, state.playback.activeNodes);
 }
 
+function keySignatureFromFifths(fifths) {
+  const rounded = Math.max(-7, Math.min(7, Math.round(Number(fifths) || 0)));
+  return KEY_SIGNATURE_BY_FIFTHS[String(rounded)] || "C";
+}
+
+function signedMidiByte(value) {
+  const byte = Number(value) & 0xff;
+  return byte > 127 ? byte - 256 : byte;
+}
+
+function primaryTempoMicroseconds(events, fallback = 500000) {
+  const tempos = (events || [])
+    .filter((event) => Number.isFinite(event.microsecondsPerQuarter) && event.microsecondsPerQuarter > 0)
+    .sort((a, b) => (a.tick || 0) - (b.tick || 0));
+  return tempos[0]?.microsecondsPerQuarter || fallback;
+}
+
 function parseMidiFile(bytes) {
   const reader = makeMidiReader(bytes);
   if (reader.readText(4) !== "MThd") throw new Error("不是标准 MIDI 文件");
@@ -2833,6 +2912,8 @@ function parseMidiFile(bytes) {
   const noteEvents = [];
   const pedalEvents = [];
   const timeSignatureEvents = [];
+  const keySignatureEvents = [];
+  const tempoEvents = [];
   let timeSignature = { numerator: 4, denominator: 4 };
   let microsecondsPerQuarter = 500000;
 
@@ -2849,10 +2930,15 @@ function parseMidiFile(bytes) {
     noteEvents.push(...trackResult.notes.map((note) => ({ ...note, trackIndex })));
     pedalEvents.push(...trackResult.pedalEvents.map((event) => ({ ...event, trackIndex })));
     timeSignatureEvents.push(...trackResult.timeSignatureEvents);
+    keySignatureEvents.push(...trackResult.keySignatureEvents);
+    tempoEvents.push(...trackResult.tempoEvents);
     if (trackResult.timeSignature) timeSignature = trackResult.timeSignature;
     if (trackResult.microsecondsPerQuarter) microsecondsPerQuarter = trackResult.microsecondsPerQuarter;
     reader.position = trackEnd;
   }
+  microsecondsPerQuarter = primaryTempoMicroseconds(tempoEvents, microsecondsPerQuarter);
+  const keySignature = keySignatureEvents
+    .sort((a, b) => (a.tick || 0) - (b.tick || 0))[0]?.keySignature || null;
 
   const notes = noteEvents
     .filter((item) => item.note >= MIDI_MIN && item.note <= MIDI_MAX)
@@ -2863,7 +2949,7 @@ function parseMidiFile(bytes) {
   }
   if (!notes.length) {
     const measureTicks = measureTicksForTimeSignature(timeSignature, ticksPerQuarter);
-    return { measures: [], pedalEvents, ticksPerQuarter, measureTicks, timeSignature, timeSignatureEvents: [], microsecondsPerQuarter, format };
+    return { measures: [], pedalEvents, ticksPerQuarter, measureTicks, timeSignature, timeSignatureEvents: [], keySignature, microsecondsPerQuarter, format };
   }
   const trackRoles = trackRolesForNotes(notes);
 
@@ -2881,6 +2967,7 @@ function parseMidiFile(bytes) {
     measureTicks,
     timeSignature,
     timeSignatureEvents: signatureEvents.map((event) => ({ tick: event.tick, ...event.timeSignature })),
+    keySignature,
     microsecondsPerQuarter,
     format,
     variableMeasures: signatureEvents.length > 1
@@ -2899,6 +2986,8 @@ function parseMusicXmlText(text) {
 
   const ticksPerQuarter = MIDI_PPQ;
   const timeSignature = readFirstMusicXmlTime(parts[0]) || { numerator: 4, denominator: 4 };
+  const keySignature = readFirstMusicXmlKey(parts[0]);
+  const microsecondsPerQuarter = microsecondsFromBpm(readFirstMusicXmlTempo(parts) || 120);
   const measureTicks = ticksPerQuarter * timeSignature.numerator * 4 / timeSignature.denominator;
   const measureCount = Math.max(...parts.map((part) => childrenByLocalName(part, "measure").length));
   const measures = Array.from({ length: measureCount }, (_, index) => ({
@@ -2969,7 +3058,8 @@ function parseMusicXmlText(text) {
     ticksPerQuarter,
     measureTicks,
     timeSignature,
-    microsecondsPerQuarter: 500000,
+    keySignature,
+    microsecondsPerQuarter,
     format: "musicxml"
   };
 }
@@ -2983,6 +3073,37 @@ function readFirstMusicXmlTime(partNode) {
   const beatType = Number(childText(timeNode, "beat-type"));
   if (!beats || !beatType) return null;
   return { numerator: beats, denominator: beatType };
+}
+
+function readFirstMusicXmlKey(partNode) {
+  const firstMeasure = childByLocalName(partNode, "measure");
+  const attributes = childByLocalName(firstMeasure, "attributes");
+  const keyNode = childByLocalName(attributes, "key");
+  const fifthsText = childText(keyNode, "fifths");
+  if (fifthsText === "") return null;
+  return keySignatureFromFifths(Number(fifthsText));
+}
+
+function readFirstMusicXmlTempo(parts) {
+  for (const part of parts) {
+    for (const measure of childrenByLocalName(part, "measure")) {
+      const soundNode = childrenByLocalName(measure, "sound").find((node) => node.getAttribute("tempo"));
+      const soundTempo = Number(soundNode?.getAttribute("tempo"));
+      if (Number.isFinite(soundTempo) && soundTempo > 0) return Math.round(soundTempo);
+
+      for (const direction of childrenByLocalName(measure, "direction")) {
+        const directionSound = childByLocalName(direction, "sound");
+        const directionTempo = Number(directionSound?.getAttribute("tempo"));
+        if (Number.isFinite(directionTempo) && directionTempo > 0) return Math.round(directionTempo);
+
+        const directionType = childByLocalName(direction, "direction-type");
+        const metronome = childByLocalName(directionType, "metronome");
+        const perMinute = Number(childText(metronome, "per-minute"));
+        if (Number.isFinite(perMinute) && perMinute > 0) return Math.round(perMinute);
+      }
+    }
+  }
+  return null;
 }
 
 function musicXmlDurationToTicks(node, divisions) {
@@ -3118,6 +3239,8 @@ function parseMidiTrack(bytes, start, end) {
   const notes = [];
   const pedalEvents = [];
   const timeSignatureEvents = [];
+  const keySignatureEvents = [];
+  const tempoEvents = [];
   let tick = 0;
   let runningStatus = 0;
   let timeSignature = null;
@@ -3145,7 +3268,13 @@ function parseMidiTrack(bytes, start, end) {
         reader.skip(length - 2);
       } else if (type === 0x51 && length >= 3) {
         microsecondsPerQuarter = (reader.readUint8() << 16) | (reader.readUint8() << 8) | reader.readUint8();
+        tempoEvents.push({ tick, microsecondsPerQuarter });
         reader.skip(length - 3);
+      } else if (type === 0x59 && length >= 2) {
+        const fifths = signedMidiByte(reader.readUint8());
+        const mode = reader.readUint8();
+        keySignatureEvents.push({ tick, fifths, mode, keySignature: keySignatureFromFifths(fifths) });
+        reader.skip(length - 2);
       } else {
         reader.skip(length);
       }
@@ -3183,7 +3312,7 @@ function parseMidiTrack(bytes, start, end) {
     });
   });
 
-  return { notes, pedalEvents, timeSignature, timeSignatureEvents, microsecondsPerQuarter };
+  return { notes, pedalEvents, timeSignature, timeSignatureEvents, keySignatureEvents, tempoEvents, microsecondsPerQuarter };
 }
 
 function makeMidiReader(bytes, position = 0) {
@@ -3747,6 +3876,8 @@ function setupEvents() {
   els.midiFileInput.addEventListener("change", () => loadScoreFile(els.midiFileInput.files[0]));
   els.startMeasureButton.addEventListener("click", goToPracticeStart);
   els.playMeasureButton.addEventListener("click", toggleContinuousPlayback);
+  els.tempoDownButton.addEventListener("click", () => adjustPracticeTempo(-1));
+  els.tempoUpButton.addEventListener("click", () => adjustPracticeTempo(1));
   els.playbackInstrumentSelect.addEventListener("change", () => {
     state.playbackInstrument = playbackInstrumentId(els.playbackInstrumentSelect.value) || "kalimba";
     syncControlsFromState();

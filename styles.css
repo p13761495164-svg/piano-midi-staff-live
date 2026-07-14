@@ -443,6 +443,7 @@ select {
 .measure-status,
 .chord-status,
 .measure-play,
+.tempo-control,
 .playback-instrument-select,
 .live-sound-toggle {
   border: 1px solid var(--line);
@@ -475,6 +476,44 @@ select {
   padding: 0 10px;
   color: var(--ink);
   box-shadow: none;
+}
+
+.tempo-control {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.tempo-control span {
+  min-width: 34px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tempo-step {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  box-shadow: none;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.tempo-step:disabled {
+  color: rgba(35, 34, 31, 0.28);
+  cursor: not-allowed;
 }
 
 .playback-instrument-select {
