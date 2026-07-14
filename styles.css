@@ -478,7 +478,8 @@ select {
 
 .playback-instrument-select {
   width: 108px;
-  min-height: 30px;
+  height: 34px;
+  min-height: 34px;
   padding: 0 24px 0 10px;
   color: var(--ink);
   font-size: 12px;
@@ -823,8 +824,9 @@ select {
 }
 
 .black-key.active {
-  background: var(--active-2);
-  border-color: #7c2117;
+  background: linear-gradient(180deg, #f5c96a 0%, #c9851f 100%);
+  border-color: #80530d;
+  box-shadow: inset 0 -8px 14px rgba(255, 244, 210, 0.24), 0 0 0 2px rgba(240, 184, 78, 0.28);
 }
 
 .key.cue {
@@ -845,8 +847,9 @@ select {
 }
 
 .black-key.input-active {
-  background: var(--active-2);
-  border-color: #7c2117;
+  background: linear-gradient(180deg, #f5c96a 0%, #c9851f 100%);
+  border-color: #80530d;
+  box-shadow: inset 0 -8px 14px rgba(255, 244, 210, 0.24), 0 0 0 2px rgba(240, 184, 78, 0.28);
 }
 
 @media (max-width: 760px) {

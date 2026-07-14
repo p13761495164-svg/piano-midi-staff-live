@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v142";
+const APP_VERSION = "v143";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -134,7 +134,7 @@ const LANGUAGE_LABELS = {
   en: "EN"
 };
 const PLAYBACK_INSTRUMENTS = [
-  { id: "grand", labels: { zh: "钢琴", ja: "ピアノ", en: "Piano" }, custom: true },
+  { id: "grand", labels: { zh: "Easy Piano", ja: "Easy Piano", en: "Easy Piano" }, custom: true },
   { id: "piano", labels: { zh: "原声钢琴", ja: "アコースティックピアノ", en: "Acoustic Piano" }, wave: "triangle", partials: [1, 2, 3, 4.1], levels: [1, 0.34, 0.18, 0.08], attack: 0.006, decay: 3.3, brightness: 3800 },
   { id: "electric", labels: { zh: "电钢琴", ja: "エレピ", en: "Electric Piano" }, wave: "sine", partials: [1, 2, 3.01, 4], levels: [1, 0.42, 0.2, 0.1], attack: 0.012, decay: 3.8, brightness: 2600 },
   { id: "kalimba", labels: { zh: "卡林巴", ja: "カリンバ", en: "Kalimba" }, wave: "sine", partials: [1, 4.03], levels: [1, 0.3], attack: 0.004, decay: 3, brightness: 5200 },
@@ -376,7 +376,7 @@ function playbackInstrumentLabel(instrument) {
 
 function renderPlaybackInstrumentOptions() {
   if (!els.playbackInstrumentSelect) return;
-  const selected = playbackInstrumentId(state.playbackInstrument) || "grand";
+  const selected = playbackInstrumentId(state.playbackInstrument) || "kalimba";
   els.playbackInstrumentSelect.replaceChildren();
   PLAYBACK_INSTRUMENTS.forEach((instrument) => {
     els.playbackInstrumentSelect.appendChild(new Option(playbackInstrumentLabel(instrument), instrument.id));
@@ -397,7 +397,7 @@ const state = {
   softPedalDown: false,
   keySignature: "C",
   noteLabelMode: "degree",
-  playbackInstrument: "grand",
+  playbackInstrument: "kalimba",
   pedalStep: "on",
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
@@ -817,7 +817,7 @@ function syncControlsFromState() {
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
   if (els.playbackInstrumentSelect) {
-    els.playbackInstrumentSelect.value = playbackInstrumentId(state.playbackInstrument) || "grand";
+    els.playbackInstrumentSelect.value = playbackInstrumentId(state.playbackInstrument) || "kalimba";
   }
 }
 
@@ -3619,7 +3619,7 @@ function setupEvents() {
   els.startMeasureButton.addEventListener("click", goToPracticeStart);
   els.playMeasureButton.addEventListener("click", toggleContinuousPlayback);
   els.playbackInstrumentSelect.addEventListener("change", () => {
-    state.playbackInstrument = playbackInstrumentId(els.playbackInstrumentSelect.value) || "grand";
+    state.playbackInstrument = playbackInstrumentId(els.playbackInstrumentSelect.value) || "kalimba";
     syncControlsFromState();
     saveSettings();
   });
