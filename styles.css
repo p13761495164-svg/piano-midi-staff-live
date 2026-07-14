@@ -442,7 +442,8 @@ select {
 
 .measure-status,
 .chord-status,
-.measure-play {
+.measure-play,
+.playback-instrument-select {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(255, 253, 248, 0.84);
@@ -473,6 +474,14 @@ select {
   padding: 0 10px;
   color: var(--ink);
   box-shadow: none;
+}
+
+.playback-instrument-select {
+  width: 108px;
+  min-height: 30px;
+  padding: 0 24px 0 10px;
+  color: var(--ink);
+  font-size: 12px;
 }
 
 .icon-button {

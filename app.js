@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v141";
+const APP_VERSION = "v142";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -73,7 +73,8 @@ const SETTINGS_FIELD_KEYS = {
   autoFollowMode: "piano-midi-staff-auto-follow-mode",
   autoFollowTolerance: "piano-midi-staff-auto-follow-tolerance",
   timeSignature: "piano-midi-staff-time-signature",
-  language: "piano-midi-staff-language"
+  language: "piano-midi-staff-language",
+  playbackInstrument: "piano-midi-staff-playback-instrument"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const MAJOR_KEY_SIGNATURES = {
@@ -132,6 +133,19 @@ const LANGUAGE_LABELS = {
   ja: "日本語",
   en: "EN"
 };
+const PLAYBACK_INSTRUMENTS = [
+  { id: "grand", labels: { zh: "钢琴", ja: "ピアノ", en: "Piano" }, custom: true },
+  { id: "piano", labels: { zh: "原声钢琴", ja: "アコースティックピアノ", en: "Acoustic Piano" }, wave: "triangle", partials: [1, 2, 3, 4.1], levels: [1, 0.34, 0.18, 0.08], attack: 0.006, decay: 3.3, brightness: 3800 },
+  { id: "electric", labels: { zh: "电钢琴", ja: "エレピ", en: "Electric Piano" }, wave: "sine", partials: [1, 2, 3.01, 4], levels: [1, 0.42, 0.2, 0.1], attack: 0.012, decay: 3.8, brightness: 2600 },
+  { id: "kalimba", labels: { zh: "卡林巴", ja: "カリンバ", en: "Kalimba" }, wave: "sine", partials: [1, 4.03], levels: [1, 0.3], attack: 0.004, decay: 3, brightness: 5200 },
+  { id: "musicbox", labels: { zh: "八音盒", ja: "オルゴール", en: "Music Box" }, wave: "sine", partials: [1, 2, 3, 5.02], levels: [1, 0.22, 0.18, 0.12], attack: 0.002, decay: 2.8, brightness: 7000 },
+  { id: "marimba", labels: { zh: "马林巴／木琴", ja: "マリンバ／木琴", en: "Marimba" }, wave: "sine", partials: [1, 3.99, 9.02], levels: [1, 0.23, 0.08], attack: 0.003, decay: 1.8, brightness: 3200 },
+  { id: "harp", labels: { zh: "竖琴", ja: "ハープ", en: "Harp" }, wave: "triangle", partials: [1, 2, 3, 4], levels: [1, 0.25, 0.13, 0.06], attack: 0.01, decay: 4.2, brightness: 4400 },
+  { id: "strings", labels: { zh: "弦乐合奏", ja: "ストリングス", en: "Strings" }, wave: "sawtooth", partials: [1, 1.005, 0.995], levels: [0.5, 0.28, 0.28], attack: 0.18, decay: 4.8, brightness: 1700 },
+  { id: "organ", labels: { zh: "风琴", ja: "オルガン", en: "Organ" }, wave: "sine", partials: [1, 2, 3, 4], levels: [1, 0.5, 0.28, 0.14], attack: 0.025, decay: 4.6, brightness: 4600 },
+  { id: "pad", labels: { zh: "合成器 Pad", ja: "シンセ Pad", en: "Synth Pad" }, wave: "sawtooth", partials: [1, 0.5, 2], levels: [0.62, 0.23, 0.14], attack: 0.32, decay: 5.6, brightness: 1050 },
+  { id: "guitar", labels: { zh: "尼龙吉他", ja: "ナイロンギター", en: "Nylon Guitar" }, wave: "triangle", partials: [1, 2, 3, 5], levels: [1, 0.3, 0.15, 0.06], attack: 0.004, decay: 3.1, brightness: 3000 }
+];
 const I18N = {
   zh: {
     "label.language": "语言",
@@ -348,6 +362,29 @@ function normalizeLanguage(language) {
   return Object.prototype.hasOwnProperty.call(I18N, language) ? language : "en";
 }
 
+function playbackInstrumentId(id) {
+  return PLAYBACK_INSTRUMENTS.some((instrument) => instrument.id === id) ? id : "";
+}
+
+function currentPlaybackInstrument() {
+  return PLAYBACK_INSTRUMENTS.find((instrument) => instrument.id === state.playbackInstrument) || PLAYBACK_INSTRUMENTS[0];
+}
+
+function playbackInstrumentLabel(instrument) {
+  return instrument.labels?.[state.language] || instrument.labels?.en || instrument.id;
+}
+
+function renderPlaybackInstrumentOptions() {
+  if (!els.playbackInstrumentSelect) return;
+  const selected = playbackInstrumentId(state.playbackInstrument) || "grand";
+  els.playbackInstrumentSelect.replaceChildren();
+  PLAYBACK_INSTRUMENTS.forEach((instrument) => {
+    els.playbackInstrumentSelect.appendChild(new Option(playbackInstrumentLabel(instrument), instrument.id));
+  });
+  els.playbackInstrumentSelect.value = selected;
+  els.playbackInstrumentSelect.setAttribute("aria-label", state.language === "ja" ? "再生音色" : state.language === "en" ? "Playback tone" : "播放音色");
+}
+
 const state = {
   midiAccess: null,
   language: detectDeviceLanguage(),
@@ -360,6 +397,7 @@ const state = {
   softPedalDown: false,
   keySignature: "C",
   noteLabelMode: "degree",
+  playbackInstrument: "grand",
   pedalStep: "on",
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
@@ -436,6 +474,7 @@ const els = {
   installButton: document.getElementById("installButton"),
   startMeasureButton: document.getElementById("startMeasureButton"),
   playMeasureButton: document.getElementById("playMeasureButton"),
+  playbackInstrumentSelect: document.getElementById("playbackInstrumentSelect"),
   playbackSlider: document.getElementById("playbackSlider"),
   playbackTime: document.getElementById("playbackTime"),
   measureStatus: document.getElementById("measureStatus"),
@@ -603,6 +642,7 @@ function applyLanguage() {
   document.querySelector('[data-auto-follow-mode="beat"]').textContent = t("button.byBeat");
 
   els.inputSelect.options[0].textContent = t("option.autoSelect");
+  renderPlaybackInstrumentOptions();
   els.languageButtons.forEach((button) => {
     const active = button.dataset.language === state.language;
     button.textContent = LANGUAGE_LABELS[button.dataset.language] || button.dataset.language;
@@ -674,10 +714,6 @@ function createSvg(tag, attrs = {}) {
   return node;
 }
 
-function snapStaffX(x) {
-  return Math.round(x * 2) / 2;
-}
-
 function readSettings() {
   const settings = {};
   try {
@@ -696,6 +732,7 @@ function readSettings() {
     const autoFollowTolerance = window.localStorage.getItem(SETTINGS_FIELD_KEYS.autoFollowTolerance);
     const timeSignature = window.localStorage.getItem(SETTINGS_FIELD_KEYS.timeSignature);
     const language = window.localStorage.getItem(SETTINGS_FIELD_KEYS.language);
+    const playbackInstrument = window.localStorage.getItem(SETTINGS_FIELD_KEYS.playbackInstrument);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
@@ -707,6 +744,7 @@ function readSettings() {
     if (autoFollowTolerance !== null) settings.autoFollowTolerance = clampTolerance(autoFollowTolerance);
     if (/^\d+\/\d+$/.test(timeSignature || "")) settings.timeSignature = timeSignature;
     if (language) settings.language = normalizeLanguage(language);
+    if (playbackInstrumentId(playbackInstrument)) settings.playbackInstrument = playbackInstrument;
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -723,7 +761,8 @@ function saveSettings() {
     autoFollowMode: state.autoFollowMode,
     autoFollowTolerance: state.autoFollowTolerance,
     timeSignature: timeSignatureKey(state.practice.timeSignature),
-    language: state.language
+    language: state.language,
+    playbackInstrument: state.playbackInstrument
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -737,6 +776,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.autoFollowTolerance, String(settings.autoFollowTolerance));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.timeSignature, settings.timeSignature);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.language, settings.language);
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.playbackInstrument, settings.playbackInstrument);
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -776,6 +816,9 @@ function syncControlsFromState() {
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
+  if (els.playbackInstrumentSelect) {
+    els.playbackInstrumentSelect.value = playbackInstrumentId(state.playbackInstrument) || "grand";
+  }
 }
 
 function timeSignatureKey(timeSignature) {
@@ -846,6 +889,9 @@ function applySavedSettings() {
     state.noteLabelMode = settings.noteLabelMode;
   } else {
     state.noteLabelMode = settings.showDegrees === false ? "none" : "degree";
+  }
+  if (playbackInstrumentId(settings.playbackInstrument)) {
+    state.playbackInstrument = settings.playbackInstrument;
   }
   if (typeof settings.selectedInputId === "string") {
     state.selectedInputId = settings.selectedInputId;
@@ -964,7 +1010,7 @@ function drawBeatGrid(svg) {
     for (let beat = 0; beat <= numerator; beat += 1) {
       const tick = measure.startTick + beat * beatTicks;
       if (tick < viewStartTick || tick > viewEndTick) continue;
-      const x = snapStaffX(xForTick(tick));
+      const x = xForTick(tick);
       const isMeasureEdge = beat === 0 || beat === numerator;
       svg.appendChild(createSvg("line", {
         x1: x,
@@ -990,8 +1036,8 @@ function drawPedalTrack(svg) {
   };
 
   pedalIntervalsForView(viewStartTick, viewEndTick).forEach((interval) => {
-    const startX = snapStaffX(xForTick(Math.max(interval.startTick, viewStartTick)));
-    const endX = snapStaffX(xForTick(Math.min(interval.endTick, viewEndTick)));
+    const startX = xForTick(Math.max(interval.startTick, viewStartTick));
+    const endX = xForTick(Math.min(interval.endTick, viewEndTick));
     if (endX <= MEASURE_NOTE_LEFT_X || startX >= MEASURE_NOTE_RIGHT_X) return;
 
     const lineStartX = Math.max(MEASURE_NOTE_LEFT_X, startX + (interval.startsInside ? 56 : 0));
@@ -1103,7 +1149,7 @@ function buildPracticeNoteItems() {
       const durationKind = durationKindForTicks(Math.max(1, target.endTick - target.startTick));
       const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
       const progress = Math.max(0, Math.min(1, (displayStartTick - viewStartTick) / timeSpan));
-      const targetX = snapStaffX(MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X));
+      const targetX = MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
       const matched = isAutoFollowTargetMatched(target);
       const active = isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick;
       const cue = cueTargetIds.has(target.id) && !matched;
@@ -2371,14 +2417,12 @@ function animatePlaybackView() {
     const playbackTick = state.playback.startTick + elapsed / Math.max(0.000001, state.playback.secondsPerTick);
     triggerPendingPlaybackNotes(playbackTick);
     updatePlaybackActiveNotes(playbackTick);
-    if (now - state.playback.lastVisualFrameAt >= 15 || playbackTick >= state.playback.endTick) {
-      state.playback.lastVisualFrameAt = now;
-      const viewTick = Math.min(maxPracticeViewStartTick(), playbackTick);
-      state.practice.viewStartTick = viewTick;
-      state.practice.currentMeasure = measureIndexForTick(viewTick);
-      updateAll();
-      syncPlaybackScrubber();
-    }
+    state.playback.lastVisualFrameAt = now;
+    const viewTick = Math.min(maxPracticeViewStartTick(), playbackTick);
+    state.practice.viewStartTick = viewTick;
+    state.practice.currentMeasure = measureIndexForTick(viewTick);
+    updateAll();
+    syncPlaybackScrubber();
 
     if (playbackTick >= state.playback.endTick) {
       stopMeasurePlayback();
@@ -2445,7 +2489,49 @@ function pedalIntervalAppliesToTarget(interval, target) {
   return interval.channel === target.channel;
 }
 
+function scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, instrument) {
+  const frequency = 440 * 2 ** ((note - 69) / 12);
+  const safeStartAt = Math.max(audioContext.currentTime + 0.004, startAt);
+  const output = audioContext.createGain();
+  const filter = audioContext.createBiquadFilter();
+  const activeNodes = [output, filter];
+  const decay = Math.max(instrument.decay || 3, duration + 0.2);
+  const releaseAt = safeStartAt + Math.min(decay, Math.max(0.12, duration));
+  const tailEnd = safeStartAt + decay + 0.08;
+
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(instrument.brightness || 3200, safeStartAt);
+  filter.Q.setValueAtTime(instrument.id === "kalimba" ? 1.8 : 0.7, safeStartAt);
+  output.gain.setValueAtTime(0.0001, safeStartAt);
+  output.gain.linearRampToValueAtTime(0.18, safeStartAt + (instrument.attack || 0.01));
+  output.gain.exponentialRampToValueAtTime(0.0001, Math.max(releaseAt + 0.04, tailEnd));
+
+  instrument.partials.forEach((partial, index) => {
+    if (frequency * partial > audioContext.sampleRate * 0.42) return;
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    oscillator.type = instrument.wave || "sine";
+    oscillator.frequency.setValueAtTime(frequency * partial, safeStartAt);
+    gain.gain.setValueAtTime(instrument.levels[index] || 0.1, safeStartAt);
+    oscillator.connect(gain);
+    gain.connect(output);
+    oscillator.start(safeStartAt);
+    oscillator.stop(tailEnd);
+    activeNodes.push(oscillator, gain);
+  });
+
+  output.connect(filter);
+  filter.connect(audioContext.destination);
+  state.playback.activeNodes.push(...activeNodes);
+}
+
 function schedulePracticeTone(audioContext, note, startAt, duration) {
+  const instrument = currentPlaybackInstrument();
+  if (!instrument.custom) {
+    scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, instrument);
+    return;
+  }
+
   const frequency = 440 * 2 ** ((note - 69) / 12);
   const safeStartAt = Math.max(audioContext.currentTime + 0.004, startAt);
   const isLowNote = note < 52;
@@ -3532,6 +3618,11 @@ function setupEvents() {
   els.midiFileInput.addEventListener("change", () => loadScoreFile(els.midiFileInput.files[0]));
   els.startMeasureButton.addEventListener("click", goToPracticeStart);
   els.playMeasureButton.addEventListener("click", toggleContinuousPlayback);
+  els.playbackInstrumentSelect.addEventListener("change", () => {
+    state.playbackInstrument = playbackInstrumentId(els.playbackInstrumentSelect.value) || "grand";
+    syncControlsFromState();
+    saveSettings();
+  });
   els.playbackSlider.addEventListener("input", () => {
     seekPracticeView(els.playbackSlider.value);
   });
