@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v157";
+const APP_VERSION = "v158";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -367,7 +367,7 @@ const I18N = {
     "status.reloading": "Reloading page..."
   }
 };
-const STAFF_VIEWBOX = { width: 1760, height: 720 };
+const STAFF_VIEWBOX = { width: 1760, height: 760 };
 const STAFF_STEP_PX = 20;
 const TREBLE_LINE_YS = [180, 220, 260, 300, 340];
 const BASS_LINE_YS = [420, 460, 500, 540, 580];
@@ -2323,7 +2323,7 @@ function firstUnmatchedTargetGroup(targets) {
 }
 
 function markAutoFollowNote(note) {
-  if (state.autoFollowMode !== "beat" || !state.practice.measures.length) return;
+  if (state.autoFollowMode !== "beat" || state.playback.playing || !state.practice.measures.length) return;
   const beatStart = currentAutoFollowBeatStart();
   if (state.autoFollow.currentBeatStart !== beatStart) resetAutoFollowBeat(beatStart);
   const target = targetForPlayedNote(note, beatStart);
@@ -2378,6 +2378,7 @@ function scheduleAutoFollowEmptyBeatCheck() {
   window.clearTimeout(state.autoFollow.emptyAdvanceTimer);
   if (
     state.autoFollowMode !== "beat" ||
+    state.playback.playing ||
     state.autoFollow.animating ||
     state.autoFollow.pausedAfterManualNavigation ||
     !state.practice.measures.length
@@ -2394,6 +2395,7 @@ function scheduleAutoFollowEmptyBeatCheck() {
 function evaluateAutoFollowBeat(options = {}) {
   if (
     state.autoFollowMode !== "beat" ||
+    state.playback.playing ||
     state.autoFollow.animating ||
     state.autoFollow.pausedAfterManualNavigation ||
     !state.practice.measures.length
