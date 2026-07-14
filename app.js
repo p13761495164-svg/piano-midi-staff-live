@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v138";
+const APP_VERSION = "v139";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2446,10 +2446,10 @@ function schedulePracticeTone(audioContext, note, startAt, duration) {
   const safeStartAt = Math.max(audioContext.currentTime + 0.004, startAt);
   const isLowNote = note < 52;
   const isHighNote = note >= 72;
-  const bodyLevel = isLowNote ? 0.24 : isHighNote ? 0.13 : 0.18;
-  const sustainTime = Math.min(Math.max(0.16, duration), isHighNote ? 0.85 : isLowNote ? 2.15 : 1.65);
+  const bodyLevel = isLowNote ? 0.26 : isHighNote ? 0.095 : 0.19;
+  const sustainTime = Math.min(Math.max(0.18, duration), isHighNote ? 0.98 : isLowNote ? 2.25 : 1.72);
   const releaseAt = safeStartAt + sustainTime;
-  const tailSeconds = isHighNote ? 0.48 : isLowNote ? 1.08 : 0.82;
+  const tailSeconds = isHighNote ? 0.58 : isLowNote ? 1.16 : 0.92;
   const tailEnd = releaseAt + tailSeconds;
   const output = audioContext.createGain();
   const toneFilter = audioContext.createBiquadFilter();
@@ -2467,28 +2467,28 @@ function schedulePracticeTone(audioContext, note, startAt, duration) {
   }
 
   toneFilter.type = "lowpass";
-  toneFilter.frequency.setValueAtTime(Math.min(isHighNote ? 5400 : 7600, frequency * (isHighNote ? 6.2 : 10.5)), safeStartAt);
-  toneFilter.frequency.exponentialRampToValueAtTime(Math.max(isHighNote ? 1100 : 820, frequency * (isHighNote ? 2.5 : 3.8)), releaseAt + tailSeconds * 0.55);
-  toneFilter.Q.setValueAtTime(0.42, safeStartAt);
+  toneFilter.frequency.setValueAtTime(Math.min(isHighNote ? 4200 : 6900, frequency * (isHighNote ? 4.8 : 8.8)), safeStartAt);
+  toneFilter.frequency.exponentialRampToValueAtTime(Math.max(isHighNote ? 920 : 780, frequency * (isHighNote ? 2.0 : 3.35)), releaseAt + tailSeconds * 0.6);
+  toneFilter.Q.setValueAtTime(isHighNote ? 0.28 : 0.36, safeStartAt);
 
   bodyFilter.type = "peaking";
-  bodyFilter.frequency.setValueAtTime(isLowNote ? 180 : isHighNote ? 520 : 310, safeStartAt);
-  bodyFilter.Q.setValueAtTime(isLowNote ? 0.75 : 0.95, safeStartAt);
-  bodyFilter.gain.setValueAtTime(isLowNote ? 4.2 : isHighNote ? 1.5 : 2.8, safeStartAt);
+  bodyFilter.frequency.setValueAtTime(isLowNote ? 165 : isHighNote ? 390 : 285, safeStartAt);
+  bodyFilter.Q.setValueAtTime(isLowNote ? 0.72 : 0.88, safeStartAt);
+  bodyFilter.gain.setValueAtTime(isLowNote ? 4.5 : isHighNote ? 0.8 : 3.0, safeStartAt);
 
   output.gain.setValueAtTime(0.0001, safeStartAt);
-  output.gain.exponentialRampToValueAtTime(isHighNote ? 0.105 : 0.16, safeStartAt + 0.008);
-  output.gain.exponentialRampToValueAtTime(isHighNote ? 0.052 : 0.095, safeStartAt + 0.11);
-  output.gain.exponentialRampToValueAtTime(isHighNote ? 0.014 : 0.036, releaseAt);
+  output.gain.exponentialRampToValueAtTime(isHighNote ? 0.095 : 0.158, safeStartAt + 0.006);
+  output.gain.exponentialRampToValueAtTime(isHighNote ? 0.047 : 0.09, safeStartAt + 0.13);
+  output.gain.exponentialRampToValueAtTime(isHighNote ? 0.017 : 0.038, releaseAt);
   output.gain.exponentialRampToValueAtTime(0.0001, tailEnd);
 
   const partials = [
-    { ratio: 1, gain: 0.76, decay: sustainTime + tailSeconds * 0.72, type: "triangle", detune: -2.5 },
-    { ratio: 1.002, gain: 0.34, decay: sustainTime + tailSeconds * 0.54, type: "sine", detune: 3.5 },
-    { ratio: 2.006, gain: isHighNote ? 0.06 : 0.19, decay: isHighNote ? 0.32 : 0.62, type: "sine", detune: -1.2 },
-    { ratio: 3.015, gain: isHighNote ? 0.028 : 0.115, decay: isHighNote ? 0.18 : 0.38, type: "sine", detune: 1.8 },
-    { ratio: 4.03, gain: isHighNote ? 0.014 : 0.052, decay: isHighNote ? 0.1 : 0.24, type: "sine", detune: 0 },
-    { ratio: 6.04, gain: isHighNote ? 0.006 : 0.022, decay: isHighNote ? 0.07 : 0.14, type: "sine", detune: 0 }
+    { ratio: 1, gain: 0.82, decay: sustainTime + tailSeconds * 0.82, type: "triangle", detune: -1.5 },
+    { ratio: 1.0015, gain: 0.26, decay: sustainTime + tailSeconds * 0.62, type: "sine", detune: 2.2 },
+    { ratio: 2.003, gain: isHighNote ? 0.045 : 0.16, decay: isHighNote ? 0.38 : 0.68, type: "sine", detune: -0.8 },
+    { ratio: 3.008, gain: isHighNote ? 0.018 : 0.088, decay: isHighNote ? 0.2 : 0.4, type: "sine", detune: 1.2 },
+    { ratio: 4.016, gain: isHighNote ? 0.007 : 0.035, decay: isHighNote ? 0.12 : 0.25, type: "sine", detune: 0 },
+    { ratio: 6.02, gain: isHighNote ? 0.0025 : 0.012, decay: isHighNote ? 0.08 : 0.14, type: "sine", detune: 0 }
   ];
 
   partials.forEach((partial) => {
@@ -2526,10 +2526,10 @@ function schedulePracticeTone(audioContext, note, startAt, duration) {
 
   attackClick.buffer = clickBuffer;
   clickFilter.type = "bandpass";
-  clickFilter.frequency.setValueAtTime(isHighNote ? 2400 : 1750, safeStartAt);
-  clickFilter.Q.setValueAtTime(0.9, safeStartAt);
-  clickGain.gain.setValueAtTime(isHighNote ? 0.008 : 0.018, safeStartAt);
-  clickGain.gain.exponentialRampToValueAtTime(0.0001, safeStartAt + 0.014);
+  clickFilter.frequency.setValueAtTime(isHighNote ? 1850 : 1600, safeStartAt);
+  clickFilter.Q.setValueAtTime(0.65, safeStartAt);
+  clickGain.gain.setValueAtTime(isHighNote ? 0.004 : 0.014, safeStartAt);
+  clickGain.gain.exponentialRampToValueAtTime(0.0001, safeStartAt + 0.012);
   attackClick.connect(clickGain);
   clickGain.connect(clickFilter);
   clickFilter.connect(toneFilter);

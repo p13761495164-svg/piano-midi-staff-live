@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "easy-piano-v138";
+const CACHE_NAME = "easy-piano-v139";
 const ASSETS = [
   "./",
   "./index.html",
