@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v161";
+const APP_VERSION = "v162";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -184,7 +184,7 @@ const I18N = {
     "label.tempo": "速度",
     "label.mistakes": "弹错记录",
     "label.noMistakes": "暂无",
-    "label.mistakeItem": "{measure}小节 第{beat}格 {note}",
+    "label.mistakeItem": "{measure}小节",
     "button.settings": "设置",
     "button.connect": "连接 MIDI",
     "button.record": "录 MIDI",
@@ -253,7 +253,7 @@ const I18N = {
     "label.tempo": "テンポ",
     "label.mistakes": "ミス記録",
     "label.noMistakes": "なし",
-    "label.mistakeItem": "{measure}小節 {beat}拍目 {note}",
+    "label.mistakeItem": "{measure}小節",
     "button.settings": "設定",
     "button.connect": "MIDI 接続",
     "button.record": "MIDI 録音",
@@ -322,7 +322,7 @@ const I18N = {
     "label.tempo": "Tempo",
     "label.mistakes": "Mistakes",
     "label.noMistakes": "None",
-    "label.mistakeItem": "Bar {measure} Beat {beat} {note}",
+    "label.mistakeItem": "Bar {measure}",
     "button.settings": "Settings",
     "button.connect": "Connect MIDI",
     "button.record": "Record MIDI",
@@ -959,13 +959,12 @@ function recordMistake(note) {
   const tick = currentAutoFollowBeatStart();
   const measureIndex = measureIndexForTick(tick);
   const measure = state.practice.measures[measureIndex];
-  const gridTicks = practiceGridTicks();
-  const beatIndex = measure ? Math.floor(Math.max(0, tick - measure.startTick) / gridTicks) + 1 : 1;
+  const measureNumber = measureIndex + 1;
+  if (state.mistakes.some((entry) => entry.measure === measureNumber)) return;
   state.mistakes.push({
     id: ++state.mistakeCounter,
-    tick,
-    measure: measureIndex + 1,
-    beat: beatIndex,
+    tick: measure?.startTick || tick,
+    measure: measureNumber,
     note
   });
   renderMistakeLog();
@@ -989,9 +988,7 @@ function renderMistakeLog() {
     button.className = "mistake-log-button";
     button.dataset.mistakeId = String(entry.id);
     button.textContent = t("label.mistakeItem", {
-      measure: entry.measure,
-      beat: entry.beat,
-      note: noteName(entry.note)
+      measure: entry.measure
     });
     els.mistakeLogList.appendChild(button);
   });
