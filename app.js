@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v155";
+const APP_VERSION = "v156";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -178,7 +178,7 @@ const I18N = {
     "label.timeSignature": "拍号",
     "label.keySignature": "调号",
     "label.currentChord": "和弦",
-    "label.liveInputSound": "设备发声",
+    "label.liveInputSound": "弹奏时设备发声",
     "label.tempo": "速度",
     "button.settings": "设置",
     "button.connect": "连接 MIDI",
@@ -243,7 +243,7 @@ const I18N = {
     "label.timeSignature": "拍子",
     "label.keySignature": "調号",
     "label.currentChord": "コード",
-    "label.liveInputSound": "端末発音",
+    "label.liveInputSound": "演奏時に端末発音",
     "label.tempo": "テンポ",
     "button.settings": "設定",
     "button.connect": "MIDI 接続",
@@ -308,7 +308,7 @@ const I18N = {
     "label.timeSignature": "Time Signature",
     "label.keySignature": "Key",
     "label.currentChord": "Chord",
-    "label.liveInputSound": "Device Sound",
+    "label.liveInputSound": "Input Sound",
     "label.tempo": "Tempo",
     "button.settings": "Settings",
     "button.connect": "Connect MIDI",
