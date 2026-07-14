@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v158";
+const APP_VERSION = "v159";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1224,9 +1224,10 @@ function buildPracticeNoteItems() {
   const inputX = activeInputColumnX();
   const displayStartById = displayStartTicksForTargets(visibleNotes);
   const primaryCueTargets = nextPrimaryCueTargets();
+  const isPlaybackMode = state.playback.playing || state.playback.paused;
   const cueBoundaryTick = primaryCueTargets.length
     ? Math.max(...primaryCueTargets.map((target) => target.startTick))
-    : Infinity;
+    : isPlaybackMode ? (state.practice.viewStartTick || 0) : Infinity;
   const cueTargetIds = new Set(nextPracticeCueTargets().map((target) => target.id));
   const items = visibleNotes
     .slice()
@@ -1292,6 +1293,9 @@ function displayStartTicksForTargets(targets) {
 
 function buildActiveInputNoteItems() {
   if (!state.practice.measures.length || !state.activeNotes.size) return [];
+  if (state.playback.playing && state.playback.silent) {
+    return buildLeftColumnNoteItems([...state.activeNotes.keys()], "input");
+  }
   const cueNotes = nextPracticeCueNotes();
   const currentTargetNotes = cueNotes.size
     ? cueNotes
