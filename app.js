@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v140";
+const APP_VERSION = "v141";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -59,16 +59,6 @@ const KEY_RANGE = { min: MIDI_MIN, max: MIDI_MAX };
 const SETTINGS_KEY = "piano-midi-staff-settings";
 const MIDI_PPQ = 480;
 const RECORDING_BPM = 120;
-const ROLAND_SAMPLE_URL = "audio/roland603-c1-c8-a0.m4a?v=140";
-const ROLAND_SAMPLE_DURATION_SECONDS = 10.666667;
-const ROLAND_SAMPLE_NOTES = [24, 36, 48, 60, 72, 84, 96, 108, 21].map((note, index) => {
-  const segment = ROLAND_SAMPLE_DURATION_SECONDS / 9;
-  return {
-    note,
-    start: Math.max(0, index * segment + 0.018),
-    duration: Math.max(0.18, segment - 0.045)
-  };
-});
 const DISPLAY_FILENAME_MAX = 50;
 const SUSTAIN_PEDAL_PAGE_DEBOUNCE_MS = 260;
 const AUTO_FOLLOW_ANIMATION_MS = 260;
@@ -416,10 +406,7 @@ const state = {
     startedAtAudioTime: 0,
     startedAtPerformance: 0,
     lastVisualFrameAt: 0,
-    secondsPerTick: 0,
-    sampleBuffer: null,
-    samplePromise: null,
-    sampleFailed: false
+    secondsPerTick: 0
   },
   scorePointer: {
     active: false,
@@ -685,6 +672,10 @@ function createSvg(tag, attrs = {}) {
   const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
   Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
   return node;
+}
+
+function snapStaffX(x) {
+  return Math.round(x * 2) / 2;
 }
 
 function readSettings() {
@@ -973,7 +964,7 @@ function drawBeatGrid(svg) {
     for (let beat = 0; beat <= numerator; beat += 1) {
       const tick = measure.startTick + beat * beatTicks;
       if (tick < viewStartTick || tick > viewEndTick) continue;
-      const x = xForTick(tick);
+      const x = snapStaffX(xForTick(tick));
       const isMeasureEdge = beat === 0 || beat === numerator;
       svg.appendChild(createSvg("line", {
         x1: x,
@@ -999,8 +990,8 @@ function drawPedalTrack(svg) {
   };
 
   pedalIntervalsForView(viewStartTick, viewEndTick).forEach((interval) => {
-    const startX = xForTick(Math.max(interval.startTick, viewStartTick));
-    const endX = xForTick(Math.min(interval.endTick, viewEndTick));
+    const startX = snapStaffX(xForTick(Math.max(interval.startTick, viewStartTick)));
+    const endX = snapStaffX(xForTick(Math.min(interval.endTick, viewEndTick)));
     if (endX <= MEASURE_NOTE_LEFT_X || startX >= MEASURE_NOTE_RIGHT_X) return;
 
     const lineStartX = Math.max(MEASURE_NOTE_LEFT_X, startX + (interval.startsInside ? 56 : 0));
@@ -1112,7 +1103,7 @@ function buildPracticeNoteItems() {
       const durationKind = durationKindForTicks(Math.max(1, target.endTick - target.startTick));
       const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
       const progress = Math.max(0, Math.min(1, (displayStartTick - viewStartTick) / timeSpan));
-      const targetX = MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
+      const targetX = snapStaffX(MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X));
       const matched = isAutoFollowTargetMatched(target);
       const active = isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick;
       const cue = cueTargetIds.has(target.id) && !matched;
@@ -2312,7 +2303,6 @@ async function startContinuousPlayback() {
   if (audioContext.state === "suspended") {
     await audioContext.resume();
   }
-  await loadRolandPianoSamples(audioContext);
   unlockPlaybackAudio(audioContext);
 
   const secondsPerTick = (state.practice.microsecondsPerQuarter || 500000) / 1000000 / (state.practice.ticksPerQuarter || MIDI_PPQ);
@@ -2381,7 +2371,7 @@ function animatePlaybackView() {
     const playbackTick = state.playback.startTick + elapsed / Math.max(0.000001, state.playback.secondsPerTick);
     triggerPendingPlaybackNotes(playbackTick);
     updatePlaybackActiveNotes(playbackTick);
-    if (now - state.playback.lastVisualFrameAt >= 33 || playbackTick >= state.playback.endTick) {
+    if (now - state.playback.lastVisualFrameAt >= 15 || playbackTick >= state.playback.endTick) {
       state.playback.lastVisualFrameAt = now;
       const viewTick = Math.min(maxPracticeViewStartTick(), playbackTick);
       state.practice.viewStartTick = viewTick;
@@ -2455,63 +2445,7 @@ function pedalIntervalAppliesToTarget(interval, target) {
   return interval.channel === target.channel;
 }
 
-async function loadRolandPianoSamples(audioContext) {
-  if (state.playback.sampleBuffer || state.playback.sampleFailed) return state.playback.sampleBuffer;
-  if (!state.playback.samplePromise) {
-    state.playback.samplePromise = fetch(ROLAND_SAMPLE_URL)
-      .then((response) => {
-        if (!response.ok) throw new Error(`sample ${response.status}`);
-        return response.arrayBuffer();
-      })
-      .then((buffer) => audioContext.decodeAudioData(buffer))
-      .then((decoded) => {
-        state.playback.sampleBuffer = decoded;
-        return decoded;
-      })
-      .catch(() => {
-        state.playback.sampleFailed = true;
-        return null;
-      });
-  }
-  return state.playback.samplePromise;
-}
-
-function closestRolandSample(note) {
-  return ROLAND_SAMPLE_NOTES.reduce((best, sample) => {
-    const bestDistance = Math.abs(note - best.note);
-    const sampleDistance = Math.abs(note - sample.note);
-    return sampleDistance < bestDistance ? sample : best;
-  }, ROLAND_SAMPLE_NOTES[0]);
-}
-
-function scheduleRolandSampleTone(audioContext, note, startAt, duration) {
-  const buffer = state.playback.sampleBuffer;
-  if (!buffer) return false;
-  const sample = closestRolandSample(note);
-  const source = audioContext.createBufferSource();
-  const gain = audioContext.createGain();
-  const playbackRate = 2 ** ((note - sample.note) / 12);
-  const sourceDuration = Math.min(sample.duration, Math.max(0.08, buffer.duration - sample.start - 0.012));
-  const audibleDuration = Math.min(Math.max(duration + 0.45, 0.42), sourceDuration / playbackRate);
-  const releaseAt = startAt + Math.min(Math.max(duration, 0.12), audibleDuration * 0.78);
-  const stopAt = startAt + audibleDuration;
-
-  source.buffer = buffer;
-  source.playbackRate.setValueAtTime(playbackRate, startAt);
-  gain.gain.setValueAtTime(0.0001, startAt);
-  gain.gain.exponentialRampToValueAtTime(0.95, startAt + 0.006);
-  gain.gain.exponentialRampToValueAtTime(0.72, startAt + 0.08);
-  gain.gain.exponentialRampToValueAtTime(0.0001, Math.max(releaseAt + 0.04, stopAt - 0.025));
-  source.connect(gain);
-  gain.connect(audioContext.destination);
-  source.start(startAt, sample.start, sourceDuration);
-  source.stop(stopAt + 0.02);
-  state.playback.activeNodes.push(source, gain);
-  return true;
-}
-
 function schedulePracticeTone(audioContext, note, startAt, duration) {
-  if (scheduleRolandSampleTone(audioContext, note, startAt, duration)) return;
   const frequency = 440 * 2 ** ((note - 69) / 12);
   const safeStartAt = Math.max(audioContext.currentTime + 0.004, startAt);
   const isLowNote = note < 52;
