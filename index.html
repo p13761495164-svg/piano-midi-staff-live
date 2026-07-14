@@ -9,9 +9,9 @@
   <meta name="apple-mobile-web-app-title" content="Easy Piano">
   <title>Easy Piano</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon.png?v=150" type="image/png">
-  <link rel="apple-touch-icon" href="icons/icon.png?v=150">
-  <link rel="stylesheet" href="styles.css?v=150">
+  <link rel="icon" href="icons/icon.png?v=151" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon.png?v=151">
+  <link rel="stylesheet" href="styles.css?v=151">
 </head>
 <body>
   <main class="app-shell">
@@ -23,7 +23,7 @@
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
-              <span id="versionBadge" class="version-badge">v150</span>
+              <span id="versionBadge" class="version-badge">v151</span>
             </div>
           </div>
         </div>
@@ -133,6 +133,10 @@
             <button id="startMeasureButton" class="measure-play icon-button" type="button" aria-label="开头" title="开头" disabled><span class="control-icon stop-icon" aria-hidden="true"></span></button>
             <button id="playMeasureButton" class="measure-play icon-button" type="button" aria-label="播放" title="播放" disabled><span class="control-icon play-icon" aria-hidden="true"></span></button>
             <select id="playbackInstrumentSelect" class="playback-instrument-select" aria-label="播放音色"></select>
+            <label class="live-sound-toggle">
+              <input id="liveSoundToggle" type="checkbox">
+              <span id="liveSoundToggleLabel">设备发声</span>
+            </label>
             <span id="measureStatus" class="measure-status">实时显示</span>
             <span id="currentChord" class="chord-status">-</span>
           </div>
@@ -147,6 +151,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=150"></script>
+  <script src="app.js?v=151"></script>
 </body>
 </html>

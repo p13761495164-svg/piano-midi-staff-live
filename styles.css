@@ -443,7 +443,8 @@ select {
 .measure-status,
 .chord-status,
 .measure-play,
-.playback-instrument-select {
+.playback-instrument-select,
+.live-sound-toggle {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(255, 253, 248, 0.84);
@@ -483,6 +484,36 @@ select {
   padding: 0 24px 0 10px;
   color: var(--ink);
   font-size: 12px;
+}
+
+.live-sound-toggle {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+}
+
+.live-sound-toggle input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.live-sound-toggle.active,
+.live-sound-toggle:has(input:checked) {
+  border-color: var(--accent);
+  background: rgba(31, 127, 132, 0.12);
+}
+
+.live-sound-toggle span {
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .icon-button {

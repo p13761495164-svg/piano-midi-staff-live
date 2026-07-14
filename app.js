@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v150";
+const APP_VERSION = "v151";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -64,6 +64,7 @@ const SUSTAIN_PEDAL_PAGE_DEBOUNCE_MS = 260;
 const AUTO_FOLLOW_ANIMATION_MS = 260;
 const ARPEGGIO_DISPLAY_WINDOW_RATIO = 0.125;
 const PLAYBACK_VISUAL_FRAME_MS = 24;
+const LIVE_INPUT_TONE_SECONDS = 18;
 const SETTINGS_FIELD_KEYS = {
   keySignature: "piano-midi-staff-key-signature",
   showDegrees: "piano-midi-staff-show-degrees",
@@ -75,7 +76,8 @@ const SETTINGS_FIELD_KEYS = {
   autoFollowTolerance: "piano-midi-staff-auto-follow-tolerance",
   timeSignature: "piano-midi-staff-time-signature",
   language: "piano-midi-staff-language",
-  playbackInstrument: "piano-midi-staff-playback-instrument"
+  playbackInstrument: "piano-midi-staff-playback-instrument",
+  liveInputSound: "piano-midi-staff-live-input-sound"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const MAJOR_KEY_SIGNATURES = {
@@ -159,6 +161,7 @@ const I18N = {
     "label.timeSignature": "拍号",
     "label.keySignature": "调号",
     "label.currentChord": "和弦",
+    "label.liveInputSound": "设备发声",
     "button.settings": "设置",
     "button.connect": "连接 MIDI",
     "button.record": "录 MIDI",
@@ -222,6 +225,7 @@ const I18N = {
     "label.timeSignature": "拍子",
     "label.keySignature": "調号",
     "label.currentChord": "コード",
+    "label.liveInputSound": "端末発音",
     "button.settings": "設定",
     "button.connect": "MIDI 接続",
     "button.record": "MIDI 録音",
@@ -285,6 +289,7 @@ const I18N = {
     "label.timeSignature": "Time Signature",
     "label.keySignature": "Key",
     "label.currentChord": "Chord",
+    "label.liveInputSound": "Device Sound",
     "button.settings": "Settings",
     "button.connect": "Connect MIDI",
     "button.record": "Record MIDI",
@@ -399,6 +404,7 @@ const state = {
   keySignature: "C",
   noteLabelMode: "degree",
   playbackInstrument: "kalimba",
+  liveInputSound: false,
   pedalStep: "on",
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
@@ -447,6 +453,11 @@ const state = {
     lastVisualFrameAt: 0,
     secondsPerTick: 0
   },
+  liveAudio: {
+    audioContext: null,
+    activeNodes: [],
+    notes: new Map()
+  },
   scorePointer: {
     active: false,
     pointerId: 0,
@@ -476,6 +487,8 @@ const els = {
   startMeasureButton: document.getElementById("startMeasureButton"),
   playMeasureButton: document.getElementById("playMeasureButton"),
   playbackInstrumentSelect: document.getElementById("playbackInstrumentSelect"),
+  liveSoundToggle: document.getElementById("liveSoundToggle"),
+  liveSoundToggleLabel: document.getElementById("liveSoundToggleLabel"),
   playbackSlider: document.getElementById("playbackSlider"),
   playbackTime: document.getElementById("playbackTime"),
   measureStatus: document.getElementById("measureStatus"),
@@ -620,6 +633,7 @@ function applyLanguage() {
   document.querySelector(".tolerance-field span").appendChild(els.toleranceValue);
   updateText(document.querySelector(".time-field span"), t("label.timeSignature"));
   updateText(document.querySelector(".key-field span"), t("label.keySignature"));
+  updateText(els.liveSoundToggleLabel, t("label.liveInputSound"));
 
   updateText(els.connectButton, t("button.connect"));
   updateText(els.recordButton, t("button.record"));
@@ -734,6 +748,7 @@ function readSettings() {
     const timeSignature = window.localStorage.getItem(SETTINGS_FIELD_KEYS.timeSignature);
     const language = window.localStorage.getItem(SETTINGS_FIELD_KEYS.language);
     const playbackInstrument = window.localStorage.getItem(SETTINGS_FIELD_KEYS.playbackInstrument);
+    const liveInputSound = window.localStorage.getItem(SETTINGS_FIELD_KEYS.liveInputSound);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
@@ -746,6 +761,7 @@ function readSettings() {
     if (/^\d+\/\d+$/.test(timeSignature || "")) settings.timeSignature = timeSignature;
     if (language) settings.language = normalizeLanguage(language);
     if (playbackInstrumentId(playbackInstrument)) settings.playbackInstrument = playbackInstrument;
+    if (liveInputSound === "true" || liveInputSound === "false") settings.liveInputSound = liveInputSound === "true";
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -763,7 +779,8 @@ function saveSettings() {
     autoFollowTolerance: state.autoFollowTolerance,
     timeSignature: timeSignatureKey(state.practice.timeSignature),
     language: state.language,
-    playbackInstrument: state.playbackInstrument
+    playbackInstrument: state.playbackInstrument,
+    liveInputSound: state.liveInputSound
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -778,6 +795,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.timeSignature, settings.timeSignature);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.language, settings.language);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.playbackInstrument, settings.playbackInstrument);
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.liveInputSound, String(settings.liveInputSound));
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -819,6 +837,11 @@ function syncControlsFromState() {
   });
   if (els.playbackInstrumentSelect) {
     els.playbackInstrumentSelect.value = playbackInstrumentId(state.playbackInstrument) || "kalimba";
+  }
+  if (els.liveSoundToggle) {
+    els.liveSoundToggle.checked = state.liveInputSound;
+    const wrapper = els.liveSoundToggle.closest(".live-sound-toggle");
+    if (wrapper) wrapper.classList.toggle("active", state.liveInputSound);
   }
 }
 
@@ -893,6 +916,9 @@ function applySavedSettings() {
   }
   if (playbackInstrumentId(settings.playbackInstrument)) {
     state.playbackInstrument = settings.playbackInstrument;
+  }
+  if (typeof settings.liveInputSound === "boolean") {
+    state.liveInputSound = settings.liveInputSound;
   }
   if (typeof settings.selectedInputId === "string") {
     state.selectedInputId = settings.selectedInputId;
@@ -1706,6 +1732,7 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   const cueNotes = nextPracticeCueNotes();
   const wrong = state.practice.measures.length > 0 && cueNotes.size > 0 && !cueNotes.has(note);
   state.activeNotes.set(note, { velocity, source, channel, startedAt: performance.now(), wrong });
+  startLiveInputTone(note, velocity);
   state.autoFollow.pausedAfterManualNavigation = false;
   markAutoFollowNote(note);
   updateAll();
@@ -1720,16 +1747,19 @@ function releaseNote(note, source = "midi", channel = 0) {
     if (state.activeNotes.has(note)) state.releasedWhileSustained.add(note);
     return;
   }
+  stopLiveInputTone(note);
   state.activeNotes.delete(note);
   state.releasedWhileSustained.delete(note);
   updateAll();
 }
 
 function releaseSustainedNotes() {
+  const releasedNotes = [...state.releasedWhileSustained];
   state.releasedWhileSustained.forEach((note) => {
     state.activeNotes.delete(note);
   });
   state.releasedWhileSustained.clear();
+  stopReleasedLiveInputTones(releasedNotes);
   updateAll();
 }
 
@@ -2501,9 +2531,9 @@ function pedalIntervalAppliesToTarget(interval, target) {
   return interval.channel === target.channel;
 }
 
-function registerPlaybackNodes(nodes, cleanupAt) {
-  state.playback.activeNodes.push(...nodes);
-  const delayMs = Math.max(120, (cleanupAt - (state.playback.audioContext?.currentTime || 0) + 0.08) * 1000);
+function registerPlaybackNodes(nodes, cleanupAt, registry = state.playback.activeNodes, audioContext = state.playback.audioContext) {
+  registry.push(...nodes);
+  const delayMs = Math.max(120, (cleanupAt - (audioContext?.currentTime || 0) + 0.08) * 1000);
   window.setTimeout(() => {
     const nodeSet = new Set(nodes);
     nodes.forEach((node) => {
@@ -2513,11 +2543,13 @@ function registerPlaybackNodes(nodes, cleanupAt) {
         // The node may already be disconnected by a manual stop.
       }
     });
-    state.playback.activeNodes = state.playback.activeNodes.filter((node) => !nodeSet.has(node));
+    const remaining = registry.filter((node) => !nodeSet.has(node));
+    registry.splice(0, registry.length, ...remaining);
   }, delayMs);
+  return nodes;
 }
 
-function scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, instrument) {
+function scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, instrument, registry = state.playback.activeNodes) {
   const frequency = 440 * 2 ** ((note - 69) / 12);
   const safeStartAt = Math.max(audioContext.currentTime + 0.004, startAt);
   const output = audioContext.createGain();
@@ -2550,14 +2582,13 @@ function scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, ins
 
   output.connect(filter);
   filter.connect(audioContext.destination);
-  registerPlaybackNodes(activeNodes, tailEnd);
+  return registerPlaybackNodes(activeNodes, tailEnd, registry, audioContext);
 }
 
-function schedulePracticeTone(audioContext, note, startAt, duration) {
+function schedulePracticeTone(audioContext, note, startAt, duration, registry = state.playback.activeNodes) {
   const instrument = currentPlaybackInstrument();
   if (!instrument.custom) {
-    scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, instrument);
-    return;
+    return scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, instrument, registry);
   }
 
   const frequency = 440 * 2 ** ((note - 69) / 12);
@@ -2657,10 +2688,10 @@ function schedulePracticeTone(audioContext, note, startAt, duration) {
   output.connect(audioContext.destination);
   attackClick.start(safeStartAt);
   attackClick.stop(safeStartAt + 0.02);
-  registerPlaybackNodes(activeNodes, tailEnd + 0.02);
+  return registerPlaybackNodes(activeNodes, tailEnd + 0.02, registry, audioContext);
 }
 
-function unlockPlaybackAudio(audioContext) {
+function unlockPlaybackAudio(audioContext, registry = state.playback.activeNodes) {
   try {
     const now = audioContext.currentTime;
     const oscillator = audioContext.createOscillator();
@@ -2670,10 +2701,86 @@ function unlockPlaybackAudio(audioContext) {
     gain.connect(audioContext.destination);
     oscillator.start(now);
     oscillator.stop(now + 0.025);
-    registerPlaybackNodes([oscillator, gain], now + 0.04);
+    registerPlaybackNodes([oscillator, gain], now + 0.04, registry, audioContext);
   } catch {
     // Some older browsers are picky about audio warmup; playback can still try normally.
   }
+}
+
+async function ensureLiveAudioContext() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) {
+    setStatusKey("status.playUnsupported");
+    state.liveInputSound = false;
+    syncControlsFromState();
+    saveSettings();
+    return null;
+  }
+  if (!state.liveAudio.audioContext) {
+    state.liveAudio.audioContext = new AudioContextClass();
+  }
+  const audioContext = state.liveAudio.audioContext;
+  if (audioContext.state === "suspended") {
+    await audioContext.resume();
+  }
+  unlockPlaybackAudio(audioContext, state.liveAudio.activeNodes);
+  return audioContext;
+}
+
+function stopAudioNodes(nodes, registry) {
+  const nodeSet = new Set(nodes || []);
+  nodeSet.forEach((node) => {
+    try {
+      if (typeof node.stop === "function") node.stop();
+      if (typeof node.disconnect === "function") node.disconnect();
+    } catch {
+      // Audio nodes may already be stopped.
+    }
+  });
+  if (registry) {
+    const remaining = registry.filter((node) => !nodeSet.has(node));
+    registry.splice(0, registry.length, ...remaining);
+  }
+}
+
+function startLiveInputTone(note, velocity = 96) {
+  if (!state.liveInputSound) return;
+  const audioContext = state.liveAudio.audioContext;
+  if (!audioContext || audioContext.state === "suspended") {
+    ensureLiveAudioContext().then(() => {
+      if (state.liveInputSound && state.activeNotes.has(note)) startLiveInputTone(note, velocity);
+    }).catch(() => {
+      setStatusKey("status.playUnsupported");
+    });
+    return;
+  }
+
+  stopLiveInputTone(note);
+  const startedAt = audioContext.currentTime + 0.004;
+  const nodes = schedulePracticeTone(
+    audioContext,
+    note,
+    startedAt,
+    LIVE_INPUT_TONE_SECONDS,
+    state.liveAudio.activeNodes
+  ) || [];
+  state.liveAudio.notes.set(note, { nodes, velocity, startedAt });
+}
+
+function stopLiveInputTone(note) {
+  const item = state.liveAudio.notes.get(note);
+  if (!item) return;
+  stopAudioNodes(item.nodes, state.liveAudio.activeNodes);
+  state.liveAudio.notes.delete(note);
+}
+
+function stopReleasedLiveInputTones(notes) {
+  notes.forEach((note) => stopLiveInputTone(note));
+}
+
+function stopAllLiveInputTones() {
+  state.liveAudio.notes.clear();
+  stopAudioNodes(state.liveAudio.activeNodes, state.liveAudio.activeNodes);
 }
 
 function stopMeasurePlayback() {
@@ -2709,15 +2816,7 @@ function pauseMeasurePlayback() {
 }
 
 function stopPlaybackAudioNodes() {
-  state.playback.activeNodes.forEach((node) => {
-    try {
-      if (typeof node.stop === "function") node.stop();
-      if (typeof node.disconnect === "function") node.disconnect();
-    } catch {
-      // Audio nodes may already be stopped.
-    }
-  });
-  state.playback.activeNodes = [];
+  stopAudioNodes(state.playback.activeNodes, state.playback.activeNodes);
 }
 
 function parseMidiFile(bytes) {
@@ -3653,11 +3752,31 @@ function setupEvents() {
     syncControlsFromState();
     saveSettings();
   });
+  els.liveSoundToggle.addEventListener("change", async () => {
+    state.liveInputSound = els.liveSoundToggle.checked;
+    if (state.liveInputSound) {
+      await ensureLiveAudioContext();
+    } else {
+      stopAllLiveInputTones();
+    }
+    syncControlsFromState();
+    saveSettings();
+  });
   els.playbackSlider.addEventListener("input", () => {
     seekPracticeView(els.playbackSlider.value);
   });
   els.fullscreenButton.addEventListener("click", toggleFullscreen);
   els.refreshButton.addEventListener("click", forceRefreshApp);
+  const unlockLiveInputAudio = () => {
+    if (
+      state.liveInputSound &&
+      (!state.liveAudio.audioContext || state.liveAudio.audioContext.state === "suspended")
+    ) {
+      ensureLiveAudioContext().catch(() => setStatusKey("status.playUnsupported"));
+    }
+  };
+  window.addEventListener("pointerdown", unlockLiveInputAudio, { passive: true });
+  window.addEventListener("keydown", unlockLiveInputAudio, { passive: true });
   document.addEventListener("fullscreenchange", syncFullscreenButton);
   document.addEventListener("webkitfullscreenchange", syncFullscreenButton);
   els.inputSelect.addEventListener("change", () => {
