@@ -386,7 +386,7 @@ select {
 
 .score-board {
   position: relative;
-  aspect-ratio: 1760 / 760;
+  aspect-ratio: 1760 / 840;
   min-height: 0;
   border-radius: 8px;
   border: 1px solid var(--line);
@@ -524,7 +524,7 @@ select {
   width: 100%;
   height: 100%;
   display: block;
-  transform: translateY(52px);
+  transform: translateY(82px);
 }
 
 .staff-line {
@@ -895,7 +895,7 @@ select {
 
   .score-board {
     aspect-ratio: auto;
-    height: clamp(306px, 56vw, 360px);
+    height: clamp(360px, 64vw, 420px);
   }
 
   .measure-tools {
