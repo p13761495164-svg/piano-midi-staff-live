@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v143";
+const APP_VERSION = "v144";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -63,6 +63,7 @@ const DISPLAY_FILENAME_MAX = 50;
 const SUSTAIN_PEDAL_PAGE_DEBOUNCE_MS = 260;
 const AUTO_FOLLOW_ANIMATION_MS = 260;
 const ARPEGGIO_DISPLAY_WINDOW_RATIO = 0.125;
+const PLAYBACK_VISUAL_FRAME_MS = 24;
 const SETTINGS_FIELD_KEYS = {
   keySignature: "piano-midi-staff-key-signature",
   showDegrees: "piano-midi-staff-show-degrees",
@@ -2417,12 +2418,14 @@ function animatePlaybackView() {
     const playbackTick = state.playback.startTick + elapsed / Math.max(0.000001, state.playback.secondsPerTick);
     triggerPendingPlaybackNotes(playbackTick);
     updatePlaybackActiveNotes(playbackTick);
-    state.playback.lastVisualFrameAt = now;
-    const viewTick = Math.min(maxPracticeViewStartTick(), playbackTick);
-    state.practice.viewStartTick = viewTick;
-    state.practice.currentMeasure = measureIndexForTick(viewTick);
-    updateAll();
-    syncPlaybackScrubber();
+    if (now - state.playback.lastVisualFrameAt >= PLAYBACK_VISUAL_FRAME_MS || playbackTick >= state.playback.endTick) {
+      state.playback.lastVisualFrameAt = now;
+      const viewTick = Math.min(maxPracticeViewStartTick(), playbackTick);
+      state.practice.viewStartTick = viewTick;
+      state.practice.currentMeasure = measureIndexForTick(viewTick);
+      updateAll();
+      syncPlaybackScrubber();
+    }
 
     if (playbackTick >= state.playback.endTick) {
       stopMeasurePlayback();
@@ -2489,6 +2492,22 @@ function pedalIntervalAppliesToTarget(interval, target) {
   return interval.channel === target.channel;
 }
 
+function registerPlaybackNodes(nodes, cleanupAt) {
+  state.playback.activeNodes.push(...nodes);
+  const delayMs = Math.max(120, (cleanupAt - (state.playback.audioContext?.currentTime || 0) + 0.08) * 1000);
+  window.setTimeout(() => {
+    const nodeSet = new Set(nodes);
+    nodes.forEach((node) => {
+      try {
+        if (typeof node.disconnect === "function") node.disconnect();
+      } catch {
+        // The node may already be disconnected by a manual stop.
+      }
+    });
+    state.playback.activeNodes = state.playback.activeNodes.filter((node) => !nodeSet.has(node));
+  }, delayMs);
+}
+
 function scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, instrument) {
   const frequency = 440 * 2 ** ((note - 69) / 12);
   const safeStartAt = Math.max(audioContext.currentTime + 0.004, startAt);
@@ -2522,7 +2541,7 @@ function scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, ins
 
   output.connect(filter);
   filter.connect(audioContext.destination);
-  state.playback.activeNodes.push(...activeNodes);
+  registerPlaybackNodes(activeNodes, tailEnd);
 }
 
 function schedulePracticeTone(audioContext, note, startAt, duration) {
@@ -2629,7 +2648,7 @@ function schedulePracticeTone(audioContext, note, startAt, duration) {
   output.connect(audioContext.destination);
   attackClick.start(safeStartAt);
   attackClick.stop(safeStartAt + 0.02);
-  state.playback.activeNodes.push(...activeNodes);
+  registerPlaybackNodes(activeNodes, tailEnd + 0.02);
 }
 
 function unlockPlaybackAudio(audioContext) {
@@ -2642,7 +2661,7 @@ function unlockPlaybackAudio(audioContext) {
     gain.connect(audioContext.destination);
     oscillator.start(now);
     oscillator.stop(now + 0.025);
-    state.playback.activeNodes.push(oscillator, gain);
+    registerPlaybackNodes([oscillator, gain], now + 0.04);
   } catch {
     // Some older browsers are picky about audio warmup; playback can still try normally.
   }
