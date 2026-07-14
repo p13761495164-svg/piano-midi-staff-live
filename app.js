@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v163";
+const APP_VERSION = "v164";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -65,6 +65,8 @@ const AUTO_FOLLOW_ANIMATION_MS = 260;
 const ARPEGGIO_DISPLAY_WINDOW_RATIO = 0.125;
 const PLAYBACK_VISUAL_FRAME_MS = 24;
 const LIVE_INPUT_TONE_SECONDS = 0.9;
+const LIVE_INPUT_RELEASE_FADE_SECONDS = 0.16;
+const SUSTAIN_PEDAL_RELEASE_FADE_SECONDS = 0.48;
 const SETTINGS_FIELD_KEYS = {
   keySignature: "piano-midi-staff-key-signature",
   showDegrees: "piano-midi-staff-show-degrees",
@@ -2920,8 +2922,45 @@ async function ensureLiveAudioContext() {
   return audioContext;
 }
 
-function stopAudioNodes(nodes, registry) {
+function stopAudioNodes(nodes, registry, options = {}) {
   const nodeSet = new Set(nodes || []);
+  const fadeSeconds = Math.max(0, Number(options.fadeSeconds) || 0);
+  if (fadeSeconds > 0) {
+    const audioContext = [...nodeSet].find((node) => node?.context)?.context;
+    const now = audioContext?.currentTime || 0;
+    nodeSet.forEach((node) => {
+      try {
+        if (node?.gain) {
+          if (typeof node.gain.cancelAndHoldAtTime === "function") {
+            node.gain.cancelAndHoldAtTime(now);
+          } else {
+            const value = Math.max(0.0001, Number(node.gain.value) || 0.0001);
+            node.gain.cancelScheduledValues(now);
+            node.gain.setValueAtTime(value, now);
+          }
+          node.gain.exponentialRampToValueAtTime(0.0001, now + fadeSeconds);
+        }
+        if (typeof node?.stop === "function") node.stop(now + fadeSeconds + 0.04);
+      } catch {
+        // Audio nodes may already be stopped.
+      }
+    });
+    window.setTimeout(() => {
+      nodeSet.forEach((node) => {
+        try {
+          if (typeof node?.disconnect === "function") node.disconnect();
+        } catch {
+          // Audio nodes may already be disconnected.
+        }
+      });
+      if (registry) {
+        const remaining = registry.filter((node) => !nodeSet.has(node));
+        registry.splice(0, registry.length, ...remaining);
+      }
+    }, Math.ceil((fadeSeconds + 0.08) * 1000));
+    return;
+  }
+
   nodeSet.forEach((node) => {
     try {
       if (typeof node.stop === "function") node.stop();
@@ -2948,7 +2987,7 @@ function startLiveInputTone(note, velocity = 96) {
     return;
   }
 
-  stopLiveInputTone(note);
+  stopLiveInputTone(note, 0.04);
   const startedAt = audioContext.currentTime + 0.004;
   const nodes = schedulePracticeTone(
     audioContext,
@@ -2960,15 +2999,15 @@ function startLiveInputTone(note, velocity = 96) {
   state.liveAudio.notes.set(note, { nodes, velocity, startedAt });
 }
 
-function stopLiveInputTone(note) {
+function stopLiveInputTone(note, fadeSeconds = LIVE_INPUT_RELEASE_FADE_SECONDS) {
   const item = state.liveAudio.notes.get(note);
   if (!item) return;
-  stopAudioNodes(item.nodes, state.liveAudio.activeNodes);
+  stopAudioNodes(item.nodes, state.liveAudio.activeNodes, { fadeSeconds });
   state.liveAudio.notes.delete(note);
 }
 
 function stopReleasedLiveInputTones(notes) {
-  notes.forEach((note) => stopLiveInputTone(note));
+  notes.forEach((note) => stopLiveInputTone(note, SUSTAIN_PEDAL_RELEASE_FADE_SECONDS));
 }
 
 function stopAllLiveInputTones() {
