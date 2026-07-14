@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v135";
+const APP_VERSION = "v137";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -356,6 +356,7 @@ const state = {
   activeNotes: new Map(),
   releasedWhileSustained: new Set(),
   sustainDown: false,
+  sustainChannel: 0,
   softPedalDown: false,
   keySignature: "C",
   noteLabelMode: "degree",
@@ -1026,26 +1027,43 @@ function drawPedalTrack(svg) {
 function pedalIntervalsForView(viewStartTick, viewEndTick) {
   const events = (state.practice.pedalEvents || [])
     .slice()
-    .sort((a, b) => a.tick - b.tick || a.value - b.value);
+    .sort((a, b) => (
+      a.tick - b.tick ||
+      (a.trackIndex ?? -1) - (b.trackIndex ?? -1) ||
+      (a.channel ?? -1) - (b.channel ?? -1) ||
+      a.value - b.value
+    ));
   const intervals = [];
-  let downTick = null;
+  const downTicks = new Map();
 
   events.forEach((event) => {
     const isDown = event.value >= 64;
-    if (isDown && downTick === null) {
-      downTick = event.tick;
+    const scope = pedalEventScope(event);
+    if (isDown && !downTicks.has(scope)) {
+      downTicks.set(scope, event);
       return;
     }
-    if (!isDown && downTick !== null) {
-      intervals.push({ startTick: downTick, endTick: Math.max(event.tick, downTick + 1) });
-      downTick = null;
+    if (!isDown && downTicks.has(scope)) {
+      const start = downTicks.get(scope);
+      intervals.push({
+        startTick: start.tick,
+        endTick: Math.max(event.tick, start.tick + 1),
+        channel: start.channel,
+        trackIndex: start.trackIndex
+      });
+      downTicks.delete(scope);
     }
   });
 
-  if (downTick !== null) {
-    const lastMeasure = state.practice.measures[state.practice.measures.length - 1];
-    intervals.push({ startTick: downTick, endTick: Math.max(lastMeasure?.endTick || viewEndTick, downTick + 1) });
-  }
+  const lastMeasure = state.practice.measures[state.practice.measures.length - 1];
+  downTicks.forEach((start) => {
+    intervals.push({
+      startTick: start.tick,
+      endTick: Math.max(lastMeasure?.endTick || viewEndTick, start.tick + 1),
+      channel: start.channel,
+      trackIndex: start.trackIndex
+    });
+  });
 
   return intervals
     .filter((interval) => interval.startTick < viewEndTick && interval.endTick > viewStartTick)
@@ -1054,6 +1072,10 @@ function pedalIntervalsForView(viewStartTick, viewEndTick) {
       startsInside: interval.startTick >= viewStartTick && interval.startTick <= viewEndTick,
       endsInside: interval.endTick >= viewStartTick && interval.endTick <= viewEndTick
     }));
+}
+
+function pedalEventScope(event) {
+  return `${event.trackIndex ?? -1}:${event.channel ?? -1}`;
 }
 
 function buildPracticeNoteItems() {
@@ -1144,11 +1166,7 @@ function buildPlaybackActiveNoteItems() {
   if (!state.practice.measures.length || (!state.playback.playing && !state.playback.paused) || !state.playback.activeNotes.size) {
     return [];
   }
-  const cueNotes = nextPracticeCueNotes();
-  return buildLeftColumnNoteItems(
-    [...state.playback.activeNotes].filter((note) => !cueNotes.has(note)),
-    "playback"
-  );
+  return buildLeftColumnNoteItems([...state.playback.activeNotes], "playback");
 }
 
 function buildLeftColumnNoteItems(notes, trackRole) {
@@ -1623,20 +1641,20 @@ function makeKey(note, className) {
   return key;
 }
 
-function pressNote(note, velocity = 96, source = "midi") {
+function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   if (note < MIDI_MIN || note > MIDI_MAX) return;
-  recordMidiEvent("noteon", { note, velocity });
+  recordMidiEvent("noteon", { note, velocity, channel });
   state.releasedWhileSustained.delete(note);
-  state.activeNotes.set(note, { velocity, source, startedAt: performance.now() });
+  state.activeNotes.set(note, { velocity, source, channel, startedAt: performance.now() });
   state.autoFollow.pausedAfterManualNavigation = false;
   markAutoFollowNote(note);
   updateAll();
   evaluateAutoFollowBeat();
 }
 
-function releaseNote(note) {
+function releaseNote(note, source = "midi", channel = 0) {
   if (state.activeNotes.has(note)) {
-    recordMidiEvent("noteoff", { note, velocity: 0 });
+    recordMidiEvent("noteoff", { note, velocity: 0, channel });
   }
   if (state.sustainDown) {
     if (state.activeNotes.has(note)) state.releasedWhileSustained.add(note);
@@ -1666,9 +1684,12 @@ function startRecording() {
 
 function stopRecording() {
   if (!state.recording.active) return;
-  [...state.activeNotes.keys()].forEach((note) => {
-    recordMidiEvent("noteoff", { note, velocity: 0 });
+  [...state.activeNotes.entries()].forEach(([note, active]) => {
+    recordMidiEvent("noteoff", { note, velocity: 0, channel: active.channel ?? 0 });
   });
+  if (state.sustainDown) {
+    recordMidiEvent("cc", { controller: 64, value: 0, channel: state.sustainChannel ?? 0 });
+  }
   state.recording.active = false;
   syncRecordingControls();
   const count = state.recording.events.filter((event) => event.type === "noteon").length;
@@ -2407,11 +2428,17 @@ function pedalIntervalsForPlayback(startTick, endTick) {
 function sustainedPlaybackEndTick(target, pedalIntervals) {
   let endTick = Math.max(target.endTick, target.startTick + 1);
   pedalIntervals.forEach((interval) => {
+    if (!pedalIntervalAppliesToTarget(interval, target)) return;
     if (endTick >= interval.startTick && endTick <= interval.endTick) {
       endTick = Math.max(endTick, interval.endTick);
     }
   });
   return endTick;
+}
+
+function pedalIntervalAppliesToTarget(interval, target) {
+  if (interval.channel === undefined || target.channel === undefined) return true;
+  return interval.channel === target.channel;
 }
 
 function schedulePracticeTone(audioContext, note, startAt, duration) {
@@ -2947,23 +2974,25 @@ function buildMidiFile(events) {
   const track = [];
   let previousTick = 0;
   const microsecondsPerQuarter = Math.round(60000000 / RECORDING_BPM);
+  const safeEvents = closeOpenRecordingPedals(events);
 
   pushVarLen(track, 0);
   track.push(0xff, 0x51, 0x03, (microsecondsPerQuarter >> 16) & 0xff, (microsecondsPerQuarter >> 8) & 0xff, microsecondsPerQuarter & 0xff);
 
-  events
+  safeEvents
     .slice()
     .sort((a, b) => a.timeMs - b.timeMs)
     .forEach((event) => {
       const tick = Math.max(previousTick, Math.round(event.timeMs * MIDI_PPQ * RECORDING_BPM / 60000));
       pushVarLen(track, tick - previousTick);
       previousTick = tick;
+      const channel = clampMidiChannel(event.channel);
       if (event.type === "noteon") {
-        track.push(0x90, clampMidiByte(event.note), clampMidiByte(event.velocity || 96));
+        track.push(0x90 | channel, clampMidiByte(event.note), clampMidiByte(event.velocity || 96));
       } else if (event.type === "noteoff") {
-        track.push(0x80, clampMidiByte(event.note), clampMidiByte(event.velocity || 0));
+        track.push(0x80 | channel, clampMidiByte(event.note), clampMidiByte(event.velocity || 0));
       } else if (event.type === "cc") {
-        track.push(0xb0, clampMidiByte(event.controller), clampMidiByte(event.value));
+        track.push(0xb0 | channel, clampMidiByte(event.controller), clampMidiByte(event.value));
       }
     });
 
@@ -2985,6 +3014,28 @@ function buildMidiFile(events) {
     track.length & 0xff
   ];
   return new Uint8Array([...header, ...trackHeader, ...track]);
+}
+
+function closeOpenRecordingPedals(events) {
+  const result = events.slice();
+  const sustainByChannel = new Map();
+  result.forEach((event) => {
+    if (event.type !== "cc" || event.controller !== 64) return;
+    sustainByChannel.set(event.channel ?? 0, event.value >= 64);
+  });
+
+  const lastTimeMs = result.reduce((max, event) => Math.max(max, Number(event.timeMs) || 0), 0);
+  sustainByChannel.forEach((isDown, channel) => {
+    if (!isDown) return;
+    result.push({
+      type: "cc",
+      controller: 64,
+      value: 0,
+      channel,
+      timeMs: lastTimeMs + 1
+    });
+  });
+  return result;
 }
 
 function pushVarLen(target, value) {
@@ -3011,6 +3062,10 @@ function bytesToBase64(bytes) {
 
 function clampMidiByte(value) {
   return Math.max(0, Math.min(127, Number(value) || 0));
+}
+
+function clampMidiChannel(value) {
+  return Math.max(0, Math.min(15, Number(value) || 0));
 }
 
 function updateAll() {
@@ -3204,27 +3259,29 @@ function midiDataLengthForStatus(status) {
 
 function handleMidiCommand(status, note, value) {
   const command = status & 0xf0;
+  const channel = status & 0x0f;
 
   if (command === 0x90 && value > 0) {
-    pressNote(note, value, "midi");
+    pressNote(note, value, "midi", channel);
     return;
   }
 
   if (command === 0x80 || (command === 0x90 && value === 0)) {
-    releaseNote(note, "midi");
+    releaseNote(note, "midi", channel);
     return;
   }
 
   if (command === 0xb0 && note === 64) {
-    recordMidiEvent("cc", { controller: 64, value });
+    recordMidiEvent("cc", { controller: 64, value, channel });
     const pressed = value >= 64;
     state.sustainDown = pressed;
+    state.sustainChannel = channel;
     if (!state.sustainDown) releaseSustainedNotes();
     return;
   }
 
   if (command === 0xb0 && isLeftPedalControl(note)) {
-    recordMidiEvent("cc", { controller: note, value });
+    recordMidiEvent("cc", { controller: note, value, channel });
     setStatusKey("status.leftPedalSignal", { controller: note, value });
     const pressed = value > 0;
     if (pressed && !state.softPedalDown) {
