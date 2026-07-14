@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v149";
+const APP_VERSION = "v150";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1212,8 +1212,7 @@ function buildActiveInputNoteItems() {
     : new Set(targetsForBeat(currentAutoFollowBeatStart()).map((target) => target.note));
   return buildLeftColumnNoteItems(
     [...state.activeNotes.keys()].filter((note) => !currentTargetNotes.has(note)),
-    "input",
-    { wrongNotes: cueNotes.size ? new Set([...state.activeNotes.keys()].filter((note) => !cueNotes.has(note))) : new Set() }
+    "input"
   );
 }
 
@@ -1224,9 +1223,8 @@ function buildPlaybackActiveNoteItems() {
   return buildLeftColumnNoteItems([...state.playback.activeNotes], "playback");
 }
 
-function buildLeftColumnNoteItems(notes, trackRole, options = {}) {
+function buildLeftColumnNoteItems(notes, trackRole) {
   const inputX = activeInputColumnX();
-  const wrongNotes = options.wrongNotes || new Set();
   const items = notes
     .sort((a, b) => a - b)
     .map((note) => {
@@ -1240,7 +1238,7 @@ function buildLeftColumnNoteItems(notes, trackRole, options = {}) {
         x: inputX,
         xOffset: 0,
         trackRole,
-        wrong: wrongNotes.has(note)
+        wrong: Boolean(state.activeNotes.get(note)?.wrong)
       };
     });
 
@@ -1705,7 +1703,9 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   if (note < MIDI_MIN || note > MIDI_MAX) return;
   recordMidiEvent("noteon", { note, velocity, channel });
   state.releasedWhileSustained.delete(note);
-  state.activeNotes.set(note, { velocity, source, channel, startedAt: performance.now() });
+  const cueNotes = nextPracticeCueNotes();
+  const wrong = state.practice.measures.length > 0 && cueNotes.size > 0 && !cueNotes.has(note);
+  state.activeNotes.set(note, { velocity, source, channel, startedAt: performance.now(), wrong });
   state.autoFollow.pausedAfterManualNavigation = false;
   markAutoFollowNote(note);
   updateAll();
@@ -3237,7 +3237,7 @@ function updateKeyboardActive() {
   els.keyboard.querySelectorAll(".key").forEach((key) => {
     const note = Number(key.dataset.note);
     const active = state.activeNotes.has(note) || state.playback.activeNotes.has(note);
-    const wrong = state.activeNotes.has(note) && cueNoteSet.size > 0 && !cueNoteSet.has(note);
+    const wrong = Boolean(state.activeNotes.get(note)?.wrong);
     key.classList.toggle("active", active);
     key.classList.toggle("input-active", state.activeNotes.has(note) && !cueNoteSet.has(note));
     key.classList.toggle("cue", cueNoteSet.has(note));
