@@ -385,8 +385,11 @@ select {
 }
 
 .mistake-log {
-  border-top: 1px solid var(--line);
-  padding-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 10px 12px;
 }
 
 .mistake-log-title {
