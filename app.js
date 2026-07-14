@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v153";
+const APP_VERSION = "v154";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1753,14 +1753,20 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   if (note < MIDI_MIN || note > MIDI_MAX) return;
   recordMidiEvent("noteon", { note, velocity, channel });
   state.releasedWhileSustained.delete(note);
-  const cueNotes = nextPracticeCueNotes();
-  const wrong = state.practice.measures.length > 0 && cueNotes.size > 0 && !cueNotes.has(note);
+  const wrong = isWrongPracticeInputNote(note);
   state.activeNotes.set(note, { velocity, source, channel, startedAt: performance.now(), wrong });
   startLiveInputTone(note, velocity);
   state.autoFollow.pausedAfterManualNavigation = false;
   markAutoFollowNote(note);
   updateAll();
   evaluateAutoFollowBeat();
+}
+
+function isWrongPracticeInputNote(note) {
+  if (!state.practice.measures.length || state.playback.playing) return false;
+  const cueTargets = nextPrimaryCueTargets();
+  if (!cueTargets.length) return false;
+  return !targetForPlayedNote(note, currentAutoFollowBeatStart());
 }
 
 function releaseNote(note, source = "midi", channel = 0) {
