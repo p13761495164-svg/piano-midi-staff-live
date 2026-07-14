@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v145";
+const APP_VERSION = "v146";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1482,14 +1482,14 @@ function drawPracticeOctaveGroups(svg, items) {
 
   sorted.forEach((item) => {
     if (!item.octaveMark) {
-      current = null;
       return;
     }
     if (
       current &&
       current.octaveMark === item.octaveMark &&
       current.trackRole === item.trackRole &&
-      Math.abs(item.x - current.endX) < 230
+      current.clef === item.clef &&
+      Math.abs(item.x - current.endX) < 420
     ) {
       current.items.push(item);
       current.endX = Math.max(current.endX, item.x);
@@ -1503,6 +1503,7 @@ function drawPracticeOctaveGroups(svg, items) {
     current = {
       octaveMark: item.octaveMark,
       trackRole: item.trackRole,
+      clef: item.clef,
       items: [item],
       startX: item.x,
       endX: item.x,
