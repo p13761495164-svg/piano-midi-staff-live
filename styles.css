@@ -1051,7 +1051,7 @@ select {
   }
 
   #staffSvg {
-    transform: translateY(35px);
+    transform: translateY(0);
   }
 
   .measure-tools {

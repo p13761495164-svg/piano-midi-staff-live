@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v180";
+const APP_VERSION = "v181";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -381,7 +381,7 @@ const I18N = {
     "status.reloading": "Reloading page..."
   }
 };
-const STAFF_VIEWBOX = { width: 1760, height: 760 };
+const STAFF_VIEWBOX = { width: 1760, height: 900 };
 const STAFF_STEP_PX = 20;
 const TREBLE_LINE_YS = [180, 220, 260, 300, 340];
 const BASS_LINE_YS = [420, 460, 500, 540, 580];
