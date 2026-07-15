@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v171";
+const APP_VERSION = "v172";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -62,7 +62,7 @@ const RECORDING_BPM = 120;
 const DISPLAY_FILENAME_MAX = 50;
 const SUSTAIN_PEDAL_PAGE_DEBOUNCE_MS = 260;
 const AUTO_FOLLOW_ANIMATION_MS = 260;
-const ARPEGGIO_DISPLAY_WINDOW_RATIO = 0.125;
+const ARPEGGIO_DISPLAY_WINDOW_RATIO = 0.25;
 const PLAYBACK_VISUAL_FRAME_MS = 24;
 const LIVE_INPUT_TONE_SECONDS = 0.9;
 const LIVE_INPUT_RELEASE_FADE_SECONDS = 0.25;
@@ -2371,7 +2371,10 @@ function targetGroupsByStartTick(targets) {
   let previousTick = null;
   let currentGroup = [];
   const arpeggioWindowTicks = arpeggioGroupingWindowTicks();
-  targets.forEach((target) => {
+  targets
+    .slice()
+    .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
+    .forEach((target) => {
     if (currentTick === null || previousTick === null || target.startTick - previousTick > arpeggioWindowTicks) {
       if (currentGroup.length) groups.push(currentGroup);
       currentTick = target.startTick;
