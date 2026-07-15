@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v184";
+const APP_VERSION = "v185";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1103,7 +1103,7 @@ function drawStaff() {
     if (!state.exportMode.active) drawPracticePlayhead(svg);
     drawPedalTrack(svg);
     const practiceItems = buildPracticeNoteItems();
-    drawPracticeDurationLines(svg);
+    if (!state.exportMode.active) drawPracticeDurationLines(svg);
     drawPracticeArpeggioMarks(svg, practiceItems);
     practiceItems.forEach((item) => drawNote(svg, item));
     if (!state.exportMode.active) {
@@ -1629,6 +1629,19 @@ function drawPracticeNoteShape(svg, item) {
   if (matched) classes.push("matched-note");
   if (item.active) classes.push("active-note");
   if (item.cue) classes.push("cue-note");
+  if (state.exportMode.active) {
+    classes.push("export-note-head");
+    svg.appendChild(createSvg("circle", {
+      cx: x,
+      cy: y,
+      r: 18,
+      class: classes.join(" "),
+      "data-target-id": targetId || "",
+      "data-note": note,
+      "data-display-note": displayNote
+    }));
+    return;
+  }
   svg.appendChild(createSvg("ellipse", {
     cx: x,
     cy: y,
@@ -1837,9 +1850,8 @@ function drawLedgerLines(svg, x, y, clef, trackRole = "primary") {
 
 function renderExportStaffSvg(rowMeasures) {
   const svg = createSvg("svg", {
-    viewBox: `0 0 ${STAFF_VIEWBOX.width} ${STAFF_VIEWBOX.height}`,
+    viewBox: `0 55 ${STAFF_VIEWBOX.width} 615`,
     xmlns: "http://www.w3.org/2000/svg",
-    preserveAspectRatio: "none",
     role: "img"
   });
   const rowStartTick = rowMeasures[0].startTick;
