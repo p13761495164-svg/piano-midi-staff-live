@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v186";
+const APP_VERSION = "v187";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -8,50 +8,6 @@ const LANDSCAPE_VISIBLE_WHITE_KEYS = 42;
 const TABLET_PORTRAIT_VISIBLE_WHITE_KEYS = 28;
 const PHONE_PORTRAIT_VISIBLE_WHITE_KEYS = 21;
 const LEFT_PEDAL_CONTROLLERS = new Set([65, 66, 67, 68, 69]);
-const HARDWARE_PEDAL_KEYS = new Set([
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowUp",
-  "ArrowDown",
-  "PageUp",
-  "PageDown",
-  " ",
-  "Spacebar",
-  "Enter",
-  "NumpadEnter",
-  "Unidentified",
-  "MediaPlayPause"
-]);
-const HARDWARE_PEDAL_CODES = new Set([
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowUp",
-  "ArrowDown",
-  "PageUp",
-  "PageDown",
-  "Space",
-  "Enter",
-  "NumpadEnter",
-  "MediaPlayPause",
-  "75",
-  "78",
-  "79",
-  "80",
-  "81",
-  "82",
-  "40",
-  "44",
-  "88",
-  "89",
-  "select",
-  "playPause",
-  "leftArrow",
-  "rightArrow",
-  "upArrow",
-  "downArrow",
-  "Unidentified"
-]);
-const HARDWARE_PEDAL_DEBOUNCE_MS = 420;
 const WHITE_PATTERN = new Set([0, 2, 4, 5, 7, 9, 11]);
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const XML_STEP_TO_SEMITONE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -450,7 +406,6 @@ const state = {
   pedalStep: "on",
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
-  lastHardwarePedalAt: 0,
   autoFollowMode: "off",
   autoFollowTolerance: 50,
   autoFollow: {
@@ -2860,8 +2815,7 @@ async function startContinuousPlayback() {
 
   animatePlaybackView();
   state.playback.stopTimer = window.setTimeout(() => {
-    stopMeasurePlayback();
-    syncPracticeControls();
+    finishContinuousPlayback();
   }, Math.ceil((playbackDuration + 0.22) * 1000));
   syncPracticeControls();
 }
@@ -2894,8 +2848,7 @@ function animatePlaybackView() {
     }
 
     if (playbackTick >= state.playback.endTick) {
-      stopMeasurePlayback();
-      syncPracticeControls();
+      finishContinuousPlayback();
       return;
     }
 
@@ -2903,6 +2856,20 @@ function animatePlaybackView() {
   };
 
   state.playback.animationFrame = window.requestAnimationFrame(step);
+}
+
+function finishContinuousPlayback() {
+  if (!state.practice.measures.length) {
+    stopMeasurePlayback();
+    syncPracticeControls();
+    return;
+  }
+  stopMeasurePlayback();
+  state.practice.viewStartTick = 0;
+  state.practice.currentMeasure = 0;
+  resetAutoFollowBeat(0, { clearPlayed: true });
+  updateAll();
+  scheduleAutoFollowEmptyBeatCheck();
 }
 
 function triggerPendingPlaybackNotes(playbackTick) {
@@ -4269,35 +4236,32 @@ function setupHardwarePedalKeys() {
   const handleKeyEvent = (event) => {
     const target = event.target;
     if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) return;
-    if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
-    const key = event.key === " " || event.code === "Space" ? " " : event.key;
-    const code = event.code || "";
-    const handled = handleHardwarePedalInput({ key, code, phase: event.type });
-    if (handled) event.preventDefault();
+    if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+    if (event.type !== "keydown") return;
+    if (handleHardwarePedalInput({ key: event.key, code: event.code })) {
+      event.preventDefault();
+    }
   };
 
   window.addEventListener("keydown", handleKeyEvent);
-  window.addEventListener("keyup", handleKeyEvent);
 }
 
 function handleHardwarePedalInput(data) {
-  const key = String(data?.key || "Unidentified");
+  const key = String(data?.key || "");
   const code = String(data?.code || "");
-
-  if (!isHardwarePedalKey(key, code)) return false;
-  const now = performance.now();
-  if (now - state.lastHardwarePedalAt < HARDWARE_PEDAL_DEBOUNCE_MS) return true;
-
-  state.lastHardwarePedalAt = now;
-  setStatusKey("status.leftPedalKeyPage", { key: key || code || "hardware" });
-  advanceByPedalStep();
-  return true;
-}
-
-function isHardwarePedalKey(key, code) {
-  if (HARDWARE_PEDAL_KEYS.has(key) || HARDWARE_PEDAL_CODES.has(code)) return true;
-  if (key === "Unidentified" || code === "Unidentified") return true;
-  return /^[0-9]+$/.test(code);
+  if (key === "ArrowLeft" || code === "ArrowLeft") {
+    advancePracticeGrid(-1, { clearPlayed: true, pauseAutoFollow: true });
+    return true;
+  }
+  if (key === "ArrowRight" || code === "ArrowRight") {
+    advancePracticeGrid(1, { clearPlayed: true, pauseAutoFollow: true });
+    return true;
+  }
+  if (key === " " || key === "Spacebar" || code === "Space") {
+    toggleContinuousPlayback();
+    return true;
+  }
+  return false;
 }
 
 function preventPageZoom() {
