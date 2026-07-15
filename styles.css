@@ -706,25 +706,26 @@ select {
 
 .note-duration-line {
   fill: none;
-  stroke: #9c9287;
-  stroke-width: 2;
+  stroke: #f0bf4b;
+  stroke-width: 10;
   stroke-linecap: round;
-  opacity: 0.34;
+  opacity: 0.26;
+  mix-blend-mode: multiply;
 }
 
 .note-duration-line.secondary-track-line {
-  stroke: #aaa39b;
-  opacity: 0.3;
+  stroke: #d0c3ad;
+  opacity: 0.32;
 }
 
 .note-duration-line.active-duration-line {
-  stroke: #c49229;
-  opacity: 0.42;
+  stroke: #f0b84e;
+  opacity: 0.4;
 }
 
 .note-duration-line.cue-duration-line {
-  stroke: #1676a5;
-  opacity: 0.36;
+  stroke: #62c1ea;
+  opacity: 0.38;
 }
 
 .filled-note {

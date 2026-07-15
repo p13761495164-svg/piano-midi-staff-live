@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v173";
+const APP_VERSION = "v174";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1081,7 +1081,7 @@ function drawStaff() {
     drawPracticePlayhead(svg);
     drawPedalTrack(svg);
     const practiceItems = buildPracticeNoteItems();
-    drawPracticeDurationLines(svg, practiceItems);
+    drawPracticeDurationLines(svg);
     drawPracticeArpeggioMarks(svg, practiceItems);
     practiceItems.forEach((item) => drawNote(svg, item));
     drawActiveInputNotes(svg);
@@ -1331,25 +1331,43 @@ function buildPracticeNoteItems() {
   return items;
 }
 
-function drawPracticeDurationLines(svg, items) {
-  items.forEach((item) => {
-    if (item.matched || !item.isPractice) return;
-    const y = yForNote(item.displayNote ?? item.note, item.clef);
-    const startX = Math.min(MEASURE_NOTE_RIGHT_X, item.x + 27);
-    const endX = Math.max(startX, Math.min(MEASURE_NOTE_RIGHT_X, item.endX || startX));
+function drawPracticeDurationLines(svg) {
+  const targets = visiblePracticeDurationTargets();
+  if (!targets.length) return;
+  const viewStartTick = state.practice.viewStartTick || 0;
+  const timeSpan = currentViewSpanTicks();
+  const displayStartById = displayStartTicksForTargets(targets);
+  const cueTargetIds = new Set(nextPracticeCueTargets().map((target) => target.id));
+  const primaryCueTargets = nextPrimaryCueTargets();
+  const isPlaybackMode = state.playback.playing || state.playback.paused;
+  const cueBoundaryTick = primaryCueTargets.length
+    ? Math.max(...primaryCueTargets.map((target) => target.startTick))
+    : isPlaybackMode ? (state.practice.viewStartTick || 0) : Infinity;
+
+  targets.forEach((target) => {
+    const display = displayInfoForPracticeNote(target.note);
+    const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
+    const startProgress = (displayStartTick - viewStartTick) / timeSpan;
+    const endProgress = (target.endTick - viewStartTick) / timeSpan;
+    const noteStartX = MEASURE_NOTE_LEFT_X + startProgress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
+    const startX = displayStartTick < viewStartTick
+      ? MEASURE_NOTE_LEFT_X
+      : Math.min(MEASURE_NOTE_RIGHT_X, noteStartX + 27);
+    const endX = Math.min(MEASURE_NOTE_RIGHT_X, MEASURE_NOTE_LEFT_X + endProgress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X));
     if (endX - startX < 16) return;
+    const y = yForNote(display.note, display.clef);
     const classes = ["note-duration-line"];
-    if (item.trackRole === "secondary") classes.push("secondary-track-line");
-    if (item.active) classes.push("active-duration-line");
-    if (item.cue) classes.push("cue-duration-line");
+    if ((target.trackRole || "primary") === "secondary") classes.push("secondary-track-line");
+    if (isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick) classes.push("active-duration-line");
+    if (cueTargetIds.has(target.id) && !isAutoFollowTargetDisplayMatched(target)) classes.push("cue-duration-line");
     svg.appendChild(createSvg("line", {
       x1: startX,
       y1: y,
       x2: endX,
       y2: y,
       class: classes.join(" "),
-      "data-duration-note": item.note,
-      "data-target-id": item.targetId || ""
+      "data-duration-note": target.note,
+      "data-target-id": target.id || ""
     }));
   });
 }
@@ -1493,6 +1511,15 @@ function visiblePracticeTargets() {
   return state.practice.measures
     .flatMap((measure) => measure.notes)
     .filter((target) => target.startTick >= viewStartTick && target.startTick < viewEndTick);
+}
+
+function visiblePracticeDurationTargets() {
+  if (!state.practice.measures.length) return [];
+  const viewStartTick = state.practice.viewStartTick || 0;
+  const viewEndTick = viewStartTick + currentViewSpanTicks();
+  return state.practice.measures
+    .flatMap((measure) => measure.notes)
+    .filter((target) => target.startTick < viewEndTick && target.endTick > viewStartTick);
 }
 
 function drawNote(svg, item) {
