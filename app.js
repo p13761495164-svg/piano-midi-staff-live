@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v170";
+const APP_VERSION = "v171";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -714,7 +714,6 @@ function applyLanguage() {
   syncFullscreenButton();
   syncPracticeControls();
   syncCurrentChord();
-  syncPracticeStats();
   renderMistakeLog();
   if (state.statusMessage?.key) {
     setStatusKey(state.statusMessage.key, state.statusMessage.params);
@@ -2439,7 +2438,6 @@ function markPlayedTargetForBeat(beatStart, target) {
   state.autoFollow.playedNotesByBeat.get(key).add(target.id);
   state.autoFollow.correctTargetIds.add(target.id);
   prunePlayedAutoFollowNotes(beatStart);
-  syncPracticeStats();
 }
 
 function prunePlayedAutoFollowNotes(currentBeatStart) {
@@ -3641,7 +3639,6 @@ function updateAll() {
   drawStaff();
   updateKeyboardActive();
   syncCurrentChord();
-  syncPracticeStats();
   syncPracticeControls();
 }
 
