@@ -9,9 +9,9 @@
   <meta name="apple-mobile-web-app-title" content="Easy Piano">
   <title>Easy Piano</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon.png?v=167" type="image/png">
-  <link rel="apple-touch-icon" href="icons/icon.png?v=167">
-  <link rel="stylesheet" href="styles.css?v=167">
+  <link rel="icon" href="icons/icon.png?v=168" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon.png?v=168">
+  <link rel="stylesheet" href="styles.css?v=168">
 </head>
 <body>
   <main class="app-shell">
@@ -19,11 +19,11 @@
       <p id="statusText" class="status-banner">等待连接 MIDI 键盘</p>
       <div class="topbar">
         <div class="brand">
-          <img class="brand-mark" src="icons/icon.png?v=167" alt="" aria-hidden="true">
+          <img class="brand-mark" src="icons/icon.png?v=168" alt="" aria-hidden="true">
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
-              <span id="versionBadge" class="version-badge">v167</span>
+              <span id="versionBadge" class="version-badge">v168</span>
             </div>
           </div>
         </div>
@@ -124,7 +124,13 @@
       </details>
 
       <section class="mistake-log" aria-live="polite">
-        <div id="mistakeLogTitle" class="mistake-log-title">弹错记录</div>
+        <div class="mistake-log-header">
+          <div id="mistakeLogTitle" class="mistake-log-title">弹错记录</div>
+          <div id="practiceStats" class="practice-stats" aria-live="polite">
+            <span class="practice-stat-correct">◯0个</span>
+            <span class="practice-stat-wrong">❌0个</span>
+          </div>
+        </div>
         <div id="mistakeLogList" class="mistake-log-list">
           <span id="mistakeLogEmpty" class="mistake-log-empty">暂无</span>
         </div>
@@ -154,7 +160,6 @@
               <span id="liveSoundToggleLabel">弹奏时设备发声</span>
             </label>
             <span id="measureStatus" class="measure-status">实时显示</span>
-            <span id="practiceStats" class="practice-stats">弹对 0/0</span>
             <span id="currentChord" class="chord-status">-</span>
           </div>
         </div>
@@ -168,6 +173,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=167"></script>
+  <script src="app.js?v=168"></script>
 </body>
 </html>

@@ -392,11 +392,38 @@ select {
   padding: 10px 12px;
 }
 
+.mistake-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
 .mistake-log-title {
   color: var(--ink);
   font-size: 13px;
   font-weight: 800;
-  margin-bottom: 8px;
+}
+
+.practice-stats {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.practice-stat-correct {
+  color: var(--accent);
+}
+
+.practice-stat-wrong {
+  color: #b7352c;
 }
 
 .mistake-log-list {
@@ -485,7 +512,6 @@ select {
 }
 
 .measure-status,
-.practice-stats,
 .chord-status,
 .measure-play,
 .tempo-control,
@@ -502,19 +528,9 @@ select {
 }
 
 .measure-status,
-.practice-stats,
 .chord-status {
   padding: 5px 12px;
   pointer-events: none;
-}
-
-.practice-stats {
-  color: var(--ink);
-  font-weight: 800;
-  flex: 0 0 104px;
-  width: 104px;
-  overflow: hidden;
-  text-align: center;
 }
 
 .chord-status {
