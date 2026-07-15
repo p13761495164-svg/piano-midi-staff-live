@@ -662,8 +662,8 @@ select {
 .measure-grid-line {
   stroke: #5f574f;
   stroke-width: 3;
-  stroke-dasharray: none;
-  opacity: 0.86;
+  stroke-dasharray: 8 8;
+  opacity: 0.58;
 }
 
 .clef {
