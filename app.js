@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v190";
+const APP_VERSION = "v191";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -355,7 +355,6 @@ const BASS_LINE_YS = [420, 460, 500, 540, 580];
 const NOTE_RADIUS = 20;
 const MEASURE_NOTE_LEFT_X = 500;
 const MEASURE_NOTE_RIGHT_X = 1620;
-const NOTE_VISUAL_X_OFFSET = 12;
 const BEAT_GRID_TOP_Y = TREBLE_LINE_YS[0];
 const BEAT_GRID_BOTTOM_Y = BASS_LINE_YS[4];
 const KEY_SIGNATURE_START_X = 270;
@@ -1313,7 +1312,7 @@ function buildPracticeNoteItems() {
       const display = displayInfoForPracticeNote(target.note, target.startTick);
       const durationKind = durationKindForTicks(Math.max(1, target.endTick - target.startTick));
       const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
-      const targetX = visualXForCurrentViewTick(displayStartTick);
+      const targetX = Math.max(MEASURE_NOTE_LEFT_X, Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(displayStartTick)));
       const targetEndX = Math.max(MEASURE_NOTE_LEFT_X, Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(target.endTick)));
       const matched = isAutoFollowTargetDisplayMatched(target);
       const active = isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick;
@@ -1362,7 +1361,7 @@ function drawPracticeDurationLines(svg) {
   targets.forEach((target) => {
     const display = displayInfoForPracticeNote(target.note, target.startTick);
     const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
-    const noteStartX = visualXForCurrentViewTick(displayStartTick);
+    const noteStartX = xForCurrentViewTick(displayStartTick);
     const startX = displayStartTick < viewStartTick
       ? MEASURE_NOTE_LEFT_X
       : Math.min(MEASURE_NOTE_RIGHT_X, noteStartX + 27);
@@ -2347,10 +2346,6 @@ function progressForCurrentViewTick(tick) {
 
 function xForCurrentViewTick(tick) {
   return MEASURE_NOTE_LEFT_X + progressForCurrentViewTick(tick) * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
-}
-
-function visualXForCurrentViewTick(tick) {
-  return Math.max(MEASURE_NOTE_LEFT_X, Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(tick) + NOTE_VISUAL_X_OFFSET));
 }
 
 function timeSignatureAtTick(tick) {
