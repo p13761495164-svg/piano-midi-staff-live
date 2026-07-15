@@ -410,16 +410,11 @@ select {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
   color: var(--ink);
   font-size: 13px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-}
-
-.practice-stat-correct {
-  color: var(--accent);
 }
 
 .practice-stat-wrong {

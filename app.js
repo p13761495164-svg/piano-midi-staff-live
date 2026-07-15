@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v168";
+const APP_VERSION = "v169";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -187,8 +187,7 @@ const I18N = {
     "label.mistakes": "弹错记录",
     "label.noMistakes": "暂无",
     "label.mistakeItem": "{measure}小节",
-    "label.correctCount": "◯{count}个",
-    "label.wrongCount": "❌{count}个",
+    "label.mistakeStats": "弹错小节数 {wrong}/{total} ({percent}%)",
     "button.settings": "设置",
     "button.connect": "连接 MIDI",
     "button.record": "录 MIDI",
@@ -258,8 +257,7 @@ const I18N = {
     "label.mistakes": "ミス記録",
     "label.noMistakes": "なし",
     "label.mistakeItem": "{measure}小節",
-    "label.correctCount": "◯{count}個",
-    "label.wrongCount": "❌{count}個",
+    "label.mistakeStats": "ミス小節数 {wrong}/{total} ({percent}%)",
     "button.settings": "設定",
     "button.connect": "MIDI 接続",
     "button.record": "MIDI 録音",
@@ -329,8 +327,7 @@ const I18N = {
     "label.mistakes": "Mistakes",
     "label.noMistakes": "None",
     "label.mistakeItem": "Bar {measure}",
-    "label.correctCount": "◯{count}",
-    "label.wrongCount": "❌{count}",
+    "label.mistakeStats": "Mistake bars {wrong}/{total} ({percent}%)",
     "button.settings": "Settings",
     "button.connect": "Connect MIDI",
     "button.record": "Record MIDI",
@@ -967,16 +964,13 @@ function syncPracticeControls() {
 
 function syncPracticeStats() {
   if (!els.practiceStats) return;
-  const validIds = new Set(state.practice.notes.map((target) => target.id));
-  const correct = [...state.autoFollow.correctTargetIds].filter((id) => validIds.has(id)).length;
+  const total = state.practice.measures.length;
   const wrong = state.mistakes.length;
-  const correctNode = document.createElement("span");
-  correctNode.className = "practice-stat-correct";
-  correctNode.textContent = t("label.correctCount", { count: correct });
+  const percent = total ? Math.round((wrong / total) * 100) : 0;
   const wrongNode = document.createElement("span");
   wrongNode.className = "practice-stat-wrong";
-  wrongNode.textContent = t("label.wrongCount", { count: wrong });
-  els.practiceStats.replaceChildren(correctNode, wrongNode);
+  wrongNode.textContent = t("label.mistakeStats", { wrong, total, percent });
+  els.practiceStats.replaceChildren(wrongNode);
 }
 
 function recordMistake(note) {
