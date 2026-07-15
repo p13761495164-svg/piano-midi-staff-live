@@ -1050,6 +1050,10 @@ select {
     height: clamp(450px, 82vw, 540px);
   }
 
+  #staffSvg {
+    transform: translateY(35px);
+  }
+
   .measure-tools {
     width: calc(100% - 24px);
   }
