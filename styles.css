@@ -689,6 +689,7 @@ select {
 
 .export-note-head {
   stroke-width: 1.6;
+  transform: none;
 }
 
 .note-duration-line {
@@ -1096,7 +1097,7 @@ body.pdf-previewing .pdf-export-root {
 
 .score-export-row svg {
   width: 100%;
-  height: 69mm;
+  height: 92mm;
   display: block;
   overflow: visible;
   border: 0;

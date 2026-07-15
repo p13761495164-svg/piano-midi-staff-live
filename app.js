@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v188";
+const APP_VERSION = "v189";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1631,7 +1631,7 @@ function drawPracticeNoteShape(svg, item) {
     svg.appendChild(createSvg("circle", {
       cx: x,
       cy: y,
-      r: 18,
+      r: 19,
       class: classes.join(" "),
       "data-target-id": targetId || "",
       "data-note": note,
@@ -1847,7 +1847,7 @@ function drawLedgerLines(svg, x, y, clef, trackRole = "primary") {
 
 function renderExportStaffSvg(rowMeasures) {
   const svg = createSvg("svg", {
-    viewBox: `0 55 ${STAFF_VIEWBOX.width} 615`,
+    viewBox: `0 15 ${STAFF_VIEWBOX.width} 810`,
     xmlns: "http://www.w3.org/2000/svg",
     role: "img"
   });
@@ -1884,7 +1884,7 @@ function exportScorePdf() {
 
   const rows = [];
   const measuresPerRow = 3;
-  const rowsPerPage = 4;
+  const rowsPerPage = 3;
   for (let index = 0; index < state.practice.measures.length; index += measuresPerRow) {
     rows.push(state.practice.measures.slice(index, index + measuresPerRow));
   }
