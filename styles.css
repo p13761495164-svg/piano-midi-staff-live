@@ -237,23 +237,23 @@ button:disabled {
 .panel-strip {
   border-top: 1px solid var(--line);
   background: rgba(255, 253, 248, 0.62);
-  padding: 12px;
+  padding: 10px 12px;
   display: grid;
   grid-template-columns: 1fr;
   align-items: end;
-  gap: 10px;
+  gap: 8px;
 }
 
 .control-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
   align-items: end;
 }
 
 .field {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -265,35 +265,15 @@ button:disabled {
   font-size: 12px;
 }
 
-.pedal-field {
-  width: min(210px, 100%);
-}
-
-.sustain-page-field {
-  width: min(230px, 100%);
-}
-
-.auto-follow-field {
-  width: min(190px, 100%);
-}
-
-.language-field {
-  width: min(190px, 100%);
-}
-
-.tolerance-field {
-  width: min(220px, 100%);
-}
-
 .tolerance-field strong {
   font-weight: 800;
 }
 
 .slider-control {
-  min-height: 42px;
+  min-height: 36px;
   display: flex;
   align-items: center;
-  padding: 0 10px;
+  padding: 0 9px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: white;
@@ -304,13 +284,9 @@ button:disabled {
   accent-color: var(--accent);
 }
 
-.time-field {
-  width: min(190px, 100%);
-}
-
 select {
   width: 100%;
-  min-height: 42px;
+  min-height: 36px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: white;
@@ -319,7 +295,7 @@ select {
 }
 
 .segmented {
-  min-height: 42px;
+  min-height: 36px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   border: 1px solid var(--line);
@@ -573,7 +549,7 @@ select {
 }
 
 .playback-instrument-field .playback-instrument-select {
-  width: 150px;
+  width: 100%;
   max-width: 100%;
 }
 
