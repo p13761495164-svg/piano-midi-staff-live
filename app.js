@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v164";
+const APP_VERSION = "v165";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -65,8 +65,8 @@ const AUTO_FOLLOW_ANIMATION_MS = 260;
 const ARPEGGIO_DISPLAY_WINDOW_RATIO = 0.125;
 const PLAYBACK_VISUAL_FRAME_MS = 24;
 const LIVE_INPUT_TONE_SECONDS = 0.9;
-const LIVE_INPUT_RELEASE_FADE_SECONDS = 0.16;
-const SUSTAIN_PEDAL_RELEASE_FADE_SECONDS = 0.48;
+const LIVE_INPUT_RELEASE_FADE_SECONDS = 0.25;
+const SUSTAIN_PEDAL_RELEASE_FADE_SECONDS = 0.65;
 const SETTINGS_FIELD_KEYS = {
   keySignature: "piano-midi-staff-key-signature",
   showDegrees: "piano-midi-staff-show-degrees",
