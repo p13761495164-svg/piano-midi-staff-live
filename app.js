@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v194";
+const APP_VERSION = "v195";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -155,6 +155,9 @@ const I18N = {
     "label.playbackInstrument": "音色",
     "label.robotPerformanceField": "演奏",
     "label.robotPerformance": "机器人演奏模式",
+    "label.displaySettings": "显示",
+    "label.practiceSettings": "练习",
+    "label.soundSettings": "声音",
     "label.tempo": "速度",
     "label.mistakes": "弹错记录",
     "label.noMistakes": "暂无",
@@ -228,6 +231,9 @@ const I18N = {
     "label.playbackInstrument": "音色",
     "label.robotPerformanceField": "演奏",
     "label.robotPerformance": "ロボット演奏モード",
+    "label.displaySettings": "表示",
+    "label.practiceSettings": "練習",
+    "label.soundSettings": "音",
     "label.tempo": "テンポ",
     "label.mistakes": "ミス記録",
     "label.noMistakes": "なし",
@@ -301,6 +307,9 @@ const I18N = {
     "label.playbackInstrument": "Tone",
     "label.robotPerformanceField": "Performance",
     "label.robotPerformance": "Robot Performance",
+    "label.displaySettings": "Display",
+    "label.practiceSettings": "Practice",
+    "label.soundSettings": "Sound",
     "label.tempo": "Tempo",
     "label.mistakes": "Mistakes",
     "label.noMistakes": "None",
@@ -525,6 +534,9 @@ const els = {
   robotPerformanceToggle: document.getElementById("robotPerformanceToggle"),
   robotPerformanceFieldLabel: document.getElementById("robotPerformanceFieldLabel"),
   robotPerformanceToggleLabel: document.getElementById("robotPerformanceToggleLabel"),
+  displaySettingsTitle: document.getElementById("displaySettingsTitle"),
+  practiceSettingsTitle: document.getElementById("practiceSettingsTitle"),
+  soundSettingsTitle: document.getElementById("soundSettingsTitle"),
   playbackSlider: document.getElementById("playbackSlider"),
   playbackTime: document.getElementById("playbackTime"),
   measureStatus: document.getElementById("measureStatus"),
@@ -679,6 +691,9 @@ function applyLanguage() {
   updateText(els.playbackInstrumentLabel, t("label.playbackInstrument"));
   updateText(els.robotPerformanceFieldLabel, t("label.robotPerformanceField"));
   updateText(els.robotPerformanceToggleLabel, t("label.robotPerformance"));
+  updateText(els.displaySettingsTitle, t("label.displaySettings"));
+  updateText(els.practiceSettingsTitle, t("label.practiceSettings"));
+  updateText(els.soundSettingsTitle, t("label.soundSettings"));
   updateText(els.mistakeLogTitle, t("label.mistakes"));
   updateText(els.mistakeLogEmpty, t("label.noMistakes"));
 
