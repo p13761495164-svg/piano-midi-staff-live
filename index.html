@@ -9,9 +9,9 @@
   <meta name="apple-mobile-web-app-title" content="Easy Piano">
   <title>Easy Piano</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon.png?v=174" type="image/png">
-  <link rel="apple-touch-icon" href="icons/icon.png?v=174">
-  <link rel="stylesheet" href="styles.css?v=174">
+  <link rel="icon" href="icons/icon.png?v=176" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon.png?v=176">
+  <link rel="stylesheet" href="styles.css?v=176">
 </head>
 <body>
   <main class="app-shell">
@@ -19,11 +19,11 @@
       <p id="statusText" class="status-banner">等待连接 MIDI 键盘</p>
       <div class="topbar">
         <div class="brand">
-          <img class="brand-mark" src="icons/icon.png?v=174" alt="" aria-hidden="true">
+          <img class="brand-mark" src="icons/icon.png?v=176" alt="" aria-hidden="true">
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
-              <span id="versionBadge" class="version-badge">v174</span>
+              <span id="versionBadge" class="version-badge">v176</span>
             </div>
           </div>
         </div>
@@ -101,6 +101,17 @@
                 <button class="mode-option" type="button" data-time-signature="6/8" aria-pressed="false">6/8</button>
               </div>
             </div>
+            <label class="field playback-instrument-field">
+              <span id="playbackInstrumentLabel">音色</span>
+              <select id="playbackInstrumentSelect" class="playback-instrument-select" aria-label="播放音色"></select>
+            </label>
+            <div class="field live-sound-field">
+              <span id="liveSoundFieldLabel">发声</span>
+              <label class="live-sound-toggle">
+                <input id="liveSoundToggle" type="checkbox">
+                <span id="liveSoundToggleLabel">弹奏时设备发声</span>
+              </label>
+            </div>
           </div>
           <div class="field key-field">
             <span>调号</span>
@@ -147,12 +158,7 @@
               <span id="tempoValue">120</span>
               <button id="tempoUpButton" class="tempo-step" type="button" aria-label="加快" title="加快" disabled>+</button>
             </div>
-            <select id="playbackInstrumentSelect" class="playback-instrument-select" aria-label="播放音色"></select>
-            <label class="live-sound-toggle">
-              <input id="liveSoundToggle" type="checkbox">
-              <span id="liveSoundToggleLabel">弹奏时设备发声</span>
-            </label>
-            <span id="measureStatus" class="measure-status">实时显示</span>
+            <span id="measureStatus" class="measure-status hidden">实时显示</span>
             <span id="currentChord" class="chord-status">-</span>
           </div>
         </div>
@@ -166,6 +172,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=174"></script>
+  <script src="app.js?v=176"></script>
 </body>
 </html>

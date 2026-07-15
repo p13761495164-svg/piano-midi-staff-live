@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v174";
+const APP_VERSION = "v176";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -181,8 +181,10 @@ const I18N = {
     "label.timeSignature": "拍号",
     "label.keySignature": "调号",
     "label.currentChord": "和弦",
+    "label.liveInputSoundField": "发声",
     "label.liveInputSound": "弹奏时设备发声",
     "label.silentPlayback": "无声播放",
+    "label.playbackInstrument": "音色",
     "label.tempo": "速度",
     "label.mistakes": "弹错记录",
     "label.noMistakes": "暂无",
@@ -249,8 +251,10 @@ const I18N = {
     "label.timeSignature": "拍子",
     "label.keySignature": "調号",
     "label.currentChord": "コード",
+    "label.liveInputSoundField": "発音",
     "label.liveInputSound": "演奏時に端末発音",
     "label.silentPlayback": "無音再生",
+    "label.playbackInstrument": "音色",
     "label.tempo": "テンポ",
     "label.mistakes": "ミス記録",
     "label.noMistakes": "なし",
@@ -317,8 +321,10 @@ const I18N = {
     "label.timeSignature": "Time Signature",
     "label.keySignature": "Key",
     "label.currentChord": "Chord",
+    "label.liveInputSoundField": "Sound",
     "label.liveInputSound": "Input Sound",
     "label.silentPlayback": "Silent Play",
+    "label.playbackInstrument": "Tone",
     "label.tempo": "Tempo",
     "label.mistakes": "Mistakes",
     "label.noMistakes": "None",
@@ -528,7 +534,9 @@ const els = {
   tempoValue: document.getElementById("tempoValue"),
   tempoUpButton: document.getElementById("tempoUpButton"),
   playbackInstrumentSelect: document.getElementById("playbackInstrumentSelect"),
+  playbackInstrumentLabel: document.getElementById("playbackInstrumentLabel"),
   liveSoundToggle: document.getElementById("liveSoundToggle"),
+  liveSoundFieldLabel: document.getElementById("liveSoundFieldLabel"),
   liveSoundToggleLabel: document.getElementById("liveSoundToggleLabel"),
   playbackSlider: document.getElementById("playbackSlider"),
   playbackTime: document.getElementById("playbackTime"),
@@ -677,8 +685,10 @@ function applyLanguage() {
   document.querySelector(".tolerance-field span").appendChild(els.toleranceValue);
   updateText(document.querySelector(".time-field span"), t("label.timeSignature"));
   updateText(document.querySelector(".key-field span"), t("label.keySignature"));
+  updateText(els.liveSoundFieldLabel, t("label.liveInputSoundField"));
   updateText(els.liveSoundToggleLabel, t("label.liveInputSound"));
   updateText(els.silentPlaybackToggleLabel, t("label.silentPlayback"));
+  updateText(els.playbackInstrumentLabel, t("label.playbackInstrument"));
   updateText(els.mistakeLogTitle, t("label.mistakes"));
   updateText(els.mistakeLogEmpty, t("label.noMistakes"));
 
@@ -4106,6 +4116,52 @@ function preventPageZoom() {
   }, { passive: false });
 }
 
+function setupTempoStepButton(button, delta) {
+  if (!button) return;
+  let holdDelay = 0;
+  let holdInterval = 0;
+  let didHold = false;
+
+  const clearHold = () => {
+    window.clearTimeout(holdDelay);
+    window.clearInterval(holdInterval);
+    holdDelay = 0;
+    holdInterval = 0;
+  };
+
+  button.addEventListener("pointerdown", (event) => {
+    if (button.disabled) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    didHold = false;
+    clearHold();
+    holdDelay = window.setTimeout(() => {
+      didHold = true;
+      adjustPracticeTempo(delta);
+      holdInterval = window.setInterval(() => {
+        if (button.disabled) {
+          clearHold();
+          return;
+        }
+        adjustPracticeTempo(delta);
+      }, 90);
+    }, 350);
+  });
+
+  ["pointerup", "pointercancel", "pointerleave", "blur"].forEach((eventName) => {
+    button.addEventListener(eventName, clearHold);
+  });
+
+  button.addEventListener("click", (event) => {
+    if (didHold) {
+      event.preventDefault();
+      event.stopPropagation();
+      didHold = false;
+      return;
+    }
+    adjustPracticeTempo(delta);
+  });
+}
+
 function setupEvents() {
   els.connectButton.addEventListener("click", connectMidi);
   els.recordButton.addEventListener("click", startRecording);
@@ -4119,8 +4175,8 @@ function setupEvents() {
     if (!button) return;
     jumpToMistake(Number(button.dataset.mistakeId));
   });
-  els.tempoDownButton.addEventListener("click", () => adjustPracticeTempo(-1));
-  els.tempoUpButton.addEventListener("click", () => adjustPracticeTempo(1));
+  setupTempoStepButton(els.tempoDownButton, -1);
+  setupTempoStepButton(els.tempoUpButton, 1);
   els.silentPlaybackToggle.addEventListener("change", () => {
     state.silentPlayback = els.silentPlaybackToggle.checked;
     syncControlsFromState();
