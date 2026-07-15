@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v181";
+const APP_VERSION = "v182";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -194,6 +194,7 @@ const I18N = {
     "button.record": "录 MIDI",
     "button.stopRecord": "停录保存",
     "button.loadScore": "载入乐谱",
+    "button.exportPdf": "导出PDF",
     "button.fullscreen": "全屏",
     "button.exitFullscreen": "退出全屏",
     "button.refresh": "更新",
@@ -264,6 +265,7 @@ const I18N = {
     "button.record": "MIDI 録音",
     "button.stopRecord": "停止して保存",
     "button.loadScore": "楽譜を読む",
+    "button.exportPdf": "PDF書き出し",
     "button.fullscreen": "全画面",
     "button.exitFullscreen": "全画面終了",
     "button.refresh": "更新",
@@ -334,6 +336,7 @@ const I18N = {
     "button.record": "Record MIDI",
     "button.stopRecord": "Stop & Save",
     "button.loadScore": "Load Score",
+    "button.exportPdf": "Export PDF",
     "button.fullscreen": "Fullscreen",
     "button.exitFullscreen": "Exit Fullscreen",
     "button.refresh": "Update",
@@ -459,6 +462,11 @@ const state = {
     animating: false,
     pausedAfterManualNavigation: false
   },
+  exportMode: {
+    active: false,
+    viewSpanTicks: 0,
+    rowMeasures: []
+  },
   mistakes: [],
   mistakeCounter: 0,
   deferredInstallPrompt: null,
@@ -522,6 +530,7 @@ const els = {
   recordButton: document.getElementById("recordButton"),
   stopRecordButton: document.getElementById("stopRecordButton"),
   loadMidiButton: document.getElementById("loadMidiButton"),
+  exportPdfButton: document.getElementById("exportPdfButton"),
   midiFileInput: document.getElementById("midiFileInput"),
   fullscreenButton: document.getElementById("fullscreenButton"),
   refreshButton: document.getElementById("refreshButton"),
@@ -696,6 +705,7 @@ function applyLanguage() {
   updateText(els.recordButton, t("button.record"));
   updateText(els.stopRecordButton, t("button.stopRecord"));
   updateText(els.loadMidiButton, t("button.loadScore"));
+  updateText(els.exportPdfButton, t("button.exportPdf"));
   updateText(els.refreshButton, t("button.refresh"));
   updateText(els.installButton, t("button.install"));
   updateIconButtonLabel(els.startMeasureButton, t("button.start"));
@@ -940,6 +950,7 @@ function syncRecordingControls() {
 
 function syncPracticeControls() {
   const hasMeasures = state.practice.measures.length > 0;
+  if (els.exportPdfButton) els.exportPdfButton.disabled = !hasMeasures;
   els.startMeasureButton.disabled = !hasMeasures || ((state.practice.viewStartTick || 0) <= 0 && !state.mistakes.length);
   els.playMeasureButton.disabled = !hasMeasures;
   syncPlaybackToggleButton();
@@ -1088,14 +1099,16 @@ function drawStaff() {
   const hasPracticeScore = state.practice.measures.length > 0;
   if (hasPracticeScore) {
     drawBeatGrid(svg);
-    drawPracticePlayhead(svg);
+    if (!state.exportMode.active) drawPracticePlayhead(svg);
     drawPedalTrack(svg);
     const practiceItems = buildPracticeNoteItems();
     drawPracticeDurationLines(svg);
     drawPracticeArpeggioMarks(svg, practiceItems);
     practiceItems.forEach((item) => drawNote(svg, item));
-    drawActiveInputNotes(svg);
-    drawPlaybackActiveNotes(svg);
+    if (!state.exportMode.active) {
+      drawActiveInputNotes(svg);
+      drawPlaybackActiveNotes(svg);
+    }
     drawPracticeOctaveGroups(svg, practiceItems);
     return;
   }
@@ -1153,10 +1166,7 @@ function drawBeatGrid(svg) {
   const viewStartTick = state.practice.viewStartTick || 0;
   const viewSpanTicks = currentViewSpanTicks();
   const viewEndTick = viewStartTick + viewSpanTicks;
-  const xForTick = (tick) => {
-    const progress = (tick - viewStartTick) / viewSpanTicks;
-    return MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
-  };
+  const xForTick = xForCurrentViewTick;
 
   state.practice.measures.forEach((measure) => {
     if (measure.endTick <= viewStartTick || measure.startTick >= viewEndTick) return;
@@ -1188,10 +1198,7 @@ function drawPedalTrack(svg) {
   const viewStartTick = state.practice.viewStartTick || 0;
   const viewSpanTicks = currentViewSpanTicks();
   const viewEndTick = viewStartTick + viewSpanTicks;
-  const xForTick = (tick) => {
-    const progress = (tick - viewStartTick) / viewSpanTicks;
-    return MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
-  };
+  const xForTick = xForCurrentViewTick;
 
   pedalIntervalsForView(viewStartTick, viewEndTick).forEach((interval) => {
     const startX = xForTick(Math.max(interval.startTick, viewStartTick));
@@ -1307,19 +1314,18 @@ function buildPracticeNoteItems() {
       const display = displayInfoForPracticeNote(target.note);
       const durationKind = durationKindForTicks(Math.max(1, target.endTick - target.startTick));
       const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
-      const progress = Math.max(0, Math.min(1, (displayStartTick - viewStartTick) / timeSpan));
-      const targetX = MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
-      const endProgress = Math.max(0, Math.min(1, (target.endTick - viewStartTick) / timeSpan));
-      const targetEndX = MEASURE_NOTE_LEFT_X + endProgress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
+      const targetX = Math.max(MEASURE_NOTE_LEFT_X, Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(displayStartTick)));
+      const targetEndX = Math.max(MEASURE_NOTE_LEFT_X, Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(target.endTick)));
       const matched = isAutoFollowTargetDisplayMatched(target);
       const active = isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick;
       const cue = cueTargetIds.has(target.id) && !matched;
+      const exportMode = state.exportMode.active;
       return {
         note: target.note,
         displayNote: display.note,
         clef: display.clef,
         step: midiToStaffStep(display.note),
-        x: matched ? inputX : targetX,
+        x: !exportMode && matched ? inputX : targetX,
         endX: targetEndX,
         startTick: target.startTick,
         displayStartTick,
@@ -1327,9 +1333,9 @@ function buildPracticeNoteItems() {
         durationKind,
         octaveMark: display.octaveMark,
         targetId: target.id,
-        matched,
-        active,
-        cue,
+        matched: exportMode ? false : matched,
+        active: exportMode ? false : active,
+        cue: exportMode ? false : cue,
         isPractice: true,
         trackIndex: target.trackIndex ?? 0,
         channel: target.channel ?? 0,
@@ -1357,19 +1363,17 @@ function drawPracticeDurationLines(svg) {
   targets.forEach((target) => {
     const display = displayInfoForPracticeNote(target.note);
     const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
-    const startProgress = (displayStartTick - viewStartTick) / timeSpan;
-    const endProgress = (target.endTick - viewStartTick) / timeSpan;
-    const noteStartX = MEASURE_NOTE_LEFT_X + startProgress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
+    const noteStartX = xForCurrentViewTick(displayStartTick);
     const startX = displayStartTick < viewStartTick
       ? MEASURE_NOTE_LEFT_X
       : Math.min(MEASURE_NOTE_RIGHT_X, noteStartX + 27);
-    const endX = Math.min(MEASURE_NOTE_RIGHT_X, MEASURE_NOTE_LEFT_X + endProgress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X));
+    const endX = Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(target.endTick));
     if (endX - startX < 16) return;
     const y = yForNote(display.note, display.clef);
     const classes = ["note-duration-line"];
     if ((target.trackRole || "primary") === "secondary") classes.push("secondary-track-line");
-    if (isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick) classes.push("active-duration-line");
-    if (cueTargetIds.has(target.id) && !isAutoFollowTargetDisplayMatched(target)) classes.push("cue-duration-line");
+    if (!state.exportMode.active && isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick) classes.push("active-duration-line");
+    if (!state.exportMode.active && cueTargetIds.has(target.id) && !isAutoFollowTargetDisplayMatched(target)) classes.push("cue-duration-line");
     svg.appendChild(createSvg("line", {
       x1: startX,
       y1: y,
@@ -1830,6 +1834,164 @@ function drawLedgerLines(svg, x, y, clef, trackRole = "primary") {
   });
 }
 
+function stylesheetTextForExport() {
+  return [...document.styleSheets].map((sheet) => {
+    try {
+      return [...sheet.cssRules].map((rule) => rule.cssText).join("\n");
+    } catch {
+      return "";
+    }
+  }).join("\n");
+}
+
+function exportPageCss() {
+  return `
+    @page { size: A4 portrait; margin: 10mm; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: white;
+      color: #292522;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .pdf-page {
+      width: 190mm;
+      min-height: 277mm;
+      box-sizing: border-box;
+      page-break-after: always;
+      display: flex;
+      flex-direction: column;
+      gap: 5mm;
+      background: white;
+    }
+    .pdf-page:last-child { page-break-after: auto; }
+    .pdf-title {
+      min-height: 8mm;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8mm;
+      color: #292522;
+      font-size: 11pt;
+      font-weight: 700;
+    }
+    .pdf-title span:last-child {
+      color: #81776d;
+      font-size: 9pt;
+      font-weight: 600;
+    }
+    .score-export-row {
+      width: 100%;
+      break-inside: avoid;
+    }
+    .score-export-row svg {
+      width: 100%;
+      height: auto;
+      display: block;
+      overflow: visible;
+      border: 0;
+      box-shadow: none;
+      background: #fffdf8;
+      transform: none;
+    }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .pdf-page { page-break-after: always; }
+      .pdf-page:last-child { page-break-after: auto; }
+    }
+  `;
+}
+
+function renderExportStaffSvg(rowMeasures) {
+  const svg = createSvg("svg", {
+    viewBox: `0 0 ${STAFF_VIEWBOX.width} ${STAFF_VIEWBOX.height}`,
+    xmlns: "http://www.w3.org/2000/svg",
+    role: "img"
+  });
+  const rowStartTick = rowMeasures[0].startTick;
+  const rowEndTick = rowMeasures[rowMeasures.length - 1].endTick;
+  const original = {
+    staffSvg: els.staffSvg,
+    viewStartTick: state.practice.viewStartTick,
+    currentMeasure: state.practice.currentMeasure,
+    noteLabelMode: state.noteLabelMode,
+    exportMode: { ...state.exportMode }
+  };
+
+  try {
+    els.staffSvg = svg;
+    state.practice.viewStartTick = rowStartTick;
+    state.practice.currentMeasure = measureIndexForTick(rowStartTick);
+    state.noteLabelMode = "degree";
+    state.exportMode = {
+      active: true,
+      viewSpanTicks: Math.max(1, rowEndTick - rowStartTick),
+      rowMeasures
+    };
+    drawStaff();
+    return svg.outerHTML;
+  } finally {
+    els.staffSvg = original.staffSvg;
+    state.practice.viewStartTick = original.viewStartTick;
+    state.practice.currentMeasure = original.currentMeasure;
+    state.noteLabelMode = original.noteLabelMode;
+    state.exportMode = original.exportMode;
+  }
+}
+
+function exportScorePdf() {
+  if (!state.practice.measures.length) return;
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return;
+
+  const rows = [];
+  for (let index = 0; index < state.practice.measures.length; index += 2) {
+    rows.push(state.practice.measures.slice(index, index + 2));
+  }
+
+  const rowsPerPage = 2;
+  const pages = [];
+  for (let index = 0; index < rows.length; index += rowsPerPage) {
+    const pageRows = rows.slice(index, index + rowsPerPage);
+    const startMeasure = index * 2 + 1;
+    const endMeasure = Math.min(state.practice.measures.length, (index + pageRows.length) * 2);
+    pages.push(`
+      <section class="pdf-page">
+        <header class="pdf-title">
+          <span>${escapeHtml(displayFilename(state.practice.filename, "Easy Piano"))}</span>
+          <span>${startMeasure}-${endMeasure} / ${state.practice.measures.length}</span>
+        </header>
+        ${pageRows.map((rowMeasures) => `<div class="score-export-row">${renderExportStaffSvg(rowMeasures)}</div>`).join("")}
+      </section>
+    `);
+  }
+
+  printWindow.document.open();
+  printWindow.document.write(`<!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${escapeHtml(displayFilename(state.practice.filename, "Easy Piano"))}</title>
+        <style>${stylesheetTextForExport()}</style>
+        <style>${exportPageCss()}</style>
+      </head>
+      <body>${pages.join("")}</body>
+    </html>`);
+  printWindow.document.close();
+  printWindow.focus();
+  window.setTimeout(() => printWindow.print(), 300);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
 function buildKeyboard() {
   const { min, max } = KEY_RANGE;
   const whiteNotes = [];
@@ -2199,8 +2361,31 @@ function currentPracticeMeasure() {
 }
 
 function currentViewSpanTicks() {
+  if (state.exportMode.active && state.exportMode.viewSpanTicks > 0) {
+    return state.exportMode.viewSpanTicks;
+  }
   const measure = currentPracticeMeasure();
   return Math.max(1, (measure?.endTick || 0) - (measure?.startTick || 0) || state.practice.measureTicks || MIDI_PPQ * 4);
+}
+
+function progressForCurrentViewTick(tick) {
+  if (state.exportMode.active && state.exportMode.rowMeasures.length) {
+    const rowMeasures = state.exportMode.rowMeasures;
+    const measureIndex = rowMeasures.findIndex((measure) => tick >= measure.startTick && tick <= measure.endTick);
+    const safeIndex = measureIndex >= 0
+      ? measureIndex
+      : tick < rowMeasures[0].startTick ? 0 : rowMeasures.length - 1;
+    const measure = rowMeasures[safeIndex];
+    const measureSpan = Math.max(1, measure.endTick - measure.startTick);
+    const localProgress = Math.max(0, Math.min(1, (tick - measure.startTick) / measureSpan));
+    return (safeIndex + localProgress) / rowMeasures.length;
+  }
+  const viewStartTick = state.practice.viewStartTick || 0;
+  return (tick - viewStartTick) / currentViewSpanTicks();
+}
+
+function xForCurrentViewTick(tick) {
+  return MEASURE_NOTE_LEFT_X + progressForCurrentViewTick(tick) * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
 }
 
 function timeSignatureAtTick(tick) {
@@ -4167,6 +4352,7 @@ function setupEvents() {
   els.recordButton.addEventListener("click", startRecording);
   els.stopRecordButton.addEventListener("click", stopRecording);
   els.loadMidiButton.addEventListener("click", () => els.midiFileInput.click());
+  els.exportPdfButton.addEventListener("click", exportScorePdf);
   els.midiFileInput.addEventListener("change", () => loadScoreFile(els.midiFileInput.files[0]));
   els.startMeasureButton.addEventListener("click", goToPracticeStart);
   els.playMeasureButton.addEventListener("click", toggleContinuousPlayback);
