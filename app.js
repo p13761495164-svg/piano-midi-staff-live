@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v165";
+const APP_VERSION = "v166";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2748,6 +2748,7 @@ function scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, ins
   const frequency = 440 * 2 ** ((note - 69) / 12);
   const safeStartAt = Math.max(audioContext.currentTime + 0.004, startAt);
   const output = audioContext.createGain();
+  output._easyPianoMasterGain = true;
   const filter = audioContext.createBiquadFilter();
   const activeNodes = [output, filter];
   const decay = Math.max(instrument.decay || 3, duration + 0.2);
@@ -2796,6 +2797,7 @@ function schedulePracticeTone(audioContext, note, startAt, duration, registry = 
   const tailSeconds = isHighNote ? 0.58 : isLowNote ? 1.16 : 0.92;
   const tailEnd = releaseAt + tailSeconds;
   const output = audioContext.createGain();
+  output._easyPianoMasterGain = true;
   const toneFilter = audioContext.createBiquadFilter();
   const bodyFilter = audioContext.createBiquadFilter();
   const attackClick = audioContext.createBufferSource();
@@ -2928,18 +2930,26 @@ function stopAudioNodes(nodes, registry, options = {}) {
   if (fadeSeconds > 0) {
     const audioContext = [...nodeSet].find((node) => node?.context)?.context;
     const now = audioContext?.currentTime || 0;
+    const gainNodes = [...nodeSet].filter((node) => node?.gain);
+    const fadeTargets = gainNodes.some((node) => node._easyPianoMasterGain)
+      ? gainNodes.filter((node) => node._easyPianoMasterGain)
+      : gainNodes;
+    fadeTargets.forEach((node) => {
+      try {
+        if (typeof node.gain.cancelAndHoldAtTime === "function") {
+          node.gain.cancelAndHoldAtTime(now);
+        } else {
+          const value = Math.max(0.0001, Number(node.gain.value) || 0.0001);
+          node.gain.cancelScheduledValues(now);
+          node.gain.setValueAtTime(value, now);
+        }
+        node.gain.exponentialRampToValueAtTime(0.0001, now + fadeSeconds);
+      } catch {
+        // Audio params may already be detached.
+      }
+    });
     nodeSet.forEach((node) => {
       try {
-        if (node?.gain) {
-          if (typeof node.gain.cancelAndHoldAtTime === "function") {
-            node.gain.cancelAndHoldAtTime(now);
-          } else {
-            const value = Math.max(0.0001, Number(node.gain.value) || 0.0001);
-            node.gain.cancelScheduledValues(now);
-            node.gain.setValueAtTime(value, now);
-          }
-          node.gain.exponentialRampToValueAtTime(0.0001, now + fadeSeconds);
-        }
         if (typeof node?.stop === "function") node.stop(now + fadeSeconds + 0.04);
       } catch {
         // Audio nodes may already be stopped.
