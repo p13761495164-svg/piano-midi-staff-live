@@ -689,16 +689,16 @@ select {
 
 .note-duration-line {
   fill: none;
-  stroke: #f0bf4b;
+  stroke: rgba(35, 34, 31, 0.42);
   stroke-width: 10;
   stroke-linecap: round;
-  opacity: 0.26;
+  opacity: 0.34;
   mix-blend-mode: multiply;
 }
 
 .note-duration-line.secondary-track-line {
-  stroke: #d0c3ad;
-  opacity: 0.32;
+  stroke: rgba(35, 34, 31, 0.32);
+  opacity: 0.3;
 }
 
 .note-duration-line.active-duration-line {
