@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v187";
+const APP_VERSION = "v188";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -11,6 +11,11 @@ const LEFT_PEDAL_CONTROLLERS = new Set([65, 66, 67, 68, 69]);
 const WHITE_PATTERN = new Set([0, 2, 4, 5, 7, 9, 11]);
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const XML_STEP_TO_SEMITONE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+const STAFF_LETTERS = ["C", "D", "E", "F", "G", "A", "B"];
+const STAFF_LETTER_TO_INDEX = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
+const STAFF_LETTER_TO_PITCH = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+const STAFF_PITCH_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const STAFF_PITCH_NAMES_FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 const KEY_RANGE = { min: MIDI_MIN, max: MIDI_MAX };
 const SETTINGS_KEY = "piano-midi-staff-settings";
 const MIDI_PPQ = 480;
@@ -40,7 +45,7 @@ const SETTINGS_FIELD_KEYS = {
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const KEY_SIGNATURE_BY_FIFTHS = {
-  "-7": "B",
+  "-7": "Cb",
   "-6": "Gb",
   "-5": "Db",
   "-4": "Ab",
@@ -53,16 +58,19 @@ const KEY_SIGNATURE_BY_FIFTHS = {
   3: "A",
   4: "E",
   5: "B",
-  6: "Gb",
-  7: "Db"
+  6: "F#",
+  7: "C#"
 };
 const MAJOR_KEY_SIGNATURES = {
+  Cb: { tones: [11, 1, 3, 4, 6, 8, 10], accidental: "b", count: 7 },
   C: { tones: [0, 2, 4, 5, 7, 9, 11], accidental: "", count: 0 },
   G: { tones: [7, 9, 11, 0, 2, 4, 6], accidental: "#", count: 1 },
   D: { tones: [2, 4, 6, 7, 9, 11, 1], accidental: "#", count: 2 },
   A: { tones: [9, 11, 1, 2, 4, 6, 8], accidental: "#", count: 3 },
   E: { tones: [4, 6, 8, 9, 11, 1, 3], accidental: "#", count: 4 },
   B: { tones: [11, 1, 3, 4, 6, 8, 10], accidental: "#", count: 5 },
+  "F#": { tones: [6, 8, 10, 11, 1, 3, 5], accidental: "#", count: 6 },
+  "C#": { tones: [1, 3, 5, 6, 8, 10, 0], accidental: "#", count: 7 },
   F: { tones: [5, 7, 9, 10, 0, 2, 4], accidental: "b", count: 1 },
   Bb: { tones: [10, 0, 2, 3, 5, 7, 9], accidental: "b", count: 2 },
   Eb: { tones: [3, 5, 7, 8, 10, 0, 2], accidental: "b", count: 3 },
@@ -729,16 +737,48 @@ function isWhite(note) {
   return WHITE_PATTERN.has(note % 12);
 }
 
-function midiToStaffStep(note) {
-  const octave = Math.floor(note / 12) - 1;
-  const letter = NOTE_NAMES[note % 12][0];
-  const letterIndex = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 }[letter];
+function staffPitchName(note, tick = state.practice.viewStartTick || 0) {
+  const pitchClass = ((note % 12) + 12) % 12;
+  const key = MAJOR_KEY_SIGNATURES[keySignatureAtTick(tick)] || MAJOR_KEY_SIGNATURES.C;
+  const degreeIndex = key.tones.indexOf(pitchClass);
+  if (degreeIndex >= 0) {
+    const tonicLetter = keySignatureAtTick(tick).replace(/[#b]/g, "")[0] || "C";
+    const tonicIndex = STAFF_LETTER_TO_INDEX[tonicLetter] ?? 0;
+    const letter = STAFF_LETTERS[(tonicIndex + degreeIndex) % STAFF_LETTERS.length];
+    const naturalPitch = STAFF_LETTER_TO_PITCH[letter];
+    const diff = ((pitchClass - naturalPitch + 18) % 12) - 6;
+    if (diff === -2) return `${letter}bb`;
+    if (diff === -1) return `${letter}b`;
+    if (diff === 1) return `${letter}#`;
+    if (diff === 2) return `${letter}##`;
+    return letter;
+  }
+  const names = key.accidental === "b" ? STAFF_PITCH_NAMES_FLAT : STAFF_PITCH_NAMES_SHARP;
+  return names[pitchClass];
+}
+
+function accidentalOffsetForStaffName(name) {
+  const accidental = name.slice(1);
+  if (accidental === "bb") return -2;
+  if (accidental === "b") return -1;
+  if (accidental === "#") return 1;
+  if (accidental === "##") return 2;
+  return 0;
+}
+
+function midiToStaffStep(note, tick = state.practice.viewStartTick || 0) {
+  const name = staffPitchName(note, tick);
+  const letter = name[0] || "C";
+  const letterIndex = STAFF_LETTER_TO_INDEX[letter] ?? 0;
+  const naturalPitch = STAFF_LETTER_TO_PITCH[letter] ?? 0;
+  const accidentalOffset = accidentalOffsetForStaffName(name);
+  const octave = Math.floor((note - naturalPitch - accidentalOffset) / 12) - 1;
   return octave * 7 + letterIndex;
 }
 
-function yForNote(note, clef) {
-  const step = midiToStaffStep(note);
-  const reference = clef === "bass" ? midiToStaffStep(43) : midiToStaffStep(64);
+function yForNote(note, clef, tick = state.practice.viewStartTick || 0) {
+  const step = midiToStaffStep(note, tick);
+  const reference = clef === "bass" ? midiToStaffStep(43, tick) : midiToStaffStep(64, tick);
   const referenceY = clef === "bass" ? BASS_LINE_YS[4] : TREBLE_LINE_YS[4];
   return referenceY - (step - reference) * STAFF_STEP_PX;
 }
@@ -1269,7 +1309,7 @@ function buildPracticeNoteItems() {
     .slice()
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
     .map((target) => {
-      const display = displayInfoForPracticeNote(target.note);
+      const display = displayInfoForPracticeNote(target.note, target.startTick);
       const durationKind = durationKindForTicks(Math.max(1, target.endTick - target.startTick));
       const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
       const targetX = Math.max(MEASURE_NOTE_LEFT_X, Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(displayStartTick)));
@@ -1282,7 +1322,7 @@ function buildPracticeNoteItems() {
         note: target.note,
         displayNote: display.note,
         clef: display.clef,
-        step: midiToStaffStep(display.note),
+        step: midiToStaffStep(display.note, target.startTick),
         x: !exportMode && matched ? inputX : targetX,
         endX: targetEndX,
         startTick: target.startTick,
@@ -1319,7 +1359,7 @@ function drawPracticeDurationLines(svg) {
     : isPlaybackMode ? (state.practice.viewStartTick || 0) : Infinity;
 
   targets.forEach((target) => {
-    const display = displayInfoForPracticeNote(target.note);
+    const display = displayInfoForPracticeNote(target.note, target.startTick);
     const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
     const noteStartX = xForCurrentViewTick(displayStartTick);
     const startX = displayStartTick < viewStartTick
@@ -1327,7 +1367,7 @@ function drawPracticeDurationLines(svg) {
       : Math.min(MEASURE_NOTE_RIGHT_X, noteStartX + 27);
     const endX = Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(target.endTick));
     if (endX - startX < 16) return;
-    const y = yForNote(display.note, display.clef);
+    const y = yForNote(display.note, display.clef, target.startTick);
     const classes = ["note-duration-line"];
     if ((target.trackRole || "primary") === "secondary") classes.push("secondary-track-line");
     if (!state.exportMode.active && isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick) classes.push("active-duration-line");
@@ -1446,7 +1486,7 @@ function drawPlaybackActiveNotes(svg) {
 
 function drawLeftColumnNotes(svg, items) {
   items.forEach((item) => {
-    const y = yForNote(item.displayNote, item.clef);
+    const y = yForNote(item.displayNote, item.clef, item.startTick);
     drawLedgerLines(svg, item.x, y, item.clef);
     svg.appendChild(createSvg("ellipse", {
       cx: item.x,
@@ -1497,7 +1537,7 @@ function visiblePracticeDurationTargets() {
 function drawNote(svg, item) {
   const { note, clef, x, matched, isPractice, targetId } = item;
   const displayNote = item.displayNote ?? note;
-  const y = yForNote(displayNote, clef);
+  const y = yForNote(displayNote, clef, item.startTick);
   drawLedgerLines(svg, x, y, clef, item.trackRole);
 
   if (isPractice) {
@@ -1544,7 +1584,7 @@ function drawNote(svg, item) {
   }
 }
 
-function displayInfoForPracticeNote(note) {
+function displayInfoForPracticeNote(note, tick = state.practice.viewStartTick || 0) {
   const clef = preferredClef(note);
   let displayNote = note;
   let octaveMark = "";
@@ -1552,11 +1592,11 @@ function displayInfoForPracticeNote(note) {
   const topLimit = Math.min(...lineYs) - LEDGER_OCTAVE_LIMIT;
   const bottomLimit = Math.max(...lineYs) + LEDGER_OCTAVE_LIMIT;
 
-  while (yForNote(displayNote, clef) < topLimit && displayNote - 12 >= MIDI_MIN) {
+  while (yForNote(displayNote, clef, tick) < topLimit && displayNote - 12 >= MIDI_MIN) {
     displayNote -= 12;
     octaveMark = "8va";
   }
-  while (yForNote(displayNote, clef) > bottomLimit && displayNote + 12 <= MIDI_MAX) {
+  while (yForNote(displayNote, clef, tick) > bottomLimit && displayNote + 12 <= MIDI_MAX) {
     displayNote += 12;
     octaveMark = "8vb";
   }
@@ -1641,7 +1681,7 @@ function drawPracticeArpeggioMarks(svg, items) {
     const startTicks = new Set(group.map((item) => item.startTick));
     if (group.length < 2 || startTicks.size < 2) return;
 
-    const ys = group.map((item) => yForNote(item.displayNote, item.clef));
+    const ys = group.map((item) => yForNote(item.displayNote, item.clef, item.startTick));
     const x = Math.min(...group.map((item) => item.x)) - 46;
     drawArpeggioWave(svg, x, Math.min(...ys) - 18, Math.max(...ys) + 18, group[0].trackRole);
   });
@@ -1689,12 +1729,12 @@ function drawPracticeOctaveGroups(svg, items) {
       current.items.push(item);
       current.endX = Math.max(current.endX, item.x);
       current.markY = current.octaveMark === "8va"
-        ? Math.min(current.markY, yForNote(item.displayNote, item.clef) - 62)
-        : Math.max(current.markY, yForNote(item.displayNote, item.clef) + 74);
+        ? Math.min(current.markY, yForNote(item.displayNote, item.clef, item.startTick) - 62)
+        : Math.max(current.markY, yForNote(item.displayNote, item.clef, item.startTick) + 74);
       return;
     }
 
-    const y = yForNote(item.displayNote, item.clef);
+    const y = yForNote(item.displayNote, item.clef, item.startTick);
     current = {
       octaveMark: item.octaveMark,
       trackRole: item.trackRole,
