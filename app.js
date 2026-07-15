@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v185";
+const APP_VERSION = "v186";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -479,6 +479,7 @@ const state = {
     filename: "",
     timeSignature: { numerator: 4, denominator: 4 },
     timeSignatureEvents: [],
+    keySignatureEvents: [],
     ticksPerQuarter: MIDI_PPQ,
     measureTicks: MIDI_PPQ * 4,
     microsecondsPerQuarter: 500000,
@@ -579,15 +580,15 @@ function noteName(note) {
   return `${NOTE_NAMES[note % 12]}${octave}`;
 }
 
-function chordNoteName(pitchClass) {
-  const key = MAJOR_KEY_SIGNATURES[state.keySignature] || MAJOR_KEY_SIGNATURES.C;
+function chordNoteName(pitchClass, tick = state.practice.viewStartTick || 0) {
+  const key = MAJOR_KEY_SIGNATURES[keySignatureAtTick(tick)] || MAJOR_KEY_SIGNATURES.C;
   const names = key.accidental === "b" ? CHORD_NAMES_FLAT : CHORD_NAMES_SHARP;
   return names[((pitchClass % 12) + 12) % 12];
 }
 
-function chordToneLabel(pitchClass) {
-  if (state.noteLabelMode === "degree") return degreeForNote(((pitchClass % 12) + 12) % 12 + 60);
-  return chordNoteName(pitchClass);
+function chordToneLabel(pitchClass, tick = state.practice.viewStartTick || 0) {
+  if (state.noteLabelMode === "degree") return degreeForNote(((pitchClass % 12) + 12) % 12 + 60, tick);
+  return chordNoteName(pitchClass, tick);
 }
 
 function chordSuffixLabel(suffix) {
@@ -741,16 +742,16 @@ function applyLanguage() {
   }
 }
 
-function accidentalForNote(note) {
+function accidentalForNote(note, tick = state.practice.viewStartTick || 0) {
   const pitchClass = note % 12;
-  const key = MAJOR_KEY_SIGNATURES[state.keySignature] || MAJOR_KEY_SIGNATURES.C;
+  const key = MAJOR_KEY_SIGNATURES[keySignatureAtTick(tick)] || MAJOR_KEY_SIGNATURES.C;
   if (key.tones.includes(pitchClass)) return "";
   if (!isWhite(note)) return key.accidental || "#";
   return "♮";
 }
 
-function degreeForNote(note) {
-  const key = MAJOR_KEY_SIGNATURES[state.keySignature] || MAJOR_KEY_SIGNATURES.C;
+function degreeForNote(note, tick = state.practice.viewStartTick || 0) {
+  const key = MAJOR_KEY_SIGNATURES[keySignatureAtTick(tick)] || MAJOR_KEY_SIGNATURES.C;
   const tonic = key.tones[0];
   const semitone = (note % 12 - tonic + 12) % 12;
   const exactIndex = MAJOR_SCALE_OFFSETS.indexOf(semitone);
@@ -875,8 +876,9 @@ function saveSettings() {
 
 function syncControlsFromState() {
   els.inputSelect.value = state.selectedInputId;
+  const activeKeySignature = keySignatureAtTick(state.practice.viewStartTick || 0);
   els.keyButtons.forEach((button) => {
-    const active = button.dataset.keySignature === state.keySignature;
+    const active = button.dataset.keySignature === activeKeySignature;
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
@@ -1500,7 +1502,7 @@ function drawLeftColumnNotes(svg, items) {
       class: `note-head active-input-note${item.wrong ? " wrong-note" : ""}`,
       "data-active-input-note": item.note
     }));
-    const innerLabel = noteInnerLabel(item.note);
+    const innerLabel = noteInnerLabel(item.note, item.startTick);
     if (innerLabel) {
       const text = createSvg("text", {
         x: item.x,
@@ -1558,7 +1560,7 @@ function drawNote(svg, item) {
     }));
   }
 
-  const innerLabel = noteInnerLabel(note);
+  const innerLabel = noteInnerLabel(note, item.startTick);
   if (innerLabel) {
     const filledPracticeNote = isPractice && !matched && !item.active && !item.cue;
     const noteInnerLabelText = createSvg("text", {
@@ -1571,7 +1573,7 @@ function drawNote(svg, item) {
     svg.appendChild(noteInnerLabelText);
   }
 
-  const accidental = accidentalForNote(note);
+  const accidental = accidentalForNote(note, item.startTick);
   if (accidental) {
     const accidentalClasses = ["accidental"];
     if (item.trackRole === "secondary") accidentalClasses.push("secondary-track-text");
@@ -1780,14 +1782,14 @@ function drawOctaveMark(svg, startX, endX, markY, octaveMark, trackRole = "prima
   }));
 }
 
-function noteInnerLabel(note) {
-  if (state.noteLabelMode === "degree") return degreeForNote(note);
+function noteInnerLabel(note, tick = state.practice.viewStartTick || 0) {
+  if (state.noteLabelMode === "degree") return degreeForNote(note, tick);
   if (state.noteLabelMode === "pitch") return NOTE_NAMES[note % 12].replace("#", "♯");
   return "";
 }
 
 function drawKeySignature(svg) {
-  const key = MAJOR_KEY_SIGNATURES[state.keySignature] || MAJOR_KEY_SIGNATURES.C;
+  const key = MAJOR_KEY_SIGNATURES[keySignatureAtTick(state.practice.viewStartTick || 0)] || MAJOR_KEY_SIGNATURES.C;
   if (!key.accidental || !key.count) return;
 
   const positions = KEY_SIGNATURE_Y[key.accidental];
@@ -1820,7 +1822,7 @@ function drawTimeSignature(svg) {
   const signature = timeSignatureAtTick(state.practice.viewStartTick || 0);
   const numerator = Math.max(1, Number(signature.numerator) || 4);
   const denominator = Math.max(1, Number(signature.denominator) || 4);
-  const key = MAJOR_KEY_SIGNATURES[state.keySignature] || MAJOR_KEY_SIGNATURES.C;
+  const key = MAJOR_KEY_SIGNATURES[keySignatureAtTick(state.practice.viewStartTick || 0)] || MAJOR_KEY_SIGNATURES.C;
   const x = KEY_SIGNATURE_START_X + Math.max(1, key.count || 0) * KEY_SIGNATURE_GAP_X + 38;
   [
     { y1: 222, y2: 282 },
@@ -2180,6 +2182,7 @@ function applyParsedScore(parsed, filename, typeLabel) {
   state.practice.filename = filename || typeLabel;
   state.practice.timeSignature = normalized.timeSignature;
   state.practice.timeSignatureEvents = normalized.timeSignatureEvents || [];
+  state.practice.keySignatureEvents = normalized.keySignatureEvents || [];
   state.practice.ticksPerQuarter = normalized.ticksPerQuarter;
   state.practice.measureTicks = normalized.measureTicks;
   state.practice.microsecondsPerQuarter = normalized.microsecondsPerQuarter;
@@ -2224,6 +2227,9 @@ function trimLeadingScoreSilence(parsed) {
   const shiftedTimeSignatureEvents = (parsed.timeSignatureEvents || [])
     .map((event) => ({ ...event, tick: shiftTick(event.tick) }))
     .sort((a, b) => a.tick - b.tick || (a.numerator || 0) - (b.numerator || 0));
+  const shiftedKeySignatureEvents = (parsed.keySignatureEvents || [])
+    .map((event) => ({ ...event, tick: shiftTick(event.tick) }))
+    .sort((a, b) => a.tick - b.tick);
 
   if (parsed.variableMeasures) {
     const shiftedMeasures = sourceMeasures
@@ -2246,7 +2252,8 @@ function trimLeadingScoreSilence(parsed) {
       notes: shiftedNotes,
       measures: shiftedMeasures.length ? shiftedMeasures : buildMeasuresFromPracticeNotes(shiftedNotes),
       pedalEvents: shiftedPedalEvents,
-      timeSignatureEvents: shiftedTimeSignatureEvents
+      timeSignatureEvents: shiftedTimeSignatureEvents,
+      keySignatureEvents: shiftedKeySignatureEvents
     };
   }
 
@@ -2255,7 +2262,8 @@ function trimLeadingScoreSilence(parsed) {
     notes: shiftedNotes,
     measures: buildMeasuresFromPracticeNotes(shiftedNotes),
     pedalEvents: shiftedPedalEvents,
-    timeSignatureEvents: shiftedTimeSignatureEvents
+    timeSignatureEvents: shiftedTimeSignatureEvents,
+    keySignatureEvents: shiftedKeySignatureEvents
   };
 }
 
@@ -2348,6 +2356,20 @@ function xForCurrentViewTick(tick) {
 function timeSignatureAtTick(tick) {
   const measure = state.practice.measures[measureIndexForTick(tick)] || currentPracticeMeasure();
   return measure?.timeSignature || state.practice.timeSignature || { numerator: 4, denominator: 4 };
+}
+
+function keySignatureAtTick(tick) {
+  const events = (state.practice.keySignatureEvents || [])
+    .filter((event) => MAJOR_KEY_SIGNATURES[event.keySignature])
+    .sort((a, b) => (a.tick || 0) - (b.tick || 0));
+  if (!events.length) return MAJOR_KEY_SIGNATURES[state.keySignature] ? state.keySignature : "C";
+  const safeTick = Math.max(0, Number(tick) || 0);
+  let current = events[0].keySignature || state.keySignature || "C";
+  for (const event of events) {
+    if ((event.tick || 0) > safeTick) break;
+    current = event.keySignature;
+  }
+  return MAJOR_KEY_SIGNATURES[current] ? current : "C";
 }
 
 async function loadScoreFile(file) {
@@ -3328,8 +3350,8 @@ function parseMidiFile(bytes) {
     reader.position = trackEnd;
   }
   microsecondsPerQuarter = primaryTempoMicroseconds(tempoEvents, microsecondsPerQuarter);
-  const keySignature = keySignatureEvents
-    .sort((a, b) => (a.tick || 0) - (b.tick || 0))[0]?.keySignature || null;
+  const sortedKeySignatureEvents = normalizedMidiKeySignatureEvents(keySignatureEvents);
+  const keySignature = sortedKeySignatureEvents[0]?.keySignature || null;
 
   const notes = noteEvents
     .filter((item) => item.note >= MIDI_MIN && item.note <= MIDI_MAX)
@@ -3340,7 +3362,7 @@ function parseMidiFile(bytes) {
   }
   if (!notes.length) {
     const measureTicks = measureTicksForTimeSignature(timeSignature, ticksPerQuarter);
-    return { measures: [], pedalEvents, ticksPerQuarter, measureTicks, timeSignature, timeSignatureEvents: [], keySignature, microsecondsPerQuarter, format };
+    return { measures: [], pedalEvents, ticksPerQuarter, measureTicks, timeSignature, timeSignatureEvents: [], keySignatureEvents: sortedKeySignatureEvents, keySignature, microsecondsPerQuarter, format };
   }
   const trackRoles = trackRolesForNotes(notes);
 
@@ -3358,6 +3380,7 @@ function parseMidiFile(bytes) {
     measureTicks,
     timeSignature,
     timeSignatureEvents: signatureEvents.map((event) => ({ tick: event.tick, ...event.timeSignature })),
+    keySignatureEvents: sortedKeySignatureEvents,
     keySignature,
     microsecondsPerQuarter,
     format,
@@ -3449,6 +3472,7 @@ function parseMusicXmlText(text) {
     ticksPerQuarter,
     measureTicks,
     timeSignature,
+    keySignatureEvents: keySignature ? [{ tick: 0, keySignature }] : [],
     keySignature,
     microsecondsPerQuarter,
     format: "musicxml"
@@ -3590,6 +3614,44 @@ function normalizedMidiTimeSignatureEvents(events, lastTick, fallback, ticksPerQ
     signatures.unshift({ tick: 0, timeSignature: fallback || selected || { numerator: 4, denominator: 4 } });
   }
   return signatures;
+}
+
+function normalizedMidiKeySignatureEvents(events, fallback = null) {
+  const signatures = (events || [])
+    .map((event, order) => ({ ...event, order }))
+    .filter((event) => MAJOR_KEY_SIGNATURES[event.keySignature])
+    .map((event) => ({
+      tick: Math.max(0, Number(event.tick) || 0),
+      fifths: Number.isFinite(event.fifths) ? event.fifths : undefined,
+      mode: Number.isFinite(event.mode) ? event.mode : undefined,
+      keySignature: event.keySignature,
+      order: event.order
+    }))
+    .sort((a, b) => a.tick - b.tick || a.order - b.order);
+  const normalized = [];
+  signatures.forEach((event) => {
+    const cleanEvent = {
+      tick: event.tick,
+      fifths: event.fifths,
+      mode: event.mode,
+      keySignature: event.keySignature
+    };
+    const previous = normalized[normalized.length - 1];
+    if (previous && previous.tick === event.tick) {
+      normalized[normalized.length - 1] = cleanEvent;
+      return;
+    }
+    if (previous && previous.keySignature === event.keySignature) return;
+    normalized.push(cleanEvent);
+  });
+  if (!normalized.length && fallback && MAJOR_KEY_SIGNATURES[fallback]) {
+    return [{ tick: 0, keySignature: fallback }];
+  }
+  if (normalized.length && normalized[0].tick > 0) {
+    const initial = fallback && MAJOR_KEY_SIGNATURES[fallback] ? fallback : normalized[0].keySignature;
+    normalized.unshift({ tick: 0, keySignature: initial });
+  }
+  return normalized;
 }
 
 function buildMidiMeasuresFromTimeSignatures(notes, signatureEvents, lastTick, trackRoles, ticksPerQuarter) {
@@ -4381,6 +4443,7 @@ function setupEvents() {
   els.keyButtons.forEach((button) => {
     button.addEventListener("click", () => {
       state.keySignature = button.dataset.keySignature;
+      state.practice.keySignatureEvents = [];
       syncControlsFromState();
       saveSettings();
       drawStaff();
