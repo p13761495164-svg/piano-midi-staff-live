@@ -9,9 +9,9 @@
   <meta name="apple-mobile-web-app-title" content="Easy Piano">
   <title>Easy Piano</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon.png?v=169" type="image/png">
-  <link rel="apple-touch-icon" href="icons/icon.png?v=169">
-  <link rel="stylesheet" href="styles.css?v=169">
+  <link rel="icon" href="icons/icon.png?v=170" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon.png?v=170">
+  <link rel="stylesheet" href="styles.css?v=170">
 </head>
 <body>
   <main class="app-shell">
@@ -19,11 +19,11 @@
       <p id="statusText" class="status-banner">等待连接 MIDI 键盘</p>
       <div class="topbar">
         <div class="brand">
-          <img class="brand-mark" src="icons/icon.png?v=169" alt="" aria-hidden="true">
+          <img class="brand-mark" src="icons/icon.png?v=170" alt="" aria-hidden="true">
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
-              <span id="versionBadge" class="version-badge">v169</span>
+              <span id="versionBadge" class="version-badge">v170</span>
             </div>
           </div>
         </div>
@@ -31,7 +31,6 @@
           <button id="connectButton" class="primary" type="button">连接 MIDI</button>
           <button id="recordButton" class="record-button" type="button">录 MIDI</button>
           <button id="stopRecordButton" class="ghost hidden" type="button">停止 MIDI</button>
-          <button id="saveRecordButton" class="ghost" type="button" disabled>保存 MIDI</button>
           <button id="loadMidiButton" class="ghost" type="button">载入乐谱</button>
           <button id="fullscreenButton" class="ghost" type="button">全屏</button>
           <button id="refreshButton" class="ghost" type="button">更新</button>
@@ -124,12 +123,7 @@
       </details>
 
       <section class="mistake-log" aria-live="polite">
-        <div class="mistake-log-header">
-          <div id="mistakeLogTitle" class="mistake-log-title">弹错记录</div>
-          <div id="practiceStats" class="practice-stats" aria-live="polite">
-            <span class="practice-stat-wrong">弹错小节数 0/0 (0%)</span>
-          </div>
-        </div>
+        <div id="mistakeLogTitle" class="mistake-log-title">弹错记录</div>
         <div id="mistakeLogList" class="mistake-log-list">
           <span id="mistakeLogEmpty" class="mistake-log-empty">暂无</span>
         </div>
@@ -172,6 +166,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js?v=169"></script>
+  <script src="app.js?v=170"></script>
 </body>
 </html>

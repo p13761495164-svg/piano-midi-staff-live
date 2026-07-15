@@ -392,33 +392,11 @@ select {
   padding: 10px 12px;
 }
 
-.mistake-log-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
 .mistake-log-title {
   color: var(--ink);
   font-size: 13px;
   font-weight: 800;
-}
-
-.practice-stats {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.practice-stat-wrong {
-  color: #b7352c;
+  margin-bottom: 8px;
 }
 
 .mistake-log-list {

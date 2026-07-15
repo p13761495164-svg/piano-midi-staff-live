@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v169";
+const APP_VERSION = "v170";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -187,12 +187,10 @@ const I18N = {
     "label.mistakes": "弹错记录",
     "label.noMistakes": "暂无",
     "label.mistakeItem": "{measure}小节",
-    "label.mistakeStats": "弹错小节数 {wrong}/{total} ({percent}%)",
     "button.settings": "设置",
     "button.connect": "连接 MIDI",
     "button.record": "录 MIDI",
-    "button.stopRecord": "停止 MIDI",
-    "button.saveRecord": "保存 MIDI",
+    "button.stopRecord": "停录保存",
     "button.loadScore": "载入乐谱",
     "button.fullscreen": "全屏",
     "button.exitFullscreen": "退出全屏",
@@ -217,7 +215,7 @@ const I18N = {
     "status.live": "实时显示",
     "status.measure": "{range} / {total} 小节",
     "status.recording": "录制中...",
-    "status.recorded": "录制完成：{count} 个音，点击保存 MIDI",
+    "status.recorded": "录制完成：{count} 个音，正在保存录音文件",
     "status.recordedEmpty": "录制完成：没有记录到音符",
     "status.savingIos": "正在打开 iOS 保存面板...",
     "status.midiGenerated": "MIDI 文件已生成",
@@ -257,12 +255,10 @@ const I18N = {
     "label.mistakes": "ミス記録",
     "label.noMistakes": "なし",
     "label.mistakeItem": "{measure}小節",
-    "label.mistakeStats": "ミス小節数 {wrong}/{total} ({percent}%)",
     "button.settings": "設定",
     "button.connect": "MIDI 接続",
     "button.record": "MIDI 録音",
-    "button.stopRecord": "録音停止",
-    "button.saveRecord": "MIDI 保存",
+    "button.stopRecord": "停止して保存",
     "button.loadScore": "楽譜を読む",
     "button.fullscreen": "全画面",
     "button.exitFullscreen": "全画面終了",
@@ -287,7 +283,7 @@ const I18N = {
     "status.live": "リアルタイム表示",
     "status.measure": "{range} / {total} 小節",
     "status.recording": "録音中...",
-    "status.recorded": "録音完了：{count} 音。MIDI を保存できます",
+    "status.recorded": "録音完了：{count} 音。MIDI を保存中",
     "status.recordedEmpty": "録音完了：音符は記録されませんでした",
     "status.savingIos": "iOS 保存画面を開いています...",
     "status.midiGenerated": "MIDI ファイルを生成しました",
@@ -327,12 +323,10 @@ const I18N = {
     "label.mistakes": "Mistakes",
     "label.noMistakes": "None",
     "label.mistakeItem": "Bar {measure}",
-    "label.mistakeStats": "Mistake bars {wrong}/{total} ({percent}%)",
     "button.settings": "Settings",
     "button.connect": "Connect MIDI",
     "button.record": "Record MIDI",
-    "button.stopRecord": "Stop MIDI",
-    "button.saveRecord": "Save MIDI",
+    "button.stopRecord": "Stop & Save",
     "button.loadScore": "Load Score",
     "button.fullscreen": "Fullscreen",
     "button.exitFullscreen": "Exit Fullscreen",
@@ -357,7 +351,7 @@ const I18N = {
     "status.live": "Live View",
     "status.measure": "{range} / {total} measures",
     "status.recording": "Recording...",
-    "status.recorded": "Recorded {count} notes. Save MIDI when ready",
+    "status.recorded": "Recorded {count} notes. Saving MIDI",
     "status.recordedEmpty": "Recording finished: no notes captured",
     "status.savingIos": "Opening iOS save panel...",
     "status.midiGenerated": "MIDI file generated",
@@ -521,7 +515,6 @@ const els = {
   connectButton: document.getElementById("connectButton"),
   recordButton: document.getElementById("recordButton"),
   stopRecordButton: document.getElementById("stopRecordButton"),
-  saveRecordButton: document.getElementById("saveRecordButton"),
   loadMidiButton: document.getElementById("loadMidiButton"),
   midiFileInput: document.getElementById("midiFileInput"),
   fullscreenButton: document.getElementById("fullscreenButton"),
@@ -540,7 +533,6 @@ const els = {
   playbackSlider: document.getElementById("playbackSlider"),
   playbackTime: document.getElementById("playbackTime"),
   measureStatus: document.getElementById("measureStatus"),
-  practiceStats: document.getElementById("practiceStats"),
   currentChord: document.getElementById("currentChord"),
   versionBadge: document.getElementById("versionBadge"),
   settingsSummaryLabel: document.getElementById("settingsSummaryLabel"),
@@ -693,7 +685,6 @@ function applyLanguage() {
   updateText(els.connectButton, t("button.connect"));
   updateText(els.recordButton, t("button.record"));
   updateText(els.stopRecordButton, t("button.stopRecord"));
-  updateText(els.saveRecordButton, t("button.saveRecord"));
   updateText(els.loadMidiButton, t("button.loadScore"));
   updateText(els.refreshButton, t("button.refresh"));
   updateText(els.installButton, t("button.install"));
@@ -936,7 +927,6 @@ function clampTolerance(value) {
 function syncRecordingControls() {
   els.recordButton.classList.toggle("hidden", state.recording.active);
   els.stopRecordButton.classList.toggle("hidden", !state.recording.active);
-  els.saveRecordButton.disabled = state.recording.active || !state.recording.events.length;
 }
 
 function syncPracticeControls() {
@@ -962,17 +952,6 @@ function syncPracticeControls() {
   });
 }
 
-function syncPracticeStats() {
-  if (!els.practiceStats) return;
-  const total = state.practice.measures.length;
-  const wrong = state.mistakes.length;
-  const percent = total ? Math.round((wrong / total) * 100) : 0;
-  const wrongNode = document.createElement("span");
-  wrongNode.className = "practice-stat-wrong";
-  wrongNode.textContent = t("label.mistakeStats", { wrong, total, percent });
-  els.practiceStats.replaceChildren(wrongNode);
-}
-
 function recordMistake(note) {
   if (!state.practice.measures.length) return;
   const tick = currentAutoFollowBeatStart();
@@ -987,7 +966,6 @@ function recordMistake(note) {
     note
   });
   renderMistakeLog();
-  syncPracticeStats();
   syncPracticeControls();
 }
 
@@ -995,7 +973,6 @@ function clearMistakes() {
   if (!state.mistakes.length) return;
   state.mistakes = [];
   renderMistakeLog();
-  syncPracticeStats();
   syncPracticeControls();
 }
 
@@ -1938,7 +1915,11 @@ function stopRecording() {
   state.recording.active = false;
   syncRecordingControls();
   const count = state.recording.events.filter((event) => event.type === "noteon").length;
-  setStatusKey(count ? "status.recorded" : "status.recordedEmpty", { count });
+  if (!count) {
+    setStatusKey("status.recordedEmpty");
+    return;
+  }
+  saveRecording();
 }
 
 function recordMidiEvent(type, detail) {
@@ -4075,7 +4056,6 @@ function setupEvents() {
   els.connectButton.addEventListener("click", connectMidi);
   els.recordButton.addEventListener("click", startRecording);
   els.stopRecordButton.addEventListener("click", stopRecording);
-  els.saveRecordButton.addEventListener("click", saveRecording);
   els.loadMidiButton.addEventListener("click", () => els.midiFileInput.click());
   els.midiFileInput.addEventListener("change", () => loadScoreFile(els.midiFileInput.files[0]));
   els.startMeasureButton.addEventListener("click", goToPracticeStart);
