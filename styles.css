@@ -704,6 +704,29 @@ select {
   stroke-width: 2;
 }
 
+.note-duration-line {
+  fill: none;
+  stroke: #9c9287;
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.34;
+}
+
+.note-duration-line.secondary-track-line {
+  stroke: #aaa39b;
+  opacity: 0.3;
+}
+
+.note-duration-line.active-duration-line {
+  stroke: #c49229;
+  opacity: 0.42;
+}
+
+.note-duration-line.cue-duration-line {
+  stroke: #1676a5;
+  opacity: 0.36;
+}
+
 .filled-note {
   fill: var(--ink);
 }

@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v172";
+const APP_VERSION = "v173";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1081,6 +1081,7 @@ function drawStaff() {
     drawPracticePlayhead(svg);
     drawPedalTrack(svg);
     const practiceItems = buildPracticeNoteItems();
+    drawPracticeDurationLines(svg, practiceItems);
     drawPracticeArpeggioMarks(svg, practiceItems);
     practiceItems.forEach((item) => drawNote(svg, item));
     drawActiveInputNotes(svg);
@@ -1298,6 +1299,8 @@ function buildPracticeNoteItems() {
       const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
       const progress = Math.max(0, Math.min(1, (displayStartTick - viewStartTick) / timeSpan));
       const targetX = MEASURE_NOTE_LEFT_X + progress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
+      const endProgress = Math.max(0, Math.min(1, (target.endTick - viewStartTick) / timeSpan));
+      const targetEndX = MEASURE_NOTE_LEFT_X + endProgress * (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X);
       const matched = isAutoFollowTargetDisplayMatched(target);
       const active = isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick;
       const cue = cueTargetIds.has(target.id) && !matched;
@@ -1307,6 +1310,7 @@ function buildPracticeNoteItems() {
         clef: display.clef,
         step: midiToStaffStep(display.note),
         x: matched ? inputX : targetX,
+        endX: targetEndX,
         startTick: target.startTick,
         displayStartTick,
         endTick: target.endTick,
@@ -1325,6 +1329,29 @@ function buildPracticeNoteItems() {
     });
 
   return items;
+}
+
+function drawPracticeDurationLines(svg, items) {
+  items.forEach((item) => {
+    if (item.matched || !item.isPractice) return;
+    const y = yForNote(item.displayNote ?? item.note, item.clef);
+    const startX = Math.min(MEASURE_NOTE_RIGHT_X, item.x + 27);
+    const endX = Math.max(startX, Math.min(MEASURE_NOTE_RIGHT_X, item.endX || startX));
+    if (endX - startX < 16) return;
+    const classes = ["note-duration-line"];
+    if (item.trackRole === "secondary") classes.push("secondary-track-line");
+    if (item.active) classes.push("active-duration-line");
+    if (item.cue) classes.push("cue-duration-line");
+    svg.appendChild(createSvg("line", {
+      x1: startX,
+      y1: y,
+      x2: endX,
+      y2: y,
+      class: classes.join(" "),
+      "data-duration-note": item.note,
+      "data-target-id": item.targetId || ""
+    }));
+  });
 }
 
 function displayStartTicksForTargets(targets) {
