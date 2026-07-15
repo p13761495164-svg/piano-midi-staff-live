@@ -1005,6 +1005,79 @@ select {
   box-shadow: inset 0 -8px 14px rgba(255, 235, 232, 0.28), 0 0 0 2px rgba(217, 71, 59, 0.24);
 }
 
+.pdf-export-root {
+  display: none;
+}
+
+.pdf-page {
+  width: 190mm;
+  min-height: 277mm;
+  box-sizing: border-box;
+  page-break-after: always;
+  display: flex;
+  flex-direction: column;
+  gap: 5mm;
+  background: white;
+}
+
+.pdf-page:last-child {
+  page-break-after: auto;
+}
+
+.pdf-title {
+  min-height: 8mm;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8mm;
+  color: #292522;
+  font-size: 11pt;
+  font-weight: 700;
+}
+
+.pdf-title span:last-child {
+  color: #81776d;
+  font-size: 9pt;
+  font-weight: 600;
+}
+
+.score-export-row {
+  width: 100%;
+  break-inside: avoid;
+}
+
+.score-export-row svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+  border: 0;
+  box-shadow: none;
+  background: #fffdf8;
+  transform: none;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 10mm;
+}
+
+@media print {
+  body {
+    background: white;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.print-exporting .app-shell {
+    display: none;
+  }
+
+  body.print-exporting .pdf-export-root {
+    display: block;
+  }
+}
+
 @media (max-width: 760px) {
   .app-shell {
     padding-left: 10px;

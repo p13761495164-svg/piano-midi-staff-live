@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v182";
+const APP_VERSION = "v183";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -570,7 +570,8 @@ const els = {
   timeSignatureButtons: [...document.querySelectorAll("[data-time-signature]")],
   scoreBoard: document.querySelector(".score-board"),
   staffSvg: document.getElementById("staffSvg"),
-  keyboard: document.getElementById("keyboard")
+  keyboard: document.getElementById("keyboard"),
+  pdfExportRoot: document.getElementById("pdfExportRoot")
 };
 
 function noteName(note) {
@@ -1834,74 +1835,6 @@ function drawLedgerLines(svg, x, y, clef, trackRole = "primary") {
   });
 }
 
-function stylesheetTextForExport() {
-  return [...document.styleSheets].map((sheet) => {
-    try {
-      return [...sheet.cssRules].map((rule) => rule.cssText).join("\n");
-    } catch {
-      return "";
-    }
-  }).join("\n");
-}
-
-function exportPageCss() {
-  return `
-    @page { size: A4 portrait; margin: 10mm; }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: white;
-      color: #292522;
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    .pdf-page {
-      width: 190mm;
-      min-height: 277mm;
-      box-sizing: border-box;
-      page-break-after: always;
-      display: flex;
-      flex-direction: column;
-      gap: 5mm;
-      background: white;
-    }
-    .pdf-page:last-child { page-break-after: auto; }
-    .pdf-title {
-      min-height: 8mm;
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 8mm;
-      color: #292522;
-      font-size: 11pt;
-      font-weight: 700;
-    }
-    .pdf-title span:last-child {
-      color: #81776d;
-      font-size: 9pt;
-      font-weight: 600;
-    }
-    .score-export-row {
-      width: 100%;
-      break-inside: avoid;
-    }
-    .score-export-row svg {
-      width: 100%;
-      height: auto;
-      display: block;
-      overflow: visible;
-      border: 0;
-      box-shadow: none;
-      background: #fffdf8;
-      transform: none;
-    }
-    @media print {
-      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .pdf-page { page-break-after: always; }
-      .pdf-page:last-child { page-break-after: auto; }
-    }
-  `;
-}
-
 function renderExportStaffSvg(rowMeasures) {
   const svg = createSvg("svg", {
     viewBox: `0 0 ${STAFF_VIEWBOX.width} ${STAFF_VIEWBOX.height}`,
@@ -1914,7 +1847,6 @@ function renderExportStaffSvg(rowMeasures) {
     staffSvg: els.staffSvg,
     viewStartTick: state.practice.viewStartTick,
     currentMeasure: state.practice.currentMeasure,
-    noteLabelMode: state.noteLabelMode,
     exportMode: { ...state.exportMode }
   };
 
@@ -1922,7 +1854,6 @@ function renderExportStaffSvg(rowMeasures) {
     els.staffSvg = svg;
     state.practice.viewStartTick = rowStartTick;
     state.practice.currentMeasure = measureIndexForTick(rowStartTick);
-    state.noteLabelMode = "degree";
     state.exportMode = {
       active: true,
       viewSpanTicks: Math.max(1, rowEndTick - rowStartTick),
@@ -1934,15 +1865,12 @@ function renderExportStaffSvg(rowMeasures) {
     els.staffSvg = original.staffSvg;
     state.practice.viewStartTick = original.viewStartTick;
     state.practice.currentMeasure = original.currentMeasure;
-    state.noteLabelMode = original.noteLabelMode;
     state.exportMode = original.exportMode;
   }
 }
 
 function exportScorePdf() {
   if (!state.practice.measures.length) return;
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) return;
 
   const rows = [];
   for (let index = 0; index < state.practice.measures.length; index += 2) {
@@ -1966,20 +1894,17 @@ function exportScorePdf() {
     `);
   }
 
-  printWindow.document.open();
-  printWindow.document.write(`<!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <title>${escapeHtml(displayFilename(state.practice.filename, "Easy Piano"))}</title>
-        <style>${stylesheetTextForExport()}</style>
-        <style>${exportPageCss()}</style>
-      </head>
-      <body>${pages.join("")}</body>
-    </html>`);
-  printWindow.document.close();
-  printWindow.focus();
-  window.setTimeout(() => printWindow.print(), 300);
+  els.pdfExportRoot.innerHTML = pages.join("");
+  document.body.classList.add("print-exporting");
+  const cleanup = () => {
+    document.body.classList.remove("print-exporting");
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup, { once: true });
+  window.setTimeout(() => {
+    window.print();
+    window.setTimeout(cleanup, 1200);
+  }, 100);
 }
 
 function escapeHtml(value) {
