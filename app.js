@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v193";
+const APP_VERSION = "v194";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -28,6 +28,9 @@ const PLAYBACK_VISUAL_FRAME_MS = 24;
 const LIVE_INPUT_TONE_SECONDS = 0.9;
 const LIVE_INPUT_RELEASE_FADE_SECONDS = 0.25;
 const SUSTAIN_PEDAL_RELEASE_FADE_SECONDS = 0.65;
+const ROBOT_TIMING_JITTER_SECONDS = 0.014;
+const ROBOT_CHORD_ROLL_SECONDS = 0.012;
+const ROBOT_GAIN_VARIATION = 0.18;
 const SETTINGS_FIELD_KEYS = {
   keySignature: "piano-midi-staff-key-signature",
   showDegrees: "piano-midi-staff-show-degrees",
@@ -41,7 +44,8 @@ const SETTINGS_FIELD_KEYS = {
   language: "piano-midi-staff-language",
   playbackInstrument: "piano-midi-staff-playback-instrument",
   liveInputSound: "piano-midi-staff-live-input-sound",
-  silentPlayback: "piano-midi-staff-silent-playback"
+  silentPlayback: "piano-midi-staff-silent-playback",
+  robotPerformance: "piano-midi-staff-robot-performance"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const KEY_SIGNATURE_BY_FIFTHS = {
@@ -149,6 +153,8 @@ const I18N = {
     "label.liveInputSound": "弹奏时设备发声",
     "label.silentPlayback": "无声播放",
     "label.playbackInstrument": "音色",
+    "label.robotPerformanceField": "演奏",
+    "label.robotPerformance": "机器人演奏模式",
     "label.tempo": "速度",
     "label.mistakes": "弹错记录",
     "label.noMistakes": "暂无",
@@ -220,6 +226,8 @@ const I18N = {
     "label.liveInputSound": "演奏時に端末発音",
     "label.silentPlayback": "無音再生",
     "label.playbackInstrument": "音色",
+    "label.robotPerformanceField": "演奏",
+    "label.robotPerformance": "ロボット演奏モード",
     "label.tempo": "テンポ",
     "label.mistakes": "ミス記録",
     "label.noMistakes": "なし",
@@ -291,6 +299,8 @@ const I18N = {
     "label.liveInputSound": "Input Sound",
     "label.silentPlayback": "Silent Play",
     "label.playbackInstrument": "Tone",
+    "label.robotPerformanceField": "Performance",
+    "label.robotPerformance": "Robot Performance",
     "label.tempo": "Tempo",
     "label.mistakes": "Mistakes",
     "label.noMistakes": "None",
@@ -411,6 +421,7 @@ const state = {
   playbackInstrument: "kalimba",
   liveInputSound: false,
   silentPlayback: false,
+  robotPerformance: false,
   pedalStep: "on",
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
@@ -511,6 +522,9 @@ const els = {
   liveSoundToggle: document.getElementById("liveSoundToggle"),
   liveSoundFieldLabel: document.getElementById("liveSoundFieldLabel"),
   liveSoundToggleLabel: document.getElementById("liveSoundToggleLabel"),
+  robotPerformanceToggle: document.getElementById("robotPerformanceToggle"),
+  robotPerformanceFieldLabel: document.getElementById("robotPerformanceFieldLabel"),
+  robotPerformanceToggleLabel: document.getElementById("robotPerformanceToggleLabel"),
   playbackSlider: document.getElementById("playbackSlider"),
   playbackTime: document.getElementById("playbackTime"),
   measureStatus: document.getElementById("measureStatus"),
@@ -663,6 +677,8 @@ function applyLanguage() {
   updateText(els.liveSoundToggleLabel, t("label.liveInputSound"));
   updateText(els.silentPlaybackToggleLabel, t("label.silentPlayback"));
   updateText(els.playbackInstrumentLabel, t("label.playbackInstrument"));
+  updateText(els.robotPerformanceFieldLabel, t("label.robotPerformanceField"));
+  updateText(els.robotPerformanceToggleLabel, t("label.robotPerformance"));
   updateText(els.mistakeLogTitle, t("label.mistakes"));
   updateText(els.mistakeLogEmpty, t("label.noMistakes"));
 
@@ -814,6 +830,7 @@ function readSettings() {
     const playbackInstrument = window.localStorage.getItem(SETTINGS_FIELD_KEYS.playbackInstrument);
     const liveInputSound = window.localStorage.getItem(SETTINGS_FIELD_KEYS.liveInputSound);
     const silentPlayback = window.localStorage.getItem(SETTINGS_FIELD_KEYS.silentPlayback);
+    const robotPerformance = window.localStorage.getItem(SETTINGS_FIELD_KEYS.robotPerformance);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
@@ -828,6 +845,7 @@ function readSettings() {
     if (playbackInstrumentId(playbackInstrument)) settings.playbackInstrument = playbackInstrument;
     if (liveInputSound === "true" || liveInputSound === "false") settings.liveInputSound = liveInputSound === "true";
     if (silentPlayback === "true" || silentPlayback === "false") settings.silentPlayback = silentPlayback === "true";
+    if (robotPerformance === "true" || robotPerformance === "false") settings.robotPerformance = robotPerformance === "true";
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -847,7 +865,8 @@ function saveSettings() {
     language: state.language,
     playbackInstrument: state.playbackInstrument,
     liveInputSound: state.liveInputSound,
-    silentPlayback: state.silentPlayback
+    silentPlayback: state.silentPlayback,
+    robotPerformance: state.robotPerformance
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -864,6 +883,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.playbackInstrument, settings.playbackInstrument);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.liveInputSound, String(settings.liveInputSound));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.silentPlayback, String(settings.silentPlayback));
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.robotPerformance, String(settings.robotPerformance));
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -920,6 +940,11 @@ function syncControlsFromState() {
       wrapper.classList.toggle("active", state.silentPlayback);
       wrapper.classList.toggle("disabled", state.playback.playing);
     }
+  }
+  if (els.robotPerformanceToggle) {
+    els.robotPerformanceToggle.checked = state.robotPerformance;
+    const wrapper = els.robotPerformanceToggle.closest(".robot-performance-toggle");
+    if (wrapper) wrapper.classList.toggle("active", state.robotPerformance);
   }
 }
 
@@ -1047,6 +1072,9 @@ function applySavedSettings() {
   }
   if (typeof settings.silentPlayback === "boolean") {
     state.silentPlayback = settings.silentPlayback;
+  }
+  if (typeof settings.robotPerformance === "boolean") {
+    state.robotPerformance = settings.robotPerformance;
   }
   if (typeof settings.selectedInputId === "string") {
     state.selectedInputId = settings.selectedInputId;
@@ -2465,6 +2493,27 @@ function secondsPerPracticeTick() {
   return (state.practice.microsecondsPerQuarter || 500000) / 1000000 / (state.practice.ticksPerQuarter || MIDI_PPQ);
 }
 
+function hashUnit(value) {
+  let hash = 2166136261;
+  const text = String(value);
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return ((hash >>> 0) % 10000) / 10000;
+}
+
+function robotHumanizedPlayback(target, chordIndex, chordSize, secondsPerTick) {
+  if (!state.robotPerformance) return { tickOffset: 0, gain: 1 };
+  const jitterSeconds = (hashUnit(`${target.id}:timing`) - 0.5) * ROBOT_TIMING_JITTER_SECONDS;
+  const rollSeconds = chordSize > 1 ? Math.max(0, chordIndex) * ROBOT_CHORD_ROLL_SECONDS : 0;
+  const gain = 1 - ROBOT_GAIN_VARIATION / 2 + hashUnit(`${target.id}:gain`) * ROBOT_GAIN_VARIATION;
+  return {
+    tickOffset: (jitterSeconds + rollSeconds) / Math.max(0.000001, secondsPerTick),
+    gain
+  };
+}
+
 function bpmFromMicroseconds(microsecondsPerQuarter) {
   return Math.max(20, Math.min(300, Math.round(60000000 / (Number(microsecondsPerQuarter) || 500000))));
 }
@@ -2573,7 +2622,20 @@ function nextPracticeCueNotes() {
 }
 
 function nextPracticeCueTargets() {
+  if (state.robotPerformance && state.playback.playing) {
+    return robotPlaybackCueTargets();
+  }
   return nextPrimaryCueTargets();
+}
+
+function robotPlaybackCueTargets() {
+  if (!state.practice.measures.length || !state.playback.playing || !state.robotPerformance) return [];
+  const currentTick = state.practice.viewStartTick || state.playback.startTick || 0;
+  const cueLeadTicks = Math.max(1, practiceBeatTicks() * 0.03);
+  const visibleFutureTargets = visiblePracticeTargets()
+    .filter((target) => target.startTick > currentTick + cueLeadTicks);
+  const groups = targetGroupsByStartTick(visibleFutureTargets);
+  return groups[0] || [];
 }
 
 function nextPrimaryCueTargets() {
@@ -2831,18 +2893,30 @@ async function startContinuousPlayback() {
   state.playback.secondsPerTick = secondsPerTick;
 
   const pedalIntervals = pedalIntervalsForPlayback(playbackStartTick, playbackEndTick);
-  state.practice.notes
+  const playbackTargets = state.practice.notes
     .filter((target) => target.endTick > playbackStartTick && target.startTick < playbackEndTick)
+    .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+  const robotGroupInfo = new Map();
+  targetGroupsByStartTick(playbackTargets).forEach((group) => {
+    const sortedGroup = group.slice().sort((a, b) => a.note - b.note || a.startTick - b.startTick);
+    sortedGroup.forEach((target, index) => {
+      robotGroupInfo.set(target.id, { index, size: sortedGroup.length });
+    });
+  });
+  playbackTargets
     .forEach((target) => {
-      const audibleStartTick = Math.max(target.startTick, playbackStartTick);
+      const groupInfo = robotGroupInfo.get(target.id) || { index: 0, size: 1 };
+      const human = robotHumanizedPlayback(target, groupInfo.index, groupInfo.size, secondsPerTick);
+      const audibleStartTick = Math.max(playbackStartTick, target.startTick + human.tickOffset);
       const effectiveEndTick = sustainedPlaybackEndTick(target, pedalIntervals);
-      const audibleEndTick = Math.min(effectiveEndTick, playbackEndTick);
+      const audibleEndTick = Math.min(Math.max(effectiveEndTick, audibleStartTick + 1), playbackEndTick);
       const noteDuration = Math.max(0.08, (audibleEndTick - audibleStartTick) * secondsPerTick);
       state.playback.pendingNotes.push({
         targetId: target.id,
         note: target.note,
         startTick: audibleStartTick,
-        duration: noteDuration
+        duration: noteDuration,
+        gain: human.gain
       });
       state.playback.visualNotes.push({
         targetId: target.id,
@@ -2925,7 +2999,7 @@ function triggerPendingPlaybackNotes(playbackTick) {
   ) {
     const item = state.playback.pendingNotes[state.playback.pendingNoteIndex];
     const offsetSeconds = Math.max(0.006, (item.startTick - playbackTick) * state.playback.secondsPerTick);
-    schedulePracticeTone(audioContext, item.note, audioContext.currentTime + offsetSeconds, item.duration);
+    schedulePracticeTone(audioContext, item.note, audioContext.currentTime + offsetSeconds, item.duration, state.playback.activeNodes, item.gain || 1);
     state.playback.pendingNoteIndex += 1;
   }
 }
@@ -2983,7 +3057,7 @@ function registerPlaybackNodes(nodes, cleanupAt, registry = state.playback.activ
   return nodes;
 }
 
-function scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, instrument, registry = state.playback.activeNodes) {
+function scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, instrument, registry = state.playback.activeNodes, gainMultiplier = 1) {
   const frequency = 440 * 2 ** ((note - 69) / 12);
   const safeStartAt = Math.max(audioContext.currentTime + 0.004, startAt);
   const output = audioContext.createGain();
@@ -2998,7 +3072,7 @@ function scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, ins
   filter.frequency.setValueAtTime(instrument.brightness || 3200, safeStartAt);
   filter.Q.setValueAtTime(instrument.id === "kalimba" ? 1.8 : 0.7, safeStartAt);
   output.gain.setValueAtTime(0.0001, safeStartAt);
-  output.gain.linearRampToValueAtTime(0.18, safeStartAt + (instrument.attack || 0.01));
+  output.gain.linearRampToValueAtTime(0.18 * gainMultiplier, safeStartAt + (instrument.attack || 0.01));
   output.gain.exponentialRampToValueAtTime(0.0001, Math.max(releaseAt + 0.04, tailEnd));
 
   instrument.partials.forEach((partial, index) => {
@@ -3020,10 +3094,10 @@ function scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, ins
   return registerPlaybackNodes(activeNodes, tailEnd, registry, audioContext);
 }
 
-function schedulePracticeTone(audioContext, note, startAt, duration, registry = state.playback.activeNodes) {
+function schedulePracticeTone(audioContext, note, startAt, duration, registry = state.playback.activeNodes, gainMultiplier = 1) {
   const instrument = currentPlaybackInstrument();
   if (!instrument.custom) {
-    return scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, instrument, registry);
+    return scheduleSimpleInstrumentTone(audioContext, note, startAt, duration, instrument, registry, gainMultiplier);
   }
 
   const frequency = 440 * 2 ** ((note - 69) / 12);
@@ -3062,9 +3136,9 @@ function schedulePracticeTone(audioContext, note, startAt, duration, registry = 
   bodyFilter.gain.setValueAtTime(isLowNote ? 4.5 : isHighNote ? 0.8 : 3.0, safeStartAt);
 
   output.gain.setValueAtTime(0.0001, safeStartAt);
-  output.gain.exponentialRampToValueAtTime(isHighNote ? 0.095 : 0.158, safeStartAt + 0.006);
-  output.gain.exponentialRampToValueAtTime(isHighNote ? 0.047 : 0.09, safeStartAt + 0.13);
-  output.gain.exponentialRampToValueAtTime(isHighNote ? 0.017 : 0.038, releaseAt);
+  output.gain.exponentialRampToValueAtTime((isHighNote ? 0.095 : 0.158) * gainMultiplier, safeStartAt + 0.006);
+  output.gain.exponentialRampToValueAtTime((isHighNote ? 0.047 : 0.09) * gainMultiplier, safeStartAt + 0.13);
+  output.gain.exponentialRampToValueAtTime((isHighNote ? 0.017 : 0.038) * gainMultiplier, releaseAt);
   output.gain.exponentialRampToValueAtTime(0.0001, tailEnd);
 
   const partials = [
@@ -4412,6 +4486,11 @@ function setupEvents() {
     } else {
       stopAllLiveInputTones();
     }
+    syncControlsFromState();
+    saveSettings();
+  });
+  els.robotPerformanceToggle.addEventListener("change", () => {
+    state.robotPerformance = els.robotPerformanceToggle.checked;
     syncControlsFromState();
     saveSettings();
   });

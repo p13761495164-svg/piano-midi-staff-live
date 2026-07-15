@@ -466,7 +466,8 @@ select {
 .tempo-control,
 .playback-instrument-select,
 .silent-playback-toggle,
-.live-sound-toggle {
+.live-sound-toggle,
+.robot-performance-toggle {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(255, 253, 248, 0.84);
@@ -554,7 +555,8 @@ select {
 }
 
 .silent-playback-toggle,
-.live-sound-toggle {
+.live-sound-toggle,
+.robot-performance-toggle {
   height: 34px;
   min-height: 34px;
   padding: 0 10px;
@@ -567,7 +569,8 @@ select {
 }
 
 .silent-playback-toggle input,
-.live-sound-toggle input {
+.live-sound-toggle input,
+.robot-performance-toggle input {
   width: 15px;
   height: 15px;
   margin: 0;
@@ -577,13 +580,16 @@ select {
 .silent-playback-toggle.active,
 .silent-playback-toggle:has(input:checked),
 .live-sound-toggle.active,
-.live-sound-toggle:has(input:checked) {
+.live-sound-toggle:has(input:checked),
+.robot-performance-toggle.active,
+.robot-performance-toggle:has(input:checked) {
   border-color: var(--accent);
   background: rgba(31, 127, 132, 0.12);
 }
 
 .silent-playback-toggle span,
-.live-sound-toggle span {
+.live-sound-toggle span,
+.robot-performance-toggle span {
   font-size: 12px;
   font-weight: 700;
 }
