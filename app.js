@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v166";
+const APP_VERSION = "v167";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -187,6 +187,7 @@ const I18N = {
     "label.mistakes": "弹错记录",
     "label.noMistakes": "暂无",
     "label.mistakeItem": "{measure}小节",
+    "label.practiceStats": "弹对 {correct}/{total}",
     "button.settings": "设置",
     "button.connect": "连接 MIDI",
     "button.record": "录 MIDI",
@@ -256,6 +257,7 @@ const I18N = {
     "label.mistakes": "ミス記録",
     "label.noMistakes": "なし",
     "label.mistakeItem": "{measure}小節",
+    "label.practiceStats": "正解 {correct}/{total}",
     "button.settings": "設定",
     "button.connect": "MIDI 接続",
     "button.record": "MIDI 録音",
@@ -325,6 +327,7 @@ const I18N = {
     "label.mistakes": "Mistakes",
     "label.noMistakes": "None",
     "label.mistakeItem": "Bar {measure}",
+    "label.practiceStats": "Correct {correct}/{total}",
     "button.settings": "Settings",
     "button.connect": "Connect MIDI",
     "button.record": "Record MIDI",
@@ -450,6 +453,7 @@ const state = {
   autoFollow: {
     currentBeatStart: null,
     playedNotesByBeat: new Map(),
+    correctTargetIds: new Set(),
     animationFrame: 0,
     emptyAdvanceTimer: 0,
     animating: false,
@@ -536,6 +540,7 @@ const els = {
   playbackSlider: document.getElementById("playbackSlider"),
   playbackTime: document.getElementById("playbackTime"),
   measureStatus: document.getElementById("measureStatus"),
+  practiceStats: document.getElementById("practiceStats"),
   currentChord: document.getElementById("currentChord"),
   versionBadge: document.getElementById("versionBadge"),
   settingsSummaryLabel: document.getElementById("settingsSummaryLabel"),
@@ -718,6 +723,7 @@ function applyLanguage() {
   syncFullscreenButton();
   syncPracticeControls();
   syncCurrentChord();
+  syncPracticeStats();
   renderMistakeLog();
   if (state.statusMessage?.key) {
     setStatusKey(state.statusMessage.key, state.statusMessage.params);
@@ -954,6 +960,18 @@ function syncPracticeControls() {
     range: rangeLabel,
     total
   });
+}
+
+function syncPracticeStats() {
+  if (!els.practiceStats) return;
+  const total = state.practice.notes.length;
+  if (!total) {
+    els.practiceStats.textContent = t("label.practiceStats", { correct: 0, total: 0 });
+    return;
+  }
+  const validIds = new Set(state.practice.notes.map((target) => target.id));
+  const correct = [...state.autoFollow.correctTargetIds].filter((id) => validIds.has(id)).length;
+  els.practiceStats.textContent = t("label.practiceStats", { correct, total });
 }
 
 function recordMistake(note) {
@@ -2326,6 +2344,7 @@ function resetAutoFollowBeat(beatStart = null, options = {}) {
   state.autoFollow.currentBeatStart = beatStart;
   if (options.clearPlayed) {
     state.autoFollow.playedNotesByBeat = new Map();
+    state.autoFollow.correctTargetIds = new Set();
   }
 }
 
@@ -2436,7 +2455,9 @@ function markPlayedTargetForBeat(beatStart, target) {
     state.autoFollow.playedNotesByBeat.set(key, new Set());
   }
   state.autoFollow.playedNotesByBeat.get(key).add(target.id);
+  state.autoFollow.correctTargetIds.add(target.id);
   prunePlayedAutoFollowNotes(beatStart);
+  syncPracticeStats();
 }
 
 function prunePlayedAutoFollowNotes(currentBeatStart) {
@@ -3638,6 +3659,7 @@ function updateAll() {
   drawStaff();
   updateKeyboardActive();
   syncCurrentChord();
+  syncPracticeStats();
   syncPracticeControls();
 }
 

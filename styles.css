@@ -485,6 +485,7 @@ select {
 }
 
 .measure-status,
+.practice-stats,
 .chord-status,
 .measure-play,
 .tempo-control,
@@ -501,9 +502,19 @@ select {
 }
 
 .measure-status,
+.practice-stats,
 .chord-status {
   padding: 5px 12px;
   pointer-events: none;
+}
+
+.practice-stats {
+  color: var(--ink);
+  font-weight: 800;
+  flex: 0 0 104px;
+  width: 104px;
+  overflow: hidden;
+  text-align: center;
 }
 
 .chord-status {
