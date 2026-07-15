@@ -1009,14 +1009,58 @@ select {
   display: none;
 }
 
+body.pdf-previewing {
+  background: white;
+}
+
+body.pdf-previewing .app-shell {
+  display: none;
+}
+
+body.pdf-previewing .pdf-export-root {
+  display: block;
+  padding: 8px;
+  background: white;
+}
+
+.pdf-export-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  min-height: 44px;
+  margin: 0 auto 10px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+  background: #fffdf8;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.pdf-export-toolbar span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pdf-export-toolbar button {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+}
+
 .pdf-page {
-  width: 190mm;
-  min-height: 277mm;
+  width: 200mm;
+  min-height: 287mm;
+  margin: 0 auto;
   box-sizing: border-box;
   page-break-after: always;
   display: flex;
   flex-direction: column;
-  gap: 5mm;
+  gap: 1.5mm;
   background: white;
 }
 
@@ -1025,19 +1069,19 @@ select {
 }
 
 .pdf-title {
-  min-height: 8mm;
+  min-height: 5mm;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: 8mm;
   color: #292522;
-  font-size: 11pt;
+  font-size: 9pt;
   font-weight: 700;
 }
 
 .pdf-title span:last-child {
   color: #81776d;
-  font-size: 9pt;
+  font-size: 8pt;
   font-weight: 600;
 }
 
@@ -1048,7 +1092,7 @@ select {
 
 .score-export-row svg {
   width: 100%;
-  height: auto;
+  height: 64mm;
   display: block;
   overflow: visible;
   border: 0;
@@ -1059,7 +1103,7 @@ select {
 
 @page {
   size: A4 portrait;
-  margin: 10mm;
+  margin: 5mm;
 }
 
 @media print {
@@ -1075,6 +1119,11 @@ select {
 
   body.print-exporting .pdf-export-root {
     display: block;
+    padding: 0;
+  }
+
+  body.print-exporting .pdf-export-toolbar {
+    display: none;
   }
 }
 

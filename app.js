@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v183";
+const APP_VERSION = "v184";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1839,6 +1839,7 @@ function renderExportStaffSvg(rowMeasures) {
   const svg = createSvg("svg", {
     viewBox: `0 0 ${STAFF_VIEWBOX.width} ${STAFF_VIEWBOX.height}`,
     xmlns: "http://www.w3.org/2000/svg",
+    preserveAspectRatio: "none",
     role: "img"
   });
   const rowStartTick = rowMeasures[0].startTick;
@@ -1873,16 +1874,17 @@ function exportScorePdf() {
   if (!state.practice.measures.length) return;
 
   const rows = [];
-  for (let index = 0; index < state.practice.measures.length; index += 2) {
-    rows.push(state.practice.measures.slice(index, index + 2));
+  const measuresPerRow = 3;
+  const rowsPerPage = 4;
+  for (let index = 0; index < state.practice.measures.length; index += measuresPerRow) {
+    rows.push(state.practice.measures.slice(index, index + measuresPerRow));
   }
 
-  const rowsPerPage = 2;
   const pages = [];
   for (let index = 0; index < rows.length; index += rowsPerPage) {
     const pageRows = rows.slice(index, index + rowsPerPage);
-    const startMeasure = index * 2 + 1;
-    const endMeasure = Math.min(state.practice.measures.length, (index + pageRows.length) * 2);
+    const startMeasure = index * measuresPerRow + 1;
+    const endMeasure = Math.min(state.practice.measures.length, (index + pageRows.length) * measuresPerRow);
     pages.push(`
       <section class="pdf-page">
         <header class="pdf-title">
@@ -1894,17 +1896,35 @@ function exportScorePdf() {
     `);
   }
 
-  els.pdfExportRoot.innerHTML = pages.join("");
+  els.pdfExportRoot.innerHTML = `
+    <div class="pdf-export-toolbar">
+      <strong>PDF Preview</strong>
+      <span>Mac/Safari: 如果“打印”是灰色，请点左下角 PDF 菜单保存。</span>
+      <button type="button" data-export-print>保存PDF/打印</button>
+      <button type="button" data-export-close>关闭</button>
+    </div>
+    ${pages.join("")}
+  `;
+  els.pdfExportRoot.setAttribute("aria-hidden", "false");
+  document.body.classList.add("pdf-previewing");
+  window.setTimeout(printExportPreview, 120);
+}
+
+function printExportPreview() {
   document.body.classList.add("print-exporting");
   const cleanup = () => {
     document.body.classList.remove("print-exporting");
     window.removeEventListener("afterprint", cleanup);
   };
   window.addEventListener("afterprint", cleanup, { once: true });
-  window.setTimeout(() => {
-    window.print();
-    window.setTimeout(cleanup, 1200);
-  }, 100);
+  window.print();
+  window.setTimeout(cleanup, 1200);
+}
+
+function closeExportPreview() {
+  document.body.classList.remove("pdf-previewing", "print-exporting");
+  els.pdfExportRoot.setAttribute("aria-hidden", "true");
+  els.pdfExportRoot.replaceChildren();
 }
 
 function escapeHtml(value) {
@@ -4278,6 +4298,15 @@ function setupEvents() {
   els.stopRecordButton.addEventListener("click", stopRecording);
   els.loadMidiButton.addEventListener("click", () => els.midiFileInput.click());
   els.exportPdfButton.addEventListener("click", exportScorePdf);
+  els.pdfExportRoot.addEventListener("click", (event) => {
+    if (event.target.closest("[data-export-print]")) {
+      printExportPreview();
+      return;
+    }
+    if (event.target.closest("[data-export-close]")) {
+      closeExportPreview();
+    }
+  });
   els.midiFileInput.addEventListener("change", () => loadScoreFile(els.midiFileInput.files[0]));
   els.startMeasureButton.addEventListener("click", goToPracticeStart);
   els.playMeasureButton.addEventListener("click", toggleContinuousPlayback);
