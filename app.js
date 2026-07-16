@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v196";
+const APP_VERSION = "v197";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2903,12 +2903,17 @@ async function startContinuousPlayback() {
   }
   const audioContext = silent ? null : state.playback.audioContext;
   if (audioContext && audioContext.state === "suspended") {
-    await audioContext.resume();
+    try {
+      await audioContext.resume();
+    } catch {
+      setStatusKey("status.playUnsupported");
+    }
   }
-  if (audioContext) unlockPlaybackAudio(audioContext);
+  if (audioContext && audioContext.state !== "suspended") unlockPlaybackAudio(audioContext);
 
   const secondsPerTick = (state.practice.microsecondsPerQuarter || 500000) / 1000000 / (state.practice.ticksPerQuarter || MIDI_PPQ);
-  const startAt = audioContext ? audioContext.currentTime + 0.08 : 0;
+  const audioReady = audioContext && audioContext.state !== "suspended";
+  const startAt = audioReady ? audioContext.currentTime + 0.08 : 0;
   const playbackStartTick = currentAutoFollowBeatStart();
   const lastMeasure = state.practice.measures[state.practice.measures.length - 1];
   const playbackEndTick = Math.max(playbackStartTick + 1, lastMeasure?.endTick || playbackStartTick + practiceBeatTicks());
@@ -2979,9 +2984,11 @@ function animatePlaybackView() {
     if (!state.playback.playing) return;
     const now = performance.now();
     const audioContext = state.playback.silent ? null : state.playback.audioContext;
-    const elapsed = audioContext
+    const performanceElapsed = Math.max(0, (now - state.playback.startedAtPerformance) / 1000);
+    const audioElapsed = audioContext && audioContext.state !== "suspended"
       ? Math.max(0, audioContext.currentTime - state.playback.startedAtAudioTime)
-      : Math.max(0, (now - state.playback.startedAtPerformance) / 1000);
+      : 0;
+    const elapsed = Math.max(performanceElapsed, audioElapsed);
     const playbackTick = state.playback.startTick + elapsed / Math.max(0.000001, state.playback.secondsPerTick);
     if (state.playback.silent) {
       state.playback.activeNotes = new Set();
