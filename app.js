@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v195";
+const APP_VERSION = "v196";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -162,6 +162,7 @@ const I18N = {
     "label.mistakes": "弹错记录",
     "label.noMistakes": "暂无",
     "label.mistakeItem": "{measure}小节",
+    "label.removeMistake": "删除这条弹错记录",
     "button.settings": "设置",
     "button.connect": "连接 MIDI",
     "button.record": "录 MIDI",
@@ -238,6 +239,7 @@ const I18N = {
     "label.mistakes": "ミス記録",
     "label.noMistakes": "なし",
     "label.mistakeItem": "{measure}小節",
+    "label.removeMistake": "このミス記録を削除",
     "button.settings": "設定",
     "button.connect": "MIDI 接続",
     "button.record": "MIDI 録音",
@@ -314,6 +316,7 @@ const I18N = {
     "label.mistakes": "Mistakes",
     "label.noMistakes": "None",
     "label.mistakeItem": "Bar {measure}",
+    "label.removeMistake": "Remove this mistake",
     "button.settings": "Settings",
     "button.connect": "Connect MIDI",
     "button.record": "Record MIDI",
@@ -1034,11 +1037,22 @@ function clearMistakes() {
   syncPracticeControls();
 }
 
+function removeMistake(id) {
+  const nextMistakes = state.mistakes.filter((entry) => entry.id !== id);
+  if (nextMistakes.length === state.mistakes.length) return;
+  state.mistakes = nextMistakes;
+  renderMistakeLog();
+  syncPracticeControls();
+}
+
 function renderMistakeLog() {
   if (!els.mistakeLogList || !els.mistakeLogEmpty) return;
-  els.mistakeLogList.querySelectorAll(".mistake-log-button").forEach((button) => button.remove());
+  els.mistakeLogList.querySelectorAll(".mistake-log-chip").forEach((chip) => chip.remove());
   els.mistakeLogEmpty.hidden = state.mistakes.length > 0;
   state.mistakes.forEach((entry) => {
+    const chip = document.createElement("span");
+    chip.className = "mistake-log-chip";
+
     const button = document.createElement("button");
     button.type = "button";
     button.className = "mistake-log-button";
@@ -1046,7 +1060,16 @@ function renderMistakeLog() {
     button.textContent = t("label.mistakeItem", {
       measure: entry.measure
     });
-    els.mistakeLogList.appendChild(button);
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "mistake-log-remove";
+    removeButton.dataset.mistakeRemove = String(entry.id);
+    removeButton.setAttribute("aria-label", t("label.removeMistake"));
+    removeButton.textContent = "×";
+
+    chip.append(button, removeButton);
+    els.mistakeLogList.appendChild(chip);
   });
 }
 
@@ -4478,6 +4501,12 @@ function setupEvents() {
   els.startMeasureButton.addEventListener("click", goToPracticeStart);
   els.playMeasureButton.addEventListener("click", toggleContinuousPlayback);
   els.mistakeLogList.addEventListener("click", (event) => {
+    const removeButton = event.target.closest("[data-mistake-remove]");
+    if (removeButton) {
+      event.stopPropagation();
+      removeMistake(Number(removeButton.dataset.mistakeRemove));
+      return;
+    }
     const button = event.target.closest("[data-mistake-id]");
     if (!button) return;
     jumpToMistake(Number(button.dataset.mistakeId));

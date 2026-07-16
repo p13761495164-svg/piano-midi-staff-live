@@ -429,6 +429,14 @@ select {
   font-size: 13px;
 }
 
+.mistake-log-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding-top: 6px;
+  padding-right: 6px;
+}
+
 .mistake-log-button {
   appearance: none;
   border: 1px solid #e4a6a0;
@@ -436,7 +444,7 @@ select {
   color: #b7352c;
   border-radius: 6px;
   min-height: 32px;
-  padding: 6px 10px;
+  padding: 6px 13px 6px 10px;
   font: inherit;
   font-size: 13px;
   font-weight: 800;
@@ -445,6 +453,32 @@ select {
 
 .mistake-log-button:active {
   transform: translateY(1px);
+}
+
+.mistake-log-remove {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e4a6a0;
+  border-radius: 999px;
+  background: #fffdf8;
+  color: #b7352c;
+  box-shadow: 0 2px 8px rgba(183, 53, 44, 0.14);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.mistake-log-remove:active {
+  transform: scale(0.94);
 }
 
 .score-board {
