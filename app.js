@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v208";
+const APP_VERSION = "v209";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1406,7 +1406,10 @@ function drawPracticeDurationLines(svg) {
     const display = displayInfoForPracticeNote(target.note, target.startTick);
     const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
     const noteStartX = xForCurrentViewTick(displayStartTick);
-    const startX = displayStartTick < viewStartTick
+    const matched = !state.exportMode.active && isAutoFollowTargetDisplayMatched(target);
+    const startX = matched
+      ? activeInputColumnX() + 27
+      : displayStartTick < viewStartTick
       ? MEASURE_NOTE_LEFT_X
       : Math.min(MEASURE_NOTE_RIGHT_X, noteStartX + 27);
     const endX = Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(target.endTick));
@@ -1415,7 +1418,7 @@ function drawPracticeDurationLines(svg) {
     const classes = ["note-duration-line"];
     if ((target.trackRole || "primary") === "secondary") classes.push("secondary-track-line");
     if (!state.exportMode.active && isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick) classes.push("active-duration-line");
-    if (!state.exportMode.active && cueTargetIds.has(target.id) && !isAutoFollowTargetDisplayMatched(target)) classes.push("cue-duration-line");
+    if (!state.exportMode.active && cueTargetIds.has(target.id) && !matched) classes.push("cue-duration-line");
     svg.appendChild(createSvg("line", {
       x1: startX,
       y1: y,
