@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v206";
+const APP_VERSION = "v207";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2710,6 +2710,13 @@ function nextUnmatchedTargetGroupAfterTick(tick) {
   return targetGroupsByStartTick(remainingTargets)[0] || [];
 }
 
+function firstTargetGroupAtOrAfterTick(tick) {
+  const targets = (state.practice.notes || [])
+    .filter((target) => target.startTick >= tick)
+    .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+  return targetGroupsByStartTick(targets)[0] || [];
+}
+
 function targetGroupsByStartTick(targets) {
   const groups = [];
   let currentTick = null;
@@ -2839,14 +2846,14 @@ function evaluateAutoFollowBeat(options = {}) {
 }
 
 function evaluateStrictAutoFollow() {
-  const cueTargets = nextPrimaryCueTargets();
-  if (!cueTargets.length) {
+  const currentGroup = firstTargetGroupAtOrAfterTick(state.practice.viewStartTick || 0);
+  if (!currentGroup.length) {
     animatePracticeViewToTick(practiceEndTick(), { snap: false });
     return;
   }
-  if (!isTargetGroupMatched(cueTargets)) return;
+  if (!isTargetGroupMatched(currentGroup)) return;
 
-  const groupEndTick = Math.max(...cueTargets.map((target) => target.startTick));
+  const groupEndTick = Math.max(...currentGroup.map((target) => target.startTick));
   const nextGroup = nextUnmatchedTargetGroupAfterTick(groupEndTick + 1);
   const nextTick = nextGroup.length
     ? Math.min(...nextGroup.map((target) => target.startTick))
