@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v204";
+const APP_VERSION = "v205";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2532,7 +2532,7 @@ function practiceGridTicks() {
 
 function maxPracticeViewStartTick() {
   if (!state.practice.measures.length) return 0;
-  return Math.max(0, practiceEndTick() - practiceGridTicks());
+  return Math.max(0, practiceEndTick());
 }
 
 function practiceEndTick() {
