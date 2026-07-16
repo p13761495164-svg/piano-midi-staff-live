@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v214";
+const APP_VERSION = "v215";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -3090,6 +3090,15 @@ async function startContinuousPlayback() {
   syncPracticeControls();
 }
 
+function playbackVisualViewTick(playbackTick) {
+  if (state.robotPerformance && state.autoFollowTolerance !== 0) {
+    const gridTicks = practiceGridTicks();
+    const completedGridTick = Math.floor(Math.max(0, playbackTick) / gridTicks) * gridTicks;
+    return clampPracticeViewStartTick(completedGridTick);
+  }
+  return playbackTick;
+}
+
 function animatePlaybackView() {
   window.cancelAnimationFrame(state.playback.animationFrame);
 
@@ -3112,7 +3121,7 @@ function animatePlaybackView() {
     }
     if (now - state.playback.lastVisualFrameAt >= PLAYBACK_VISUAL_FRAME_MS || playbackTick >= state.playback.endTick) {
       state.playback.lastVisualFrameAt = now;
-      const viewTick = Math.min(maxPracticeViewStartTick(), playbackTick);
+      const viewTick = Math.min(maxPracticeViewStartTick(), playbackVisualViewTick(playbackTick));
       state.practice.viewStartTick = viewTick;
       state.practice.currentMeasure = measureIndexForTick(viewTick);
       updateAll();
