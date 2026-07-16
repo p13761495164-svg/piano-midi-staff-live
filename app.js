@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v212";
+const APP_VERSION = "v213";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -29,9 +29,10 @@ const PLAYBACK_VISUAL_FRAME_MS = 24;
 const LIVE_INPUT_TONE_SECONDS = 0.9;
 const LIVE_INPUT_RELEASE_FADE_SECONDS = 0.25;
 const SUSTAIN_PEDAL_RELEASE_FADE_SECONDS = 0.65;
-const ROBOT_TIMING_JITTER_SECONDS = 0.014;
-const ROBOT_CHORD_ROLL_SECONDS = 0.012;
-const ROBOT_GAIN_VARIATION = 0.18;
+const ROBOT_TIMING_JITTER_SECONDS = 0.018;
+const ROBOT_CHORD_ROLL_SECONDS = 0.009;
+const ROBOT_GAIN_VARIATION = 0.22;
+const ROBOT_MAX_TIMING_OFFSET_SECONDS = 0.026;
 const SETTINGS_FIELD_KEYS = {
   keySignature: "piano-midi-staff-key-signature",
   showDegrees: "piano-midi-staff-show-degrees",
@@ -2558,10 +2559,28 @@ function hashUnit(value) {
 function robotHumanizedPlayback(target, chordIndex, chordSize, secondsPerTick) {
   if (!state.robotPerformance) return { tickOffset: 0, gain: 1 };
   const jitterSeconds = (hashUnit(`${target.id}:timing`) - 0.5) * ROBOT_TIMING_JITTER_SECONDS;
-  const rollSeconds = chordSize > 1 ? Math.max(0, chordIndex) * ROBOT_CHORD_ROLL_SECONDS : 0;
-  const gain = 1 - ROBOT_GAIN_VARIATION / 2 + hashUnit(`${target.id}:gain`) * ROBOT_GAIN_VARIATION;
+  const centeredChordIndex = chordSize > 1 ? chordIndex - (chordSize - 1) / 2 : 0;
+  const rollSeconds = centeredChordIndex * ROBOT_CHORD_ROLL_SECONDS;
+  const lowHandLeadSeconds = target.note < 60 ? -0.004 : target.note >= 72 ? 0.003 : 0;
+  const rawTimingSeconds = jitterSeconds + rollSeconds + lowHandLeadSeconds;
+  const timingSeconds = Math.max(
+    -ROBOT_MAX_TIMING_OFFSET_SECONDS,
+    Math.min(ROBOT_MAX_TIMING_OFFSET_SECONDS, rawTimingSeconds)
+  );
+  const positionPulse = target.startTick % Math.max(1, practiceBeatTicks()) === 0 ? 0.035 : -0.01;
+  const registerBalance = target.note < 52 ? 0.06 : target.note >= 76 ? -0.06 : 0;
+  const gain = Math.max(
+    0.78,
+    Math.min(
+      1.18,
+      1 - ROBOT_GAIN_VARIATION / 2 +
+        hashUnit(`${target.id}:gain`) * ROBOT_GAIN_VARIATION +
+        positionPulse +
+        registerBalance
+    )
+  );
   return {
-    tickOffset: (jitterSeconds + rollSeconds) / Math.max(0.000001, secondsPerTick),
+    tickOffset: timingSeconds / Math.max(0.000001, secondsPerTick),
     gain
   };
 }
