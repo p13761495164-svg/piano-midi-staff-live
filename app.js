@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v198";
+const APP_VERSION = "v199";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -3493,11 +3493,7 @@ function parseMidiFile(bytes) {
   const trackRoles = trackRolesForNotes(notes);
 
   const lastTick = Math.max(...notes.map((note) => Math.max(note.endTick, note.startTick + 1)));
-  const signatureEvents = correctedMidiTimeSignatureEvents(
-    normalizedMidiTimeSignatureEvents(timeSignatureEvents, lastTick, timeSignature, ticksPerQuarter),
-    notes,
-    ticksPerQuarter
-  );
+  const signatureEvents = normalizedMidiTimeSignatureEvents(timeSignatureEvents, lastTick, timeSignature, ticksPerQuarter);
   timeSignature = signatureEvents[0]?.timeSignature || timeSignature;
   const measureTicks = measureTicksForTimeSignature(timeSignature, ticksPerQuarter);
   const measures = buildMidiMeasuresFromTimeSignatures(notes, signatureEvents, lastTick, trackRoles, ticksPerQuarter);
@@ -3744,30 +3740,6 @@ function normalizedMidiTimeSignatureEvents(events, lastTick, fallback, ticksPerQ
     signatures.unshift({ tick: 0, timeSignature: fallback || selected || { numerator: 4, denominator: 4 } });
   }
   return signatures;
-}
-
-function correctedMidiTimeSignatureEvents(signatureEvents, notes, ticksPerQuarter) {
-  if (!signatureEvents.length || !notes.length) return signatureEvents;
-  if (signatureEvents.length !== 1) return signatureEvents;
-
-  const signature = signatureEvents[0].timeSignature;
-  if (signature?.numerator !== 2 || signature?.denominator !== 4) return signatureEvents;
-
-  const twoFourTicks = measureTicksForTimeSignature(signature, ticksPerQuarter);
-  const lastTick = Math.max(...notes.map((note) => Math.max(note.endTick, note.startTick + 1)));
-  const measureCount = Math.max(1, Math.ceil(lastTick / twoFourTicks));
-  if (measureCount > 8) return signatureEvents;
-
-  const uniqueStarts = new Set(notes.map((note) => Math.max(0, Math.round(note.startTick || 0))));
-  const averageStartsPerMeasure = uniqueStarts.size / measureCount;
-  const shortSubdivisionTicks = Math.max(1, ticksPerQuarter / 4);
-  const shortNotes = notes.filter((note) => Math.max(1, note.endTick - note.startTick) <= shortSubdivisionTicks * 1.25);
-  const shortNoteRatio = shortNotes.length / notes.length;
-
-  if (averageStartsPerMeasure >= 7 && shortNoteRatio >= 0.55) {
-    return [{ tick: 0, timeSignature: { numerator: 6, denominator: 8 } }];
-  }
-  return signatureEvents;
 }
 
 function normalizedMidiKeySignatureEvents(events, fallback = null) {
