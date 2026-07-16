@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v213";
+const APP_VERSION = "v214";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2713,6 +2713,7 @@ function robotPlaybackCueTargets() {
 }
 
 function nextPrimaryCueTargets() {
+  if (state.autoFollowTolerance !== 0) return computeNextPrimaryCueTargets();
   return lockedAutoFollowTargetGroup();
 }
 
@@ -2806,8 +2807,28 @@ function markAutoFollowNote(note) {
 }
 
 function targetForPlayedNote(note, currentBeatStart) {
-  return lockedAutoFollowTargetGroup()
-    .find((target) => target.note === note && !isAutoFollowTargetMatched(target)) || null;
+  if (state.autoFollowTolerance === 0) {
+    return lockedAutoFollowTargetGroup()
+      .find((target) => target.note === note && !isAutoFollowTargetMatched(target)) || null;
+  }
+
+  const gridTicks = practiceGridTicks();
+  const viewStartTick = state.practice.viewStartTick || 0;
+  const currentBeatEnd = currentBeatStart + gridTicks;
+  const candidates = (state.practice.notes || [])
+    .filter((target) => (
+      target.note === note &&
+      target.startTick >= currentBeatStart &&
+      target.startTick < currentBeatEnd
+    ))
+    .sort((a, b) => {
+      const aInCurrentBeat = a.startTick < currentBeatEnd ? 0 : 1;
+      const bInCurrentBeat = b.startTick < currentBeatEnd ? 0 : 1;
+      return aInCurrentBeat - bInCurrentBeat ||
+        Math.abs(a.startTick - viewStartTick) - Math.abs(b.startTick - viewStartTick) ||
+        a.startTick - b.startTick;
+    });
+  return candidates.find((target) => !isAutoFollowTargetMatched(target)) || candidates[0] || null;
 }
 
 function beatStartForTick(tick) {
@@ -2860,6 +2881,17 @@ function evaluateAutoFollowBeat(options = {}) {
   ) return;
   const beatStart = currentAutoFollowBeatStart();
   if (state.autoFollow.currentBeatStart !== beatStart) resetAutoFollowBeat(beatStart);
+
+  if (state.autoFollowTolerance !== 0) {
+    const targets = targetsForBeat(beatStart);
+    if (!targets.length) {
+      if (options.advanceEmptyBeat) advancePracticeGrid(1);
+      return;
+    }
+    if (!isTargetGroupMatched(targets)) return;
+    advancePracticeGrid(1);
+    return;
+  }
 
   const currentGroup = lockedAutoFollowTargetGroup();
   if (!currentGroup.length) {
