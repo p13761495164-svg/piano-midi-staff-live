@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v201";
+const APP_VERSION = "v202";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -24,6 +24,7 @@ const DISPLAY_FILENAME_MAX = 50;
 const SUSTAIN_PEDAL_PAGE_DEBOUNCE_MS = 260;
 const AUTO_FOLLOW_ANIMATION_MS = 260;
 const ARPEGGIO_DISPLAY_WINDOW_RATIO = 0.1;
+const DENSE_SUBDIVISION_PRACTICE_BPM = 70;
 const PLAYBACK_VISUAL_FRAME_MS = 24;
 const LIVE_INPUT_TONE_SECONDS = 0.9;
 const LIVE_INPUT_RELEASE_FADE_SECONDS = 0.25;
@@ -2237,7 +2238,7 @@ function applyParsedScore(parsed, filename, typeLabel) {
   state.practice.keySignatureEvents = normalized.keySignatureEvents || [];
   state.practice.ticksPerQuarter = normalized.ticksPerQuarter;
   state.practice.measureTicks = normalized.measureTicks;
-  state.practice.microsecondsPerQuarter = normalized.microsecondsPerQuarter;
+  state.practice.microsecondsPerQuarter = practiceTempoForParsedScore(normalized);
   state.practice.viewStartTick = 0;
   state.practice.measures = normalized.variableMeasures ? normalized.measures : buildMeasuresFromPracticeNotes(state.practice.notes);
   if (normalized.keySignature && MAJOR_KEY_SIGNATURES[normalized.keySignature]) {
@@ -2317,6 +2318,28 @@ function trimLeadingScoreSilence(parsed) {
     timeSignatureEvents: shiftedTimeSignatureEvents,
     keySignatureEvents: shiftedKeySignatureEvents
   };
+}
+
+function practiceTempoForParsedScore(score) {
+  const originalTempo = score.microsecondsPerQuarter || 500000;
+  const originalBpm = bpmFromMicroseconds(originalTempo);
+  if (originalBpm <= DENSE_SUBDIVISION_PRACTICE_BPM) return originalTempo;
+  return hasDenseSixteenthStarts(score) ? microsecondsFromBpm(DENSE_SUBDIVISION_PRACTICE_BPM) : originalTempo;
+}
+
+function hasDenseSixteenthStarts(score) {
+  const notes = score.notes || (score.measures || []).flatMap((measure) => measure.notes || []);
+  if (notes.length < 8) return false;
+  const ticksPerQuarter = score.ticksPerQuarter || MIDI_PPQ;
+  const sixteenthTicks = Math.max(1, ticksPerQuarter / 4);
+  const tolerance = Math.max(2, sixteenthTicks * 0.15);
+  const uniqueStarts = [...new Set(notes.map((note) => Math.round(Math.max(0, note.startTick || 0))))].sort((a, b) => a - b);
+  let denseGaps = 0;
+  for (let index = 1; index < uniqueStarts.length; index += 1) {
+    const gap = uniqueStarts[index] - uniqueStarts[index - 1];
+    if (gap > 0 && Math.abs(gap - sixteenthTicks) <= tolerance) denseGaps += 1;
+  }
+  return denseGaps >= 4;
 }
 
 function updatePracticeTimeSignature(timeSignature) {
