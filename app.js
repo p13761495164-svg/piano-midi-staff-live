@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v203";
+const APP_VERSION = "v204";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -4344,7 +4344,7 @@ async function forceRefreshApp() {
   }
 
   const url = new URL(window.location.href);
-  url.searchParams.set("v", APP_VERSION);
+  url.searchParams.delete("v");
   url.searchParams.set("fresh", Date.now().toString());
   window.location.replace(url.toString());
 }
