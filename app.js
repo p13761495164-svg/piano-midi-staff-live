@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v211";
+const APP_VERSION = "v212";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -442,6 +442,7 @@ const state = {
   autoFollowTolerance: 50,
   autoFollow: {
     currentBeatStart: null,
+    targetGroupIds: [],
     playedNotesByBeat: new Map(),
     correctTargetIds: new Set(),
     animationFrame: 0,
@@ -2097,8 +2098,8 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   startLiveInputTone(note, velocity);
   state.autoFollow.pausedAfterManualNavigation = false;
   markAutoFollowNote(note);
-  updateAll();
   evaluateAutoFollowBeat();
+  updateAll();
 }
 
 function isWrongPracticeInputNote(note) {
@@ -2648,6 +2649,7 @@ function currentAutoFollowBeatStart() {
 
 function resetAutoFollowBeat(beatStart = null, options = {}) {
   state.autoFollow.currentBeatStart = beatStart;
+  state.autoFollow.targetGroupIds = [];
   if (options.clearPlayed) {
     state.autoFollow.playedNotesByBeat = new Map();
     state.autoFollow.correctTargetIds = new Set();
@@ -2692,6 +2694,33 @@ function robotPlaybackCueTargets() {
 }
 
 function nextPrimaryCueTargets() {
+  return lockedAutoFollowTargetGroup();
+}
+
+function lockedAutoFollowTargetGroup() {
+  if (!state.practice.measures.length || state.playback.playing) return [];
+  const locked = targetsForLockedAutoFollowGroup();
+  if (locked.length) return locked;
+
+  const group = computeNextPrimaryCueTargets();
+  state.autoFollow.targetGroupIds = group.map((target) => target.id);
+  return group;
+}
+
+function targetsForLockedAutoFollowGroup() {
+  if (!state.autoFollow.targetGroupIds.length) return [];
+  const ids = new Set(state.autoFollow.targetGroupIds);
+  const targets = (state.practice.notes || [])
+    .filter((target) => ids.has(target.id))
+    .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+  if (targets.length !== state.autoFollow.targetGroupIds.length) {
+    state.autoFollow.targetGroupIds = [];
+    return [];
+  }
+  return targets;
+}
+
+function computeNextPrimaryCueTargets() {
   if (!state.practice.measures.length || state.playback.playing) return [];
   const gridTicks = practiceGridTicks();
   const startTick = currentAutoFollowBeatStart();
@@ -2758,26 +2787,8 @@ function markAutoFollowNote(note) {
 }
 
 function targetForPlayedNote(note, currentBeatStart) {
-  const cueTarget = nextPrimaryCueTargets().find((target) => target.note === note && !isAutoFollowTargetMatched(target));
-  if (cueTarget) return cueTarget;
-
-  const gridTicks = practiceGridTicks();
-  const viewStartTick = state.practice.viewStartTick || 0;
-  const currentBeatEnd = currentBeatStart + gridTicks;
-  const candidates = (state.practice.notes || [])
-    .filter((target) => (
-      target.note === note &&
-      target.startTick >= currentBeatStart &&
-      target.startTick < currentBeatEnd
-    ))
-    .sort((a, b) => {
-      const aInCurrentBeat = a.startTick < currentBeatEnd ? 0 : 1;
-      const bInCurrentBeat = b.startTick < currentBeatEnd ? 0 : 1;
-      return aInCurrentBeat - bInCurrentBeat ||
-        Math.abs(a.startTick - viewStartTick) - Math.abs(b.startTick - viewStartTick) ||
-        a.startTick - b.startTick;
-    });
-  return candidates.find((target) => !isAutoFollowTargetMatched(target)) || candidates[0] || null;
+  return lockedAutoFollowTargetGroup()
+    .find((target) => target.note === note && !isAutoFollowTargetMatched(target)) || null;
 }
 
 function beatStartForTick(tick) {
@@ -2831,18 +2842,19 @@ function evaluateAutoFollowBeat(options = {}) {
   const beatStart = currentAutoFollowBeatStart();
   if (state.autoFollow.currentBeatStart !== beatStart) resetAutoFollowBeat(beatStart);
 
-  if (state.autoFollowTolerance === 0) {
-    evaluateStrictAutoFollow();
-    return;
-  }
-
-  const targets = targetsForBeat(beatStart);
-  if (!targets.length) {
+  const currentGroup = lockedAutoFollowTargetGroup();
+  if (!currentGroup.length) {
     if (options.advanceEmptyBeat) advancePracticeGrid(1);
     return;
   }
-  if (!isTargetGroupMatched(targets)) return;
-  advancePracticeGrid(1);
+  if (!isTargetGroupMatched(currentGroup)) return;
+
+  const groupEndTick = Math.max(...currentGroup.map((target) => target.startTick));
+  const nextGroup = nextUnmatchedTargetGroupAfterTick(groupEndTick + 1);
+  const nextTick = nextGroup.length
+    ? Math.min(...nextGroup.map((target) => target.startTick))
+    : practiceEndTick();
+  animatePracticeViewToTick(nextTick, { snap: false });
 }
 
 function evaluateStrictAutoFollow() {
