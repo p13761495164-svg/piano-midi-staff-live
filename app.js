@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v199";
+const APP_VERSION = "v200";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1182,36 +1182,13 @@ function drawStaff() {
     return;
   }
 
-  const chordX = STAFF_VIEWBOX.width / 2;
   const noteItems = visibleNotes.map((note) => {
     const clef = preferredClef(note);
     const step = midiToStaffStep(note);
-    return { note, clef, step, x: chordX, xOffset: 0 };
+    return { note, clef, step, x: STAFF_VIEWBOX.width / 2, xOffset: 0 };
   });
 
-  for (let index = 0; index < noteItems.length;) {
-    const clusterStart = index;
-    index += 1;
-    while (
-      index < noteItems.length &&
-      noteItems[index].clef === noteItems[index - 1].clef &&
-      noteItems[index].step - noteItems[index - 1].step <= 1
-    ) {
-      index += 1;
-    }
-
-    const cluster = noteItems.slice(clusterStart, index);
-    if (cluster.length > 1) {
-      const spread = 35;
-      cluster.forEach((item, itemIndex) => {
-        item.xOffset = (itemIndex - (cluster.length - 1) / 2) * spread;
-      });
-    }
-  }
-
-  noteItems.forEach((item) => {
-    drawNote(svg, { ...item, x: chordX + item.xOffset });
-  });
+  applyNoteCollisionOffsets(noteItems, 35).forEach((item) => drawNote(svg, item));
 }
 
 function drawPracticePlayhead(svg) {
@@ -1408,7 +1385,7 @@ function buildPracticeNoteItems() {
       };
     });
 
-  return items;
+  return applyNoteCollisionOffsets(items, 34);
 }
 
 function drawPracticeDurationLines(svg) {
@@ -1515,27 +1492,41 @@ function buildLeftColumnNoteItems(notes, trackRole) {
       };
     });
 
-  for (let index = 0; index < items.length;) {
+  return applyNoteCollisionOffsets(items, 34);
+}
+
+function applyNoteCollisionOffsets(items, spread = 34) {
+  const adjusted = items.map((item) => ({ ...item, xOffset: item.xOffset || 0 }));
+  const sorted = adjusted
+    .slice()
+    .sort((a, b) => (
+      Math.round(a.x) - Math.round(b.x) ||
+      String(a.clef).localeCompare(String(b.clef)) ||
+      a.step - b.step ||
+      a.note - b.note
+    ));
+
+  for (let index = 0; index < sorted.length;) {
     const clusterStart = index;
     index += 1;
     while (
-      index < items.length &&
-      items[index].clef === items[index - 1].clef &&
-      items[index].step - items[index - 1].step <= 1
+      index < sorted.length &&
+      Math.abs(sorted[index].x - sorted[index - 1].x) <= 4 &&
+      sorted[index].clef === sorted[index - 1].clef &&
+      sorted[index].step - sorted[index - 1].step <= 1
     ) {
       index += 1;
     }
 
-    const cluster = items.slice(clusterStart, index);
+    const cluster = sorted.slice(clusterStart, index);
     if (cluster.length > 1) {
-      const spread = 34;
       cluster.forEach((item, itemIndex) => {
         item.xOffset = (itemIndex - (cluster.length - 1) / 2) * spread;
       });
     }
   }
 
-  return items.map((item) => ({ ...item, x: item.x + item.xOffset }));
+  return adjusted.map((item) => ({ ...item, x: item.x + item.xOffset }));
 }
 
 function activeInputColumnX() {
