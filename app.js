@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v215";
+const APP_VERSION = "v216";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -26,6 +26,7 @@ const AUTO_FOLLOW_ANIMATION_MS = 260;
 const ARPEGGIO_DISPLAY_WINDOW_RATIO = 0.1;
 const DENSE_SUBDIVISION_PRACTICE_BPM = 70;
 const PLAYBACK_VISUAL_FRAME_MS = 24;
+const ROBOT_BEAT_VIEW_ANIMATION_MS = 180;
 const LIVE_INPUT_TONE_SECONDS = 0.9;
 const LIVE_INPUT_RELEASE_FADE_SECONDS = 0.25;
 const SUSTAIN_PEDAL_RELEASE_FADE_SECONDS = 0.65;
@@ -492,6 +493,10 @@ const state = {
     startedAtAudioTime: 0,
     startedAtPerformance: 0,
     lastVisualFrameAt: 0,
+    visualTargetTick: null,
+    visualAnimationFromTick: 0,
+    visualAnimationToTick: 0,
+    visualAnimationStartedAt: 0,
     secondsPerTick: 0
   },
   liveAudio: {
@@ -3046,6 +3051,10 @@ async function startContinuousPlayback() {
   state.playback.startedAtAudioTime = startAt;
   state.playback.startedAtPerformance = performance.now() + 80;
   state.playback.lastVisualFrameAt = 0;
+  state.playback.visualTargetTick = null;
+  state.playback.visualAnimationFromTick = playbackStartTick;
+  state.playback.visualAnimationToTick = playbackStartTick;
+  state.playback.visualAnimationStartedAt = 0;
   state.playback.secondsPerTick = secondsPerTick;
 
   const pedalIntervals = pedalIntervalsForPlayback(playbackStartTick, playbackEndTick);
@@ -3093,8 +3102,25 @@ async function startContinuousPlayback() {
 function playbackVisualViewTick(playbackTick) {
   if (state.robotPerformance && state.autoFollowTolerance !== 0) {
     const gridTicks = practiceGridTicks();
-    const completedGridTick = Math.floor(Math.max(0, playbackTick) / gridTicks) * gridTicks;
-    return clampPracticeViewStartTick(completedGridTick);
+    const completedGridTick = clampPracticeViewStartTick(Math.floor(Math.max(0, playbackTick) / gridTicks) * gridTicks);
+    if (state.playback.visualTargetTick === null) {
+      state.playback.visualTargetTick = completedGridTick;
+      state.playback.visualAnimationFromTick = completedGridTick;
+      state.playback.visualAnimationToTick = completedGridTick;
+      state.playback.visualAnimationStartedAt = performance.now();
+      return completedGridTick;
+    }
+    if (Math.abs(completedGridTick - state.playback.visualTargetTick) >= 1) {
+      state.playback.visualAnimationFromTick = state.practice.viewStartTick || state.playback.visualTargetTick;
+      state.playback.visualAnimationToTick = completedGridTick;
+      state.playback.visualTargetTick = completedGridTick;
+      state.playback.visualAnimationStartedAt = performance.now();
+    }
+    const elapsed = performance.now() - state.playback.visualAnimationStartedAt;
+    const progress = Math.min(1, elapsed / ROBOT_BEAT_VIEW_ANIMATION_MS);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    return state.playback.visualAnimationFromTick +
+      (state.playback.visualAnimationToTick - state.playback.visualAnimationFromTick) * eased;
   }
   return playbackTick;
 }
@@ -3518,6 +3544,10 @@ function stopMeasurePlayback() {
   state.playback.visualNotes = [];
   state.playback.pendingNotes = [];
   state.playback.pendingNoteIndex = 0;
+  state.playback.visualTargetTick = null;
+  state.playback.visualAnimationFromTick = 0;
+  state.playback.visualAnimationToTick = 0;
+  state.playback.visualAnimationStartedAt = 0;
   state.playback.playing = false;
   state.playback.paused = false;
   state.playback.silent = false;
