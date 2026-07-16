@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v209";
+const APP_VERSION = "v210";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2848,6 +2848,7 @@ function evaluateSectionAutoFollow(options = {}) {
     return;
   }
   if (!isTargetGroupMatched(currentGroup)) return;
+  markTargetGroupProcessed(currentGroup);
 
   const groupEndTick = Math.max(...currentGroup.map((target) => target.startTick));
   const nextGroup = nextUnmatchedTargetGroupAfterTick(groupEndTick + 1);
@@ -2855,6 +2856,14 @@ function evaluateSectionAutoFollow(options = {}) {
     ? Math.min(...nextGroup.map((target) => target.startTick))
     : practiceEndTick();
   animatePracticeViewToTick(nextTick, { snap: false });
+}
+
+function markTargetGroupProcessed(targets) {
+  targets.forEach((target) => {
+    if (!isAutoFollowTargetMatched(target)) {
+      markPlayedTargetForBeat(beatStartForTick(target.startTick), target);
+    }
+  });
 }
 
 function isAutoFollowTargetMatched(target) {
