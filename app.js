@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v207";
+const APP_VERSION = "v208";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2693,14 +2693,16 @@ function robotPlaybackCueTargets() {
 
 function nextPrimaryCueTargets() {
   if (!state.practice.measures.length || state.playback.playing) return [];
-  const gridTicks = practiceGridTicks();
   const startTick = currentAutoFollowBeatStart();
-  const endTick = practiceEndTick();
-  for (let tick = startTick; tick <= endTick; tick += gridTicks) {
-    const group = firstUnmatchedTargetGroup(targetsForBeat(tick));
-    if (group.length) return group;
-  }
-  return [];
+  return nextUnmatchedTargetGroupAfterTick(startTick);
+}
+
+function targetGroupsAtOrAfterTick(tick) {
+  const safeTick = Math.max(0, Number(tick) || 0);
+  const targets = (state.practice.notes || [])
+    .filter((target) => target.startTick >= safeTick)
+    .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+  return targetGroupsByStartTick(targets);
 }
 
 function nextUnmatchedTargetGroupAfterTick(tick) {
@@ -2711,10 +2713,7 @@ function nextUnmatchedTargetGroupAfterTick(tick) {
 }
 
 function firstTargetGroupAtOrAfterTick(tick) {
-  const targets = (state.practice.notes || [])
-    .filter((target) => target.startTick >= tick)
-    .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
-  return targetGroupsByStartTick(targets)[0] || [];
+  return targetGroupsAtOrAfterTick(tick)[0] || [];
 }
 
 function targetGroupsByStartTick(targets) {
@@ -2831,24 +2830,18 @@ function evaluateAutoFollowBeat(options = {}) {
   const beatStart = currentAutoFollowBeatStart();
   if (state.autoFollow.currentBeatStart !== beatStart) resetAutoFollowBeat(beatStart);
 
-  if (state.autoFollowTolerance === 0) {
-    evaluateStrictAutoFollow();
-    return;
-  }
-
-  const targets = targetsForBeat(beatStart);
-  if (!targets.length) {
-    if (options.advanceEmptyBeat) advancePracticeGrid(1);
-    return;
-  }
-  if (!isTargetGroupMatched(targets)) return;
-  advancePracticeGrid(1);
+  evaluateSectionAutoFollow(options);
 }
 
-function evaluateStrictAutoFollow() {
+function evaluateSectionAutoFollow(options = {}) {
   const currentGroup = firstTargetGroupAtOrAfterTick(state.practice.viewStartTick || 0);
   if (!currentGroup.length) {
     animatePracticeViewToTick(practiceEndTick(), { snap: false });
+    return;
+  }
+  const groupStartTick = Math.min(...currentGroup.map((target) => target.startTick));
+  if (groupStartTick > (state.practice.viewStartTick || 0) && options.advanceEmptyBeat) {
+    animatePracticeViewToTick(groupStartTick, { snap: false });
     return;
   }
   if (!isTargetGroupMatched(currentGroup)) return;
