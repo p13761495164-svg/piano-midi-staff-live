@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v198";
+const APP_VERSION = "v199";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2766,6 +2766,28 @@ function markPlayedTargetForBeat(beatStart, target) {
   prunePlayedAutoFollowNotes(beatStart);
 }
 
+function isPracticeNoteSounding(note) {
+  return state.activeNotes.has(note) || state.releasedWhileSustained.has(note);
+}
+
+function clearWrongStateForMatchedNote(note) {
+  const active = state.activeNotes.get(note);
+  if (active?.wrong) {
+    state.activeNotes.set(note, { ...active, wrong: false });
+  }
+}
+
+function markSoundingTargetsForBeat(beatStart) {
+  let changed = false;
+  targetsForBeat(beatStart).forEach((target) => {
+    if (isAutoFollowTargetMatched(target) || !isPracticeNoteSounding(target.note)) return;
+    markPlayedTargetForBeat(beatStartForTick(target.startTick), target);
+    clearWrongStateForMatchedNote(target.note);
+    changed = true;
+  });
+  return changed;
+}
+
 function prunePlayedAutoFollowNotes(currentBeatStart) {
   const keepFrom = currentBeatStart - practiceGridTicks();
   [...state.autoFollow.playedNotesByBeat.keys()].forEach((key) => {
@@ -2807,6 +2829,7 @@ function evaluateAutoFollowBeat(options = {}) {
     if (options.advanceEmptyBeat) advancePracticeGrid(1);
     return;
   }
+  markSoundingTargetsForBeat(beatStart);
   if (!isTargetGroupMatched(targets)) return;
   advancePracticeGrid(1);
 }
@@ -2874,6 +2897,7 @@ function animatePracticeViewToTick(targetTick, options = {}) {
     resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: Boolean(options.clearPlayed) });
     updateAll();
     scheduleAutoFollowEmptyBeatCheck();
+    window.setTimeout(() => evaluateAutoFollowBeat(), 0);
   };
 
   state.autoFollow.animationFrame = window.requestAnimationFrame(step);
