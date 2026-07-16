@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v205";
+const APP_VERSION = "v206";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2636,12 +2636,14 @@ function snapTickToBeat(tick) {
   return Math.round(Math.max(0, tick) / gridTicks) * gridTicks;
 }
 
-function clampPracticeViewStartTick(tick) {
-  return Math.max(0, Math.min(maxPracticeViewStartTick(), snapTickToBeat(tick)));
+function clampPracticeViewStartTick(tick, options = {}) {
+  const safeTick = Math.max(0, Number(tick) || 0);
+  const nextTick = options.snap === false ? safeTick : snapTickToBeat(safeTick);
+  return Math.max(0, Math.min(maxPracticeViewStartTick(), nextTick));
 }
 
 function currentAutoFollowBeatStart() {
-  return clampPracticeViewStartTick(state.practice.viewStartTick || 0);
+  return clampPracticeViewStartTick(state.practice.viewStartTick || 0, { snap: state.autoFollowTolerance !== 0 });
 }
 
 function resetAutoFollowBeat(beatStart = null, options = {}) {
@@ -2699,6 +2701,13 @@ function nextPrimaryCueTargets() {
     if (group.length) return group;
   }
   return [];
+}
+
+function nextUnmatchedTargetGroupAfterTick(tick) {
+  const remainingTargets = (state.practice.notes || [])
+    .filter((target) => target.startTick >= tick && !isAutoFollowTargetMatched(target))
+    .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+  return targetGroupsByStartTick(remainingTargets)[0] || [];
 }
 
 function targetGroupsByStartTick(targets) {
@@ -2815,6 +2824,11 @@ function evaluateAutoFollowBeat(options = {}) {
   const beatStart = currentAutoFollowBeatStart();
   if (state.autoFollow.currentBeatStart !== beatStart) resetAutoFollowBeat(beatStart);
 
+  if (state.autoFollowTolerance === 0) {
+    evaluateStrictAutoFollow();
+    return;
+  }
+
   const targets = targetsForBeat(beatStart);
   if (!targets.length) {
     if (options.advanceEmptyBeat) advancePracticeGrid(1);
@@ -2822,6 +2836,22 @@ function evaluateAutoFollowBeat(options = {}) {
   }
   if (!isTargetGroupMatched(targets)) return;
   advancePracticeGrid(1);
+}
+
+function evaluateStrictAutoFollow() {
+  const cueTargets = nextPrimaryCueTargets();
+  if (!cueTargets.length) {
+    animatePracticeViewToTick(practiceEndTick(), { snap: false });
+    return;
+  }
+  if (!isTargetGroupMatched(cueTargets)) return;
+
+  const groupEndTick = Math.max(...cueTargets.map((target) => target.startTick));
+  const nextGroup = nextUnmatchedTargetGroupAfterTick(groupEndTick + 1);
+  const nextTick = nextGroup.length
+    ? Math.min(...nextGroup.map((target) => target.startTick))
+    : practiceEndTick();
+  animatePracticeViewToTick(nextTick, { snap: false });
 }
 
 function isAutoFollowTargetMatched(target) {
@@ -2852,7 +2882,7 @@ function isTargetGroupMatched(targets) {
 function animatePracticeViewToTick(targetTick, options = {}) {
   if (!state.practice.measures.length) return;
   const startTick = state.practice.viewStartTick || 0;
-  const endTick = clampPracticeViewStartTick(targetTick);
+  const endTick = clampPracticeViewStartTick(targetTick, { snap: options.snap !== false });
   if (Math.abs(endTick - startTick) < 1) return;
 
   if (options.clearPlayed) {
