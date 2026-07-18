@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v237";
+const APP_VERSION = "v238";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2899,6 +2899,20 @@ function nextPracticeCueNotes() {
   return new Set(nextPracticeCueTargets().map((target) => target.note));
 }
 
+function keyboardCueNotes() {
+  return new Set(nextKeyboardCueTargets().map((target) => target.note));
+}
+
+function nextKeyboardCueTargets() {
+  const targets = nextPracticeCueTargets();
+  if (!flowDisplayEnabled()) return targets;
+  const playheadX = practicePlayheadX();
+  return targets.filter((target) => {
+    const x = xForCurrentViewTick(target.startTick);
+    return x >= playheadX - 1 && x <= MEASURE_NOTE_RIGHT_X + 1;
+  });
+}
+
 function nextPracticeCueTargets() {
   if (state.robotPerformance && state.playback.playing) {
     return robotPlaybackCueTargets();
@@ -4475,15 +4489,16 @@ function updateAll() {
 }
 
 function updateKeyboardActive() {
-  const cueNoteSet = nextPracticeCueNotes();
+  const cueNoteSet = keyboardCueNotes();
   els.keyboard.querySelectorAll(".key").forEach((key) => {
     const note = Number(key.dataset.note);
     const inputHeld = isInputNoteVisuallyHeld(note);
     const active = inputHeld || state.playback.activeNotes.has(note);
+    const cue = cueNoteSet.has(note) && !active;
     const wrong = Boolean(state.activeNotes.get(note)?.wrong);
     key.classList.toggle("active", active);
     key.classList.toggle("input-active", inputHeld && !cueNoteSet.has(note));
-    key.classList.toggle("cue", cueNoteSet.has(note));
+    key.classList.toggle("cue", cue);
     key.classList.toggle("wrong", wrong);
   });
 }
