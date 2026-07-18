@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v221";
+const APP_VERSION = "v222";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2972,7 +2972,16 @@ function startPracticeRunTailFinish() {
   }
   state.autoFollow.finishingRun = true;
   state.autoFollow.pausedAfterManualNavigation = false;
-  animatePracticeViewToTick(practiceEndTick(), { snap: false, finishPracticeRun: true });
+  const tailDurationMs = Math.max(
+    AUTO_FOLLOW_ANIMATION_MS,
+    (practiceEndTick() - (state.practice.viewStartTick || 0)) * secondsPerPracticeTick() * 1000
+  );
+  animatePracticeViewToTick(practiceEndTick(), {
+    snap: false,
+    finishPracticeRun: true,
+    durationMs: tailDurationMs,
+    linear: true
+  });
 }
 
 function finishPracticeRunIfReleased() {
@@ -3038,10 +3047,11 @@ function animatePracticeViewToTick(targetTick, options = {}) {
   state.autoFollow.emptyAdvanceTimer = 0;
   state.autoFollow.animating = true;
   const startedAt = performance.now();
+  const durationMs = Math.max(1, Number(options.durationMs) || AUTO_FOLLOW_ANIMATION_MS);
 
   const step = (now) => {
-    const progress = Math.min(1, (now - startedAt) / AUTO_FOLLOW_ANIMATION_MS);
-    const eased = 1 - Math.pow(1 - progress, 3);
+    const progress = Math.min(1, (now - startedAt) / durationMs);
+    const eased = options.linear ? progress : 1 - Math.pow(1 - progress, 3);
     state.practice.viewStartTick = startTick + (endTick - startTick) * eased;
     state.practice.currentMeasure = measureIndexForTick(state.practice.viewStartTick);
     updateAll();
