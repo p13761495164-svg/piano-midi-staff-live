@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v220";
+const APP_VERSION = "v221";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -605,10 +605,20 @@ function chordSuffixLabel(suffix) {
   return suffix;
 }
 
+function isInputNoteSounding(note) {
+  const active = state.activeNotes.get(note);
+  if (!active) return false;
+  return !state.sustainDown || active.chordPedalEpoch === state.chordPedalEpoch;
+}
+
+function currentInputSoundingNotes() {
+  return [...state.activeNotes.keys()]
+    .filter((note) => isInputNoteSounding(note))
+    .sort((a, b) => a - b);
+}
+
 function currentSoundingNotes() {
-  const inputNotes = [...state.activeNotes.entries()]
-    .filter(([, active]) => !state.sustainDown || active.chordPedalEpoch === state.chordPedalEpoch)
-    .map(([note]) => note);
+  const inputNotes = currentInputSoundingNotes();
   const notes = new Set([...inputNotes, ...state.playback.activeNotes]);
   return [...notes].sort((a, b) => a - b);
 }
@@ -634,8 +644,7 @@ function currentChordName() {
   });
 
   if (!best) return "-";
-  const rootName = `${chordToneLabel(best.root)}${chordSuffixLabel(best.suffix)}`;
-  return best.root === bass ? rootName : `${rootName}/${chordToneLabel(bass)}`;
+  return `${chordToneLabel(best.root)}${chordSuffixLabel(best.suffix)}`;
 }
 
 function syncCurrentChord() {
@@ -1467,16 +1476,17 @@ function displayStartTicksForTargets(targets) {
 }
 
 function buildActiveInputNoteItems() {
-  if (!state.practice.measures.length || !state.activeNotes.size) return [];
+  const soundingNotes = currentInputSoundingNotes();
+  if (!state.practice.measures.length || !soundingNotes.length) return [];
   if (state.playback.playing && state.playback.silent) {
-    return buildLeftColumnNoteItems([...state.activeNotes.keys()], "input");
+    return buildLeftColumnNoteItems(soundingNotes, "input");
   }
   const cueNotes = nextPracticeCueNotes();
   const currentTargetNotes = cueNotes.size
     ? cueNotes
     : new Set(targetsForBeat(currentAutoFollowBeatStart()).map((target) => target.note));
   return buildLeftColumnNoteItems(
-    [...state.activeNotes.keys()].filter((note) => !currentTargetNotes.has(note)),
+    soundingNotes.filter((note) => !currentTargetNotes.has(note)),
     "input"
   );
 }
@@ -2239,7 +2249,7 @@ function revokeRecordingUrl() {
 }
 
 function isPracticeNoteActive(note) {
-  return state.activeNotes.has(note);
+  return isInputNoteSounding(note);
 }
 
 function displayFilename(filename, fallback) {
@@ -2956,7 +2966,7 @@ function evaluateStrictAutoFollow() {
 
 function startPracticeRunTailFinish() {
   if (!state.practice.measures.length) return;
-  if (!state.activeNotes.size) {
+  if (!currentInputSoundingNotes().length) {
     finishPracticeRun();
     return;
   }
@@ -2966,7 +2976,7 @@ function startPracticeRunTailFinish() {
 }
 
 function finishPracticeRunIfReleased() {
-  if (state.autoFollow.finishingRun && !state.activeNotes.size) {
+  if (state.autoFollow.finishingRun && !currentInputSoundingNotes().length) {
     finishPracticeRun();
   }
 }
@@ -4254,10 +4264,11 @@ function updateKeyboardActive() {
   const cueNoteSet = nextPracticeCueNotes();
   els.keyboard.querySelectorAll(".key").forEach((key) => {
     const note = Number(key.dataset.note);
-    const active = state.activeNotes.has(note) || state.playback.activeNotes.has(note);
+    const inputSounding = isInputNoteSounding(note);
+    const active = inputSounding || state.playback.activeNotes.has(note);
     const wrong = Boolean(state.activeNotes.get(note)?.wrong);
     key.classList.toggle("active", active);
-    key.classList.toggle("input-active", state.activeNotes.has(note) && !cueNoteSet.has(note));
+    key.classList.toggle("input-active", inputSounding && !cueNoteSet.has(note));
     key.classList.toggle("cue", cueNoteSet.has(note));
     key.classList.toggle("wrong", wrong);
   });
@@ -4455,7 +4466,7 @@ function handleMidiCommand(status, note, value) {
     state.sustainDown = pressed;
     state.sustainChannel = channel;
     if (!state.sustainDown) releaseSustainedNotes();
-    syncCurrentChord();
+    updateAll();
     return;
   }
 
