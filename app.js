@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v223";
+const APP_VERSION = "v224";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -619,9 +619,19 @@ function isInputNoteSounding(note) {
   return !state.sustainDown || active.chordPedalEpoch === state.chordPedalEpoch;
 }
 
+function isInputNoteVisuallyHeld(note) {
+  return state.activeNotes.has(note);
+}
+
 function currentInputSoundingNotes() {
   return [...state.activeNotes.keys()]
     .filter((note) => isInputNoteSounding(note))
+    .sort((a, b) => a - b);
+}
+
+function currentInputVisualNotes() {
+  return [...state.activeNotes.keys()]
+    .filter((note) => isInputNoteVisuallyHeld(note))
     .sort((a, b) => a - b);
 }
 
@@ -1495,23 +1505,23 @@ function displayStartTicksForTargets(targets) {
 }
 
 function buildActiveInputNoteItems() {
-  const soundingNotes = currentInputSoundingNotes();
-  if (!state.practice.measures.length || !soundingNotes.length) return [];
+  const visualNotes = currentInputVisualNotes();
+  if (!state.practice.measures.length || !visualNotes.length) return [];
   if (flowDisplayEnabled()) {
     return buildLeftColumnNoteItems(
-      soundingNotes.filter((note) => Boolean(state.activeNotes.get(note)?.wrong)),
+      visualNotes.filter((note) => Boolean(state.activeNotes.get(note)?.wrong)),
       "input"
     );
   }
   if (state.playback.playing && state.playback.silent) {
-    return buildLeftColumnNoteItems(soundingNotes, "input");
+    return buildLeftColumnNoteItems(visualNotes, "input");
   }
   const cueNotes = nextPracticeCueNotes();
   const currentTargetNotes = cueNotes.size
     ? cueNotes
     : new Set(targetsForBeat(currentAutoFollowBeatStart()).map((target) => target.note));
   return buildLeftColumnNoteItems(
-    soundingNotes.filter((note) => !currentTargetNotes.has(note)),
+    visualNotes.filter((note) => !currentTargetNotes.has(note)),
     "input"
   );
 }
@@ -2274,7 +2284,7 @@ function revokeRecordingUrl() {
 }
 
 function isPracticeNoteActive(note) {
-  return isInputNoteSounding(note);
+  return isInputNoteVisuallyHeld(note);
 }
 
 function displayFilename(filename, fallback) {
@@ -2973,7 +2983,7 @@ function evaluateAutoFollowBeat(options = {}) {
       startPracticeRunTailFinish();
       return;
     }
-    advancePracticeGrid(1);
+    advancePracticeGrid(1, { tempoDuration: true, linear: true });
     return;
   }
 
@@ -2991,7 +3001,7 @@ function evaluateAutoFollowBeat(options = {}) {
     return;
   }
   const nextTick = Math.min(...nextGroup.map((target) => target.startTick));
-  animatePracticeViewToTick(nextTick, { snap: false });
+  animatePracticeViewToTick(nextTick, { snap: false, tempoDuration: true, linear: true });
 }
 
 function evaluateStrictAutoFollow() {
@@ -3009,12 +3019,12 @@ function evaluateStrictAutoFollow() {
     return;
   }
   const nextTick = Math.min(...nextGroup.map((target) => target.startTick));
-  animatePracticeViewToTick(nextTick, { snap: false });
+  animatePracticeViewToTick(nextTick, { snap: false, tempoDuration: true, linear: true });
 }
 
 function startPracticeRunTailFinish() {
   if (!state.practice.measures.length) return;
-  if (!currentInputSoundingNotes().length) {
+  if (!currentInputVisualNotes().length) {
     finishPracticeRun();
     return;
   }
@@ -3033,7 +3043,7 @@ function startPracticeRunTailFinish() {
 }
 
 function finishPracticeRunIfReleased() {
-  if (state.autoFollow.finishingRun && !currentInputSoundingNotes().length) {
+  if (state.autoFollow.finishingRun && !currentInputVisualNotes().length) {
     finishPracticeRun();
   }
 }
@@ -3095,11 +3105,15 @@ function animatePracticeViewToTick(targetTick, options = {}) {
   state.autoFollow.emptyAdvanceTimer = 0;
   state.autoFollow.animating = true;
   const startedAt = performance.now();
-  const durationMs = Math.max(1, Number(options.durationMs) || AUTO_FOLLOW_ANIMATION_MS);
+  const tempoDurationMs = Math.abs(endTick - startTick) * secondsPerPracticeTick() * 1000;
+  const durationMs = Math.max(
+    1,
+    Number(options.durationMs) || (options.tempoDuration ? tempoDurationMs : AUTO_FOLLOW_ANIMATION_MS)
+  );
 
   const step = (now) => {
     const progress = Math.min(1, (now - startedAt) / durationMs);
-    const eased = options.linear ? progress : 1 - Math.pow(1 - progress, 3);
+    const eased = options.linear || options.tempoDuration ? progress : 1 - Math.pow(1 - progress, 3);
     state.practice.viewStartTick = startTick + (endTick - startTick) * eased;
     state.practice.currentMeasure = measureIndexForTick(state.practice.viewStartTick);
     updateAll();
@@ -4322,11 +4336,11 @@ function updateKeyboardActive() {
   const cueNoteSet = nextPracticeCueNotes();
   els.keyboard.querySelectorAll(".key").forEach((key) => {
     const note = Number(key.dataset.note);
-    const inputSounding = isInputNoteSounding(note);
-    const active = inputSounding || state.playback.activeNotes.has(note);
+    const inputHeld = isInputNoteVisuallyHeld(note);
+    const active = inputHeld || state.playback.activeNotes.has(note);
     const wrong = Boolean(state.activeNotes.get(note)?.wrong);
     key.classList.toggle("active", active);
-    key.classList.toggle("input-active", inputSounding && !cueNoteSet.has(note));
+    key.classList.toggle("input-active", inputHeld && !cueNoteSet.has(note));
     key.classList.toggle("cue", cueNoteSet.has(note));
     key.classList.toggle("wrong", wrong);
   });
