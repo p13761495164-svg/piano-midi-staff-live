@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v228";
+const APP_VERSION = "v229";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -466,6 +466,7 @@ const state = {
     rhythmRunning: false,
     rhythmStartedAt: 0,
     rhythmStartTick: 0,
+    rhythmStopTick: 0,
     rhythmLastFrameAt: 0,
     emptyAdvanceTimer: 0,
     animating: false,
@@ -2218,7 +2219,6 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   state.autoFollow.pausedAfterManualNavigation = false;
   markAutoFollowNote(note);
   evaluateAutoFollowBeat();
-  startRhythmFollow();
   updateAll();
 }
 
@@ -2843,12 +2843,15 @@ function rhythmFollowEnabled() {
   );
 }
 
-function startRhythmFollow() {
+function startRhythmFollow(stopTick) {
   if (!rhythmFollowEnabled() || state.autoFollow.animating || state.autoFollow.finishingRun) return;
+  const targetTick = Math.max(state.practice.viewStartTick || 0, Math.min(Number(stopTick) || 0, maxPracticeViewStartTick()));
+  if (targetTick <= (state.practice.viewStartTick || 0) + 0.5) return;
   window.cancelAnimationFrame(state.autoFollow.rhythmFrame);
   state.autoFollow.rhythmRunning = true;
   state.autoFollow.rhythmStartedAt = performance.now();
   state.autoFollow.rhythmStartTick = state.practice.viewStartTick || 0;
+  state.autoFollow.rhythmStopTick = targetTick;
   state.autoFollow.rhythmLastFrameAt = 0;
 
   const step = (now) => {
@@ -2858,7 +2861,7 @@ function startRhythmFollow() {
     }
     const elapsedSeconds = Math.max(0, (now - state.autoFollow.rhythmStartedAt) / 1000);
     const nextTick = Math.min(
-      maxPracticeViewStartTick(),
+      state.autoFollow.rhythmStopTick,
       state.autoFollow.rhythmStartTick + elapsedSeconds / Math.max(0.000001, secondsPerPracticeTick())
     );
     if (now - state.autoFollow.rhythmLastFrameAt >= PLAYBACK_VISUAL_FRAME_MS) {
@@ -2867,8 +2870,12 @@ function startRhythmFollow() {
       state.practice.currentMeasure = measureIndexForTick(nextTick);
       updateAll();
     }
-    if (nextTick >= maxPracticeViewStartTick()) {
+    if (nextTick >= state.autoFollow.rhythmStopTick) {
+      state.practice.viewStartTick = state.autoFollow.rhythmStopTick;
+      state.practice.currentMeasure = measureIndexForTick(state.practice.viewStartTick);
+      resetAutoFollowBeat(currentAutoFollowBeatStart());
       stopRhythmFollow();
+      updateAll();
       return;
     }
     state.autoFollow.rhythmFrame = window.requestAnimationFrame(step);
@@ -2884,8 +2891,9 @@ function stopRhythmFollow() {
 }
 
 function restartRhythmFollowFromCurrentTick() {
+  const stopTick = state.autoFollow.rhythmStopTick;
   stopRhythmFollow();
-  startRhythmFollow();
+  startRhythmFollow(stopTick);
 }
 
 function targetsForBeat(beatStart) {
@@ -3095,12 +3103,14 @@ function evaluateAutoFollowBeat(options = {}) {
       return;
     }
     if (!isTargetGroupMatched(targets)) return;
-    if (!nextUnmatchedTargetGroupAfterTick(beatStart + practiceGridTicks()).length) {
+    const nextGroup = nextUnmatchedTargetGroupAfterTick(beatStart + practiceGridTicks());
+    if (!nextGroup.length) {
       startPracticeRunTailFinish();
       return;
     }
     if (rhythmFollowEnabled()) {
-      animatePracticeViewToTick(beatStart, { snap: false, durationMs: 130, resumeRhythmFollow: true });
+      const nextTick = Math.min(...nextGroup.map((target) => target.startTick));
+      animatePracticeViewToTick(beatStart, { snap: false, durationMs: 130, resumeRhythmFollow: true, rhythmStopTick: nextTick });
       return;
     }
     advancePracticeGrid(1);
@@ -3122,7 +3132,8 @@ function evaluateAutoFollowBeat(options = {}) {
   }
   if (rhythmFollowEnabled()) {
     const alignTick = Math.min(...currentGroup.map((target) => target.startTick));
-    animatePracticeViewToTick(alignTick, { snap: false, durationMs: 130, resumeRhythmFollow: true });
+    const nextTick = Math.min(...nextGroup.map((target) => target.startTick));
+    animatePracticeViewToTick(alignTick, { snap: false, durationMs: 130, resumeRhythmFollow: true, rhythmStopTick: nextTick });
     return;
   }
   const nextTick = Math.min(...nextGroup.map((target) => target.startTick));
@@ -3255,7 +3266,7 @@ function animatePracticeViewToTick(targetTick, options = {}) {
     }
     updateAll();
     if (options.resumeRhythmFollow) {
-      startRhythmFollow();
+      startRhythmFollow(options.rhythmStopTick);
       return;
     }
     scheduleAutoFollowEmptyBeatCheck();
@@ -3268,9 +3279,6 @@ function toggleContinuousPlayback() {
   if (state.rhythmFollow && state.autoFollowMode === "beat" && !state.playback.playing) {
     if (state.autoFollow.rhythmRunning) {
       stopRhythmFollow();
-    } else {
-      state.autoFollow.pausedAfterManualNavigation = false;
-      startRhythmFollow();
     }
     syncPracticeControls();
     return;
@@ -5050,7 +5058,6 @@ function setupEvents() {
       syncControlsFromState();
       saveSettings();
       scheduleAutoFollowEmptyBeatCheck();
-      if (rhythmFollowEnabled()) startRhythmFollow();
     });
   });
   els.flowDisplayButtons.forEach((button) => {
@@ -5068,7 +5075,6 @@ function setupEvents() {
         state.autoFollowMode = "beat";
         state.autoFollow.pausedAfterManualNavigation = false;
         resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: true });
-        startRhythmFollow();
       } else {
         stopRhythmFollow();
       }
