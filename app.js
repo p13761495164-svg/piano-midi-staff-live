@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v232";
+const APP_VERSION = "v233";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1434,10 +1434,11 @@ function buildPracticeNoteItems() {
       const display = displayInfoForPracticeNote(target.note, target.startTick);
       const durationKind = durationKindForTicks(Math.max(1, target.endTick - target.startTick));
       const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
-      const targetX = Math.max(MEASURE_NOTE_LEFT_X, Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(displayStartTick)));
+      const rawTargetX = Math.max(MEASURE_NOTE_LEFT_X, Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(displayStartTick)));
       const targetEndX = Math.max(MEASURE_NOTE_LEFT_X, Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(target.endTick)));
       const matched = isAutoFollowTargetDisplayMatched(target);
       const active = isPracticeTargetVisuallyActive(target, cueBoundaryTick);
+      const targetX = flowPracticeNoteX(rawTargetX, { matched, active });
       const cue = cueTargetIds.has(target.id) && !matched && !active;
       const exportMode = state.exportMode.active;
       return {
@@ -1470,6 +1471,13 @@ function buildPracticeNoteItems() {
 
 function isLeftOfPracticePlayheadX(x) {
   return !state.exportMode.active && x < practicePlayheadX() - 1;
+}
+
+function flowPracticeNoteX(x, item) {
+  if (!flowDisplayEnabled() || state.exportMode.active || (!item.matched && !item.active)) return x;
+  const playheadX = practicePlayheadX();
+  if (x > playheadX + 1) return x;
+  return Math.max(MEASURE_NOTE_LEFT_X + 2, Math.min(x, playheadX - 42));
 }
 
 function shouldDisplayPracticeNoteItem(item) {
