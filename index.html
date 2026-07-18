@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.png?v=240" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon.png?v=240">
-  <link rel="stylesheet" href="styles.css?v=241">
+  <link rel="stylesheet" href="styles.css?v=242">
 </head>
 <body>
   <main class="app-shell">
@@ -23,7 +23,7 @@
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
-              <span id="versionBadge" class="version-badge">v241</span>
+              <span id="versionBadge" class="version-badge">v242</span>
             </div>
           </div>
         </div>
@@ -110,9 +110,10 @@
                 </div>
               </div>
               <div class="field tolerance-field">
-                <span>容错 <strong id="toleranceValue">50%</strong></span>
-                <div class="slider-control">
-                  <input id="toleranceSlider" type="range" min="0" max="50" step="10" value="50" aria-label="容错百分比">
+                <span>容错</span>
+                <div class="segmented two-part" role="group" aria-label="容错">
+                  <button class="mode-option" type="button" data-tolerance-mode="off" aria-pressed="false">关</button>
+                  <button class="mode-option active" type="button" data-tolerance-mode="on" aria-pressed="true">开</button>
                 </div>
               </div>
             </div>
@@ -198,6 +199,6 @@
     </section>
   </main>
   <div id="pdfExportRoot" class="pdf-export-root" aria-hidden="true"></div>
-  <script src="app.js?v=241"></script>
+  <script src="app.js?v=242"></script>
 </body>
 </html>

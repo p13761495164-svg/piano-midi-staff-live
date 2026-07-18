@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v241";
+const APP_VERSION = "v242";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -583,8 +583,7 @@ const els = {
   sustainPedalPageButtons: [...document.querySelectorAll("[data-sustain-pedal-page]")],
   autoFollowButtons: [...document.querySelectorAll("[data-auto-follow-mode]")],
   flowDisplayButtons: [...document.querySelectorAll("[data-flow-display]")],
-  toleranceSlider: document.getElementById("toleranceSlider"),
-  toleranceValue: document.getElementById("toleranceValue"),
+  toleranceButtons: [...document.querySelectorAll("[data-tolerance-mode]")],
   mistakeLogTitle: document.getElementById("mistakeLogTitle"),
   mistakeLogList: document.getElementById("mistakeLogList"),
   mistakeLogEmpty: document.getElementById("mistakeLogEmpty"),
@@ -748,9 +747,7 @@ function applyLanguage() {
   updateText(document.querySelector(".pedal-field span"), t("label.leftPedal"));
   updateText(document.querySelector(".sustain-page-field span"), t("label.sustainPedal"));
   updateText(document.querySelector(".auto-follow-field span"), t("label.autoFollow"));
-  updateText(document.querySelector(".tolerance-field span"), `${t("label.tolerance")} `);
-  els.toleranceValue.textContent = `${state.autoFollowTolerance}%`;
-  document.querySelector(".tolerance-field span").appendChild(els.toleranceValue);
+  updateText(document.querySelector(".tolerance-field span"), t("label.tolerance"));
   updateText(document.querySelector(".time-field span"), t("label.timeSignature"));
   updateText(document.querySelector(".key-field span"), t("label.keySignature"));
   updateText(els.liveSoundFieldLabel, t("label.liveInputSoundField"));
@@ -786,6 +783,8 @@ function applyLanguage() {
   document.querySelector('[data-sustain-pedal-page="page"]').textContent = t("button.page");
   document.querySelector('[data-auto-follow-mode="off"]').textContent = t("button.off");
   document.querySelector('[data-auto-follow-mode="beat"]').textContent = t("button.byBeat");
+  document.querySelector('[data-tolerance-mode="off"]').textContent = t("button.off");
+  document.querySelector('[data-tolerance-mode="on"]').textContent = t("button.on");
   document.querySelector('[data-flow-display="off"]').textContent = t("button.off");
   document.querySelector('[data-flow-display="on"]').textContent = t("button.on");
 
@@ -1013,8 +1012,11 @@ function syncControlsFromState() {
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
-  els.toleranceSlider.value = String(state.autoFollowTolerance);
-  els.toleranceValue.textContent = `${state.autoFollowTolerance}%`;
+  els.toleranceButtons.forEach((button) => {
+    const active = (button.dataset.toleranceMode === "on") === (state.autoFollowTolerance !== 0);
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
   els.timeSignatureButtons.forEach((button) => {
     const active = button.dataset.timeSignature === timeSignatureKey(state.practice.timeSignature);
     button.classList.toggle("active", active);
@@ -1059,7 +1061,7 @@ function parseTimeSignatureKey(value) {
 }
 
 function clampTolerance(value) {
-  return Math.max(0, Math.min(50, Math.round((Number(value) || 0) / 10) * 10));
+  return Number(value) > 0 ? 50 : 0;
 }
 
 function syncRecordingControls() {
@@ -5081,17 +5083,13 @@ function setupEvents() {
       drawStaff();
     });
   });
-  els.toleranceSlider.addEventListener("input", () => {
-    state.autoFollowTolerance = clampTolerance(els.toleranceSlider.value);
-    syncControlsFromState();
-    saveSettings();
-    evaluateAutoFollowBeat();
-  });
-  els.toleranceSlider.addEventListener("change", () => {
-    state.autoFollowTolerance = clampTolerance(els.toleranceSlider.value);
-    syncControlsFromState();
-    saveSettings();
-    evaluateAutoFollowBeat();
+  els.toleranceButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.autoFollowTolerance = button.dataset.toleranceMode === "on" ? 50 : 0;
+      syncControlsFromState();
+      saveSettings();
+      evaluateAutoFollowBeat();
+    });
   });
   els.timeSignatureButtons.forEach((button) => {
     button.addEventListener("click", () => {
