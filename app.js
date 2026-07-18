@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v235";
+const APP_VERSION = "v236";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -24,6 +24,7 @@ const DISPLAY_FILENAME_MAX = 50;
 const SUSTAIN_PEDAL_PAGE_DEBOUNCE_MS = 260;
 const AUTO_FOLLOW_ANIMATION_MS = 260;
 const ARPEGGIO_DISPLAY_WINDOW_RATIO = 0.1;
+const PRACTICE_CHORD_WINDOW_SECONDS = 0.09;
 const DENSE_SUBDIVISION_PRACTICE_BPM = 70;
 const PLAYBACK_VISUAL_FRAME_MS = 24;
 const ROBOT_BEAT_VIEW_ANIMATION_MS = 180;
@@ -1671,6 +1672,12 @@ function arpeggioGroupingWindowTicks() {
   return Math.max(1, practiceBeatTicks() * ARPEGGIO_DISPLAY_WINDOW_RATIO);
 }
 
+function practiceChordWindowTicks() {
+  const secondsWindow = PRACTICE_CHORD_WINDOW_SECONDS / Math.max(0.000001, secondsPerPracticeTick());
+  const gridWindow = practiceGridTicks() * 0.45;
+  return Math.max(1, Math.round(Math.min(secondsWindow, gridWindow)));
+}
+
 function visiblePracticeTargets() {
   if (!state.practice.measures.length) return [];
   const viewStartTick = currentVisualStartTick();
@@ -2953,27 +2960,27 @@ function nextUnmatchedTargetGroupAfterTick(tick) {
   const remainingTargets = (state.practice.notes || [])
     .filter((target) => target.startTick >= tick && !isAutoFollowTargetMatched(target))
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
-  return targetGroupsByStartTick(remainingTargets)[0] || [];
+  return autoFollowTargetGroups(remainingTargets)[0] || [];
 }
 
 function firstTargetGroupAtOrAfterTick(tick) {
   const targets = (state.practice.notes || [])
     .filter((target) => target.startTick >= tick)
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
-  return targetGroupsByStartTick(targets)[0] || [];
+  return autoFollowTargetGroups(targets)[0] || [];
 }
 
-function targetGroupsByStartTick(targets) {
+function targetGroupsByStartTick(targets, options = {}) {
   const groups = [];
   let currentTick = null;
   let previousTick = null;
   let currentGroup = [];
-  const arpeggioWindowTicks = arpeggioGroupingWindowTicks();
+  const groupingWindowTicks = Math.max(0, options.windowTicks ?? arpeggioGroupingWindowTicks());
   targets
     .slice()
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
     .forEach((target) => {
-    if (currentTick === null || previousTick === null || target.startTick - previousTick > arpeggioWindowTicks) {
+    if (currentTick === null || previousTick === null || target.startTick - previousTick > groupingWindowTicks) {
       if (currentGroup.length) groups.push(currentGroup);
       currentTick = target.startTick;
       currentGroup = [];
@@ -2985,8 +2992,12 @@ function targetGroupsByStartTick(targets) {
   return groups;
 }
 
+function autoFollowTargetGroups(targets) {
+  return targetGroupsByStartTick(targets, { windowTicks: practiceChordWindowTicks() });
+}
+
 function firstUnmatchedTargetGroup(targets) {
-  const groups = targetGroupsByStartTick(targets);
+  const groups = autoFollowTargetGroups(targets);
   for (const group of groups) {
     if (!isTargetGroupMatched(group)) {
       return group;
@@ -3193,7 +3204,7 @@ function isAutoFollowTargetDisplayMatched(target) {
 }
 
 function targetGroupForTarget(target) {
-  const groups = targetGroupsByStartTick(targetsForBeat(beatStartForTick(target.startTick)));
+  const groups = autoFollowTargetGroups(targetsForBeat(beatStartForTick(target.startTick)));
   return groups.find((group) => group.some((item) => item.id === target.id)) || [target];
 }
 
