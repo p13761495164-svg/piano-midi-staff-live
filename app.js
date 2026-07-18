@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v218";
+const APP_VERSION = "v219";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -452,6 +452,7 @@ const state = {
     animationFrame: 0,
     emptyAdvanceTimer: 0,
     animating: false,
+    finishingRun: false,
     pausedAfterManualNavigation: false
   },
   exportMode: {
@@ -2128,6 +2129,7 @@ function releaseNote(note, source = "midi", channel = 0) {
   stopLiveInputTone(note);
   state.activeNotes.delete(note);
   state.releasedWhileSustained.delete(note);
+  finishPracticeRunIfReleased();
   updateAll();
 }
 
@@ -2138,6 +2140,7 @@ function releaseSustainedNotes() {
   });
   state.releasedWhileSustained.clear();
   stopReleasedLiveInputTones(releasedNotes);
+  finishPracticeRunIfReleased();
   updateAll();
 }
 
@@ -2679,6 +2682,7 @@ function resetAutoFollowBeat(beatStart = null, options = {}) {
   if (options.clearPlayed) {
     state.autoFollow.playedNotesByBeat = new Map();
     state.autoFollow.correctTargetIds = new Set();
+    state.autoFollow.finishingRun = false;
   }
 }
 
@@ -2897,7 +2901,7 @@ function evaluateAutoFollowBeat(options = {}) {
     }
     if (!isTargetGroupMatched(targets)) return;
     if (!nextUnmatchedTargetGroupAfterTick(beatStart + practiceGridTicks()).length) {
-      finishPracticeRun();
+      startPracticeRunTailFinish();
       return;
     }
     advancePracticeGrid(1);
@@ -2914,7 +2918,7 @@ function evaluateAutoFollowBeat(options = {}) {
   const groupEndTick = Math.max(...currentGroup.map((target) => target.startTick));
   const nextGroup = nextUnmatchedTargetGroupAfterTick(groupEndTick + 1);
   if (!nextGroup.length) {
-    finishPracticeRun();
+    startPracticeRunTailFinish();
     return;
   }
   const nextTick = Math.min(...nextGroup.map((target) => target.startTick));
@@ -2932,11 +2936,28 @@ function evaluateStrictAutoFollow() {
   const groupEndTick = Math.max(...currentGroup.map((target) => target.startTick));
   const nextGroup = nextUnmatchedTargetGroupAfterTick(groupEndTick + 1);
   if (!nextGroup.length) {
-    finishPracticeRun();
+    startPracticeRunTailFinish();
     return;
   }
   const nextTick = Math.min(...nextGroup.map((target) => target.startTick));
   animatePracticeViewToTick(nextTick, { snap: false });
+}
+
+function startPracticeRunTailFinish() {
+  if (!state.practice.measures.length) return;
+  if (!state.activeNotes.size) {
+    finishPracticeRun();
+    return;
+  }
+  state.autoFollow.finishingRun = true;
+  state.autoFollow.pausedAfterManualNavigation = false;
+  animatePracticeViewToTick(practiceEndTick(), { snap: false, finishPracticeRun: true });
+}
+
+function finishPracticeRunIfReleased() {
+  if (state.autoFollow.finishingRun && !state.activeNotes.size) {
+    finishPracticeRun();
+  }
 }
 
 function finishPracticeRun() {
@@ -2945,6 +2966,7 @@ function finishPracticeRun() {
   stopMeasurePlayback();
   state.practice.viewStartTick = 0;
   state.practice.currentMeasure = 0;
+  state.autoFollow.finishingRun = false;
   state.autoFollow.pausedAfterManualNavigation = false;
   resetAutoFollowBeat(0, { clearPlayed: true });
   updateAll();
@@ -3012,6 +3034,10 @@ function animatePracticeViewToTick(targetTick, options = {}) {
     state.practice.currentMeasure = measureIndexForTick(endTick);
     state.autoFollow.animating = false;
     resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: Boolean(options.clearPlayed) });
+    if (options.finishPracticeRun) {
+      finishPracticeRun();
+      return;
+    }
     updateAll();
     scheduleAutoFollowEmptyBeatCheck();
   };
