@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v239";
+const APP_VERSION = "v240";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -135,7 +135,7 @@ const PLAYBACK_INSTRUMENTS = [
   { id: "grand", labels: { zh: "Easy Piano", ja: "Easy Piano", en: "Easy Piano" }, custom: true },
   { id: "piano", labels: { zh: "原声钢琴", ja: "アコースティックピアノ", en: "Acoustic Piano" }, wave: "triangle", partials: [1, 2, 3, 4.1], levels: [1, 0.34, 0.18, 0.08], attack: 0.006, decay: 3.3, brightness: 3800 },
   { id: "electric", labels: { zh: "电钢琴", ja: "エレピ", en: "Electric Piano" }, wave: "sine", partials: [1, 2, 3.01, 4], levels: [1, 0.42, 0.2, 0.1], attack: 0.012, decay: 3.8, brightness: 2600 },
-  { id: "kalimba", labels: { zh: "卡林巴", ja: "カリンバ", en: "Kalimba" }, wave: "sine", partials: [1, 4.03], levels: [1, 0.3], attack: 0.004, decay: 3, brightness: 5200 },
+  { id: "kalimba", labels: { zh: "卡林巴", ja: "カリンバ", en: "Kalimba" }, wave: "sine", partials: [1, 2.01, 4.03, 7.02], levels: [1, 0.16, 0.34, 0.08], attack: 0.002, decay: 2.1, brightness: 7600 },
   { id: "musicbox", labels: { zh: "八音盒", ja: "オルゴール", en: "Music Box" }, wave: "sine", partials: [1, 2, 3, 5.02], levels: [1, 0.22, 0.18, 0.12], attack: 0.002, decay: 2.8, brightness: 7000 },
   { id: "marimba", labels: { zh: "马林巴／木琴", ja: "マリンバ／木琴", en: "Marimba" }, wave: "sine", partials: [1, 3.99, 9.02], levels: [1, 0.23, 0.08], attack: 0.003, decay: 1.8, brightness: 3200 },
   { id: "harp", labels: { zh: "竖琴", ja: "ハープ", en: "Harp" }, wave: "triangle", partials: [1, 2, 3, 4], levels: [1, 0.25, 0.13, 0.06], attack: 0.01, decay: 4.2, brightness: 4400 },
@@ -446,12 +446,12 @@ const state = {
   liveInputSound: false,
   silentPlayback: false,
   robotPerformance: false,
-  flowDisplay: false,
+  flowDisplay: true,
   rhythmFollow: false,
   pedalStep: "on",
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
-  autoFollowMode: "off",
+  autoFollowMode: "beat",
   autoFollowTolerance: 50,
   autoFollow: {
     currentBeatStart: null,
