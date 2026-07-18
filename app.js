@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v224";
+const APP_VERSION = "v225";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2983,7 +2983,7 @@ function evaluateAutoFollowBeat(options = {}) {
       startPracticeRunTailFinish();
       return;
     }
-    advancePracticeGrid(1, { tempoDuration: true, linear: true });
+    advancePracticeGrid(1);
     return;
   }
 
@@ -3001,7 +3001,7 @@ function evaluateAutoFollowBeat(options = {}) {
     return;
   }
   const nextTick = Math.min(...nextGroup.map((target) => target.startTick));
-  animatePracticeViewToTick(nextTick, { snap: false, tempoDuration: true, linear: true });
+  animatePracticeViewToTick(nextTick, { snap: false });
 }
 
 function evaluateStrictAutoFollow() {
@@ -3019,7 +3019,7 @@ function evaluateStrictAutoFollow() {
     return;
   }
   const nextTick = Math.min(...nextGroup.map((target) => target.startTick));
-  animatePracticeViewToTick(nextTick, { snap: false, tempoDuration: true, linear: true });
+  animatePracticeViewToTick(nextTick, { snap: false });
 }
 
 function startPracticeRunTailFinish() {
@@ -3105,15 +3105,11 @@ function animatePracticeViewToTick(targetTick, options = {}) {
   state.autoFollow.emptyAdvanceTimer = 0;
   state.autoFollow.animating = true;
   const startedAt = performance.now();
-  const tempoDurationMs = Math.abs(endTick - startTick) * secondsPerPracticeTick() * 1000;
-  const durationMs = Math.max(
-    1,
-    Number(options.durationMs) || (options.tempoDuration ? tempoDurationMs : AUTO_FOLLOW_ANIMATION_MS)
-  );
+  const durationMs = Math.max(1, Number(options.durationMs) || AUTO_FOLLOW_ANIMATION_MS);
 
   const step = (now) => {
     const progress = Math.min(1, (now - startedAt) / durationMs);
-    const eased = options.linear || options.tempoDuration ? progress : 1 - Math.pow(1 - progress, 3);
+    const eased = options.linear ? progress : 1 - Math.pow(1 - progress, 3);
     state.practice.viewStartTick = startTick + (endTick - startTick) * eased;
     state.practice.currentMeasure = measureIndexForTick(state.practice.viewStartTick);
     updateAll();
