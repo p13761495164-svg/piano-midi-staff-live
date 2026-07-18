@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v226";
+const APP_VERSION = "v227";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -49,7 +49,8 @@ const SETTINGS_FIELD_KEYS = {
   liveInputSound: "piano-midi-staff-live-input-sound",
   silentPlayback: "piano-midi-staff-silent-playback",
   robotPerformance: "piano-midi-staff-robot-performance",
-  flowDisplay: "piano-midi-staff-flow-display"
+  flowDisplay: "piano-midi-staff-flow-display",
+  rhythmFollow: "piano-midi-staff-rhythm-follow"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const KEY_SIGNATURE_BY_FIFTHS = {
@@ -151,6 +152,7 @@ const I18N = {
     "label.leftPedal": "左踏板翻页",
     "label.sustainPedal": "延音踏板翻页",
     "label.autoFollow": "自动跟随",
+    "label.rhythmFollow": "节奏跟随",
     "label.tolerance": "容错",
     "label.timeSignature": "拍号",
     "label.keySignature": "调号",
@@ -229,6 +231,7 @@ const I18N = {
     "label.leftPedal": "左ペダル送り",
     "label.sustainPedal": "サステイン送り",
     "label.autoFollow": "自動追従",
+    "label.rhythmFollow": "リズム追従",
     "label.tolerance": "許容",
     "label.timeSignature": "拍子",
     "label.keySignature": "調号",
@@ -307,6 +310,7 @@ const I18N = {
     "label.leftPedal": "Left Pedal Page",
     "label.sustainPedal": "Sustain Pedal Page",
     "label.autoFollow": "Auto Follow",
+    "label.rhythmFollow": "Rhythm Follow",
     "label.tolerance": "Tolerance",
     "label.timeSignature": "Time Signature",
     "label.keySignature": "Key",
@@ -446,6 +450,7 @@ const state = {
   silentPlayback: false,
   robotPerformance: false,
   flowDisplay: false,
+  rhythmFollow: false,
   pedalStep: "on",
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
@@ -457,6 +462,11 @@ const state = {
     playedNotesByBeat: new Map(),
     correctTargetIds: new Set(),
     animationFrame: 0,
+    rhythmFrame: 0,
+    rhythmRunning: false,
+    rhythmStartedAt: 0,
+    rhythmStartTick: 0,
+    rhythmLastFrameAt: 0,
     emptyAdvanceTimer: 0,
     animating: false,
     finishingRun: false,
@@ -556,6 +566,7 @@ const els = {
   robotPerformanceFieldLabel: document.getElementById("robotPerformanceFieldLabel"),
   robotPerformanceToggleLabel: document.getElementById("robotPerformanceToggleLabel"),
   flowDisplayLabel: document.getElementById("flowDisplayLabel"),
+  rhythmFollowLabel: document.getElementById("rhythmFollowLabel"),
   displaySettingsTitle: document.getElementById("displaySettingsTitle"),
   practiceSettingsTitle: document.getElementById("practiceSettingsTitle"),
   soundSettingsTitle: document.getElementById("soundSettingsTitle"),
@@ -575,6 +586,7 @@ const els = {
   sustainPedalPageButtons: [...document.querySelectorAll("[data-sustain-pedal-page]")],
   autoFollowButtons: [...document.querySelectorAll("[data-auto-follow-mode]")],
   flowDisplayButtons: [...document.querySelectorAll("[data-flow-display]")],
+  rhythmFollowButtons: [...document.querySelectorAll("[data-rhythm-follow]")],
   toleranceSlider: document.getElementById("toleranceSlider"),
   toleranceValue: document.getElementById("toleranceValue"),
   mistakeLogTitle: document.getElementById("mistakeLogTitle"),
@@ -732,6 +744,7 @@ function applyLanguage() {
   updateText(document.querySelector(".pedal-field span"), t("label.leftPedal"));
   updateText(document.querySelector(".sustain-page-field span"), t("label.sustainPedal"));
   updateText(document.querySelector(".auto-follow-field span"), t("label.autoFollow"));
+  updateText(els.rhythmFollowLabel, t("label.rhythmFollow"));
   updateText(document.querySelector(".tolerance-field span"), `${t("label.tolerance")} `);
   els.toleranceValue.textContent = `${state.autoFollowTolerance}%`;
   document.querySelector(".tolerance-field span").appendChild(els.toleranceValue);
@@ -772,6 +785,8 @@ function applyLanguage() {
   document.querySelector('[data-auto-follow-mode="beat"]').textContent = t("button.byBeat");
   document.querySelector('[data-flow-display="off"]').textContent = t("button.off");
   document.querySelector('[data-flow-display="on"]').textContent = t("button.on");
+  document.querySelector('[data-rhythm-follow="off"]').textContent = t("button.off");
+  document.querySelector('[data-rhythm-follow="on"]').textContent = t("button.on");
 
   els.inputSelect.options[0].textContent = t("option.autoSelect");
   renderPlaybackInstrumentOptions();
@@ -902,6 +917,7 @@ function readSettings() {
     const silentPlayback = window.localStorage.getItem(SETTINGS_FIELD_KEYS.silentPlayback);
     const robotPerformance = window.localStorage.getItem(SETTINGS_FIELD_KEYS.robotPerformance);
     const flowDisplay = window.localStorage.getItem(SETTINGS_FIELD_KEYS.flowDisplay);
+    const rhythmFollow = window.localStorage.getItem(SETTINGS_FIELD_KEYS.rhythmFollow);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
@@ -918,6 +934,7 @@ function readSettings() {
     if (silentPlayback === "true" || silentPlayback === "false") settings.silentPlayback = silentPlayback === "true";
     if (robotPerformance === "true" || robotPerformance === "false") settings.robotPerformance = robotPerformance === "true";
     if (flowDisplay === "true" || flowDisplay === "false") settings.flowDisplay = flowDisplay === "true";
+    if (rhythmFollow === "true" || rhythmFollow === "false") settings.rhythmFollow = rhythmFollow === "true";
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -939,7 +956,8 @@ function saveSettings() {
     liveInputSound: state.liveInputSound,
     silentPlayback: state.silentPlayback,
     robotPerformance: state.robotPerformance,
-    flowDisplay: state.flowDisplay
+    flowDisplay: state.flowDisplay,
+    rhythmFollow: state.rhythmFollow
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -958,6 +976,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.silentPlayback, String(settings.silentPlayback));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.robotPerformance, String(settings.robotPerformance));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.flowDisplay, String(settings.flowDisplay));
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.rhythmFollow, String(settings.rhythmFollow));
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -993,6 +1012,11 @@ function syncControlsFromState() {
   });
   els.flowDisplayButtons.forEach((button) => {
     const active = (button.dataset.flowDisplay === "on") === state.flowDisplay;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  els.rhythmFollowButtons.forEach((button) => {
+    const active = (button.dataset.rhythmFollow === "on") === state.rhythmFollow;
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
@@ -1142,10 +1166,11 @@ function jumpToMistake(id) {
 
 function syncPlaybackToggleButton() {
   const icon = els.playMeasureButton.querySelector(".control-icon");
-  const label = state.playback.playing ? t("button.pause") : t("button.play");
+  const running = state.playback.playing || state.autoFollow.rhythmRunning;
+  const label = running ? t("button.pause") : t("button.play");
   if (icon) {
-    icon.classList.toggle("play-icon", !state.playback.playing);
-    icon.classList.toggle("pause-icon", state.playback.playing);
+    icon.classList.toggle("play-icon", !running);
+    icon.classList.toggle("pause-icon", running);
   }
   updateIconButtonLabel(els.playMeasureButton, label);
 }
@@ -1178,6 +1203,10 @@ function applySavedSettings() {
   if (typeof settings.flowDisplay === "boolean") {
     state.flowDisplay = settings.flowDisplay;
   }
+  if (typeof settings.rhythmFollow === "boolean") {
+    state.rhythmFollow = settings.rhythmFollow;
+    if (state.rhythmFollow) state.autoFollowMode = "beat";
+  }
   if (typeof settings.selectedInputId === "string") {
     state.selectedInputId = settings.selectedInputId;
   }
@@ -1191,6 +1220,9 @@ function applySavedSettings() {
   }
   if (["off", "beat"].includes(settings.autoFollowMode)) {
     state.autoFollowMode = settings.autoFollowMode;
+  }
+  if (state.rhythmFollow) {
+    state.autoFollowMode = "beat";
   }
   if (Number.isFinite(settings.autoFollowTolerance)) {
     state.autoFollowTolerance = clampTolerance(settings.autoFollowTolerance);
@@ -2183,6 +2215,7 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   state.autoFollow.pausedAfterManualNavigation = false;
   markAutoFollowNote(note);
   evaluateAutoFollowBeat();
+  startRhythmFollow();
   updateAll();
 }
 
@@ -2707,10 +2740,12 @@ function currentTempoBpm() {
 
 function adjustPracticeTempo(delta) {
   if (!state.practice.measures.length) return;
+  const resumeRhythm = state.autoFollow.rhythmRunning;
   stopMeasurePlayback();
   const nextBpm = Math.max(20, Math.min(300, currentTempoBpm() + delta));
   state.practice.microsecondsPerQuarter = microsecondsFromBpm(nextBpm);
   syncPracticeControls();
+  if (resumeRhythm) restartRhythmFollowFromCurrentTick();
 }
 
 function syncTempoControls() {
@@ -2751,6 +2786,7 @@ function syncPlaybackScrubber() {
 function seekPracticeView(tick) {
   if (!state.practice.measures.length) return;
   stopMeasurePlayback();
+  stopRhythmFollow();
   const nextTick = clampPracticeViewStartTick(Number(tick) || 0);
   state.practice.viewStartTick = nextTick;
   state.practice.currentMeasure = measureIndexForTick(nextTick);
@@ -2786,10 +2822,67 @@ function resetAutoFollowBeat(beatStart = null, options = {}) {
 
 function cancelAutoFollowAnimation() {
   window.cancelAnimationFrame(state.autoFollow.animationFrame);
+  stopRhythmFollow();
   window.clearTimeout(state.autoFollow.emptyAdvanceTimer);
   state.autoFollow.animationFrame = 0;
   state.autoFollow.emptyAdvanceTimer = 0;
   state.autoFollow.animating = false;
+}
+
+function rhythmFollowEnabled() {
+  return Boolean(
+    state.rhythmFollow &&
+    state.autoFollowMode === "beat" &&
+    !state.playback.playing &&
+    !state.playback.paused &&
+    !state.autoFollow.pausedAfterManualNavigation &&
+    state.practice.measures.length
+  );
+}
+
+function startRhythmFollow() {
+  if (!rhythmFollowEnabled() || state.autoFollow.animating || state.autoFollow.finishingRun) return;
+  window.cancelAnimationFrame(state.autoFollow.rhythmFrame);
+  state.autoFollow.rhythmRunning = true;
+  state.autoFollow.rhythmStartedAt = performance.now();
+  state.autoFollow.rhythmStartTick = state.practice.viewStartTick || 0;
+  state.autoFollow.rhythmLastFrameAt = 0;
+
+  const step = (now) => {
+    if (!rhythmFollowEnabled() || state.autoFollow.animating || state.autoFollow.finishingRun) {
+      stopRhythmFollow();
+      return;
+    }
+    const elapsedSeconds = Math.max(0, (now - state.autoFollow.rhythmStartedAt) / 1000);
+    const nextTick = Math.min(
+      maxPracticeViewStartTick(),
+      state.autoFollow.rhythmStartTick + elapsedSeconds / Math.max(0.000001, secondsPerPracticeTick())
+    );
+    if (now - state.autoFollow.rhythmLastFrameAt >= PLAYBACK_VISUAL_FRAME_MS) {
+      state.autoFollow.rhythmLastFrameAt = now;
+      state.practice.viewStartTick = nextTick;
+      state.practice.currentMeasure = measureIndexForTick(nextTick);
+      updateAll();
+    }
+    if (nextTick >= maxPracticeViewStartTick()) {
+      stopRhythmFollow();
+      return;
+    }
+    state.autoFollow.rhythmFrame = window.requestAnimationFrame(step);
+  };
+
+  state.autoFollow.rhythmFrame = window.requestAnimationFrame(step);
+}
+
+function stopRhythmFollow() {
+  window.cancelAnimationFrame(state.autoFollow.rhythmFrame);
+  state.autoFollow.rhythmFrame = 0;
+  state.autoFollow.rhythmRunning = false;
+}
+
+function restartRhythmFollowFromCurrentTick() {
+  stopRhythmFollow();
+  startRhythmFollow();
 }
 
 function targetsForBeat(beatStart) {
@@ -2966,6 +3059,7 @@ function scheduleAutoFollowEmptyBeatCheck() {
   window.clearTimeout(state.autoFollow.emptyAdvanceTimer);
   if (
     state.autoFollowMode !== "beat" ||
+    state.rhythmFollow ||
     state.playback.playing ||
     state.autoFollow.animating ||
     state.autoFollow.pausedAfterManualNavigation ||
@@ -3002,6 +3096,10 @@ function evaluateAutoFollowBeat(options = {}) {
       startPracticeRunTailFinish();
       return;
     }
+    if (rhythmFollowEnabled()) {
+      animatePracticeViewToTick(beatStart, { snap: false, durationMs: 130, resumeRhythmFollow: true });
+      return;
+    }
     advancePracticeGrid(1);
     return;
   }
@@ -3017,6 +3115,11 @@ function evaluateAutoFollowBeat(options = {}) {
   const nextGroup = nextUnmatchedTargetGroupAfterTick(groupEndTick + 1);
   if (!nextGroup.length) {
     startPracticeRunTailFinish();
+    return;
+  }
+  if (rhythmFollowEnabled()) {
+    const alignTick = Math.min(...currentGroup.map((target) => target.startTick));
+    animatePracticeViewToTick(alignTick, { snap: false, durationMs: 130, resumeRhythmFollow: true });
     return;
   }
   const nextTick = Math.min(...nextGroup.map((target) => target.startTick));
@@ -3119,6 +3222,7 @@ function animatePracticeViewToTick(targetTick, options = {}) {
   }
 
   stopMeasurePlayback();
+  stopRhythmFollow();
   window.cancelAnimationFrame(state.autoFollow.animationFrame);
   window.clearTimeout(state.autoFollow.emptyAdvanceTimer);
   state.autoFollow.emptyAdvanceTimer = 0;
@@ -3147,6 +3251,10 @@ function animatePracticeViewToTick(targetTick, options = {}) {
       return;
     }
     updateAll();
+    if (options.resumeRhythmFollow) {
+      startRhythmFollow();
+      return;
+    }
     scheduleAutoFollowEmptyBeatCheck();
   };
 
@@ -3154,6 +3262,16 @@ function animatePracticeViewToTick(targetTick, options = {}) {
 }
 
 function toggleContinuousPlayback() {
+  if (state.rhythmFollow && state.autoFollowMode === "beat" && !state.playback.playing) {
+    if (state.autoFollow.rhythmRunning) {
+      stopRhythmFollow();
+    } else {
+      state.autoFollow.pausedAfterManualNavigation = false;
+      startRhythmFollow();
+    }
+    syncPracticeControls();
+    return;
+  }
   if (state.playback.playing) {
     pauseMeasurePlayback();
     syncPracticeControls();
@@ -3688,6 +3806,7 @@ function stopAllLiveInputTones() {
 }
 
 function stopMeasurePlayback() {
+  stopRhythmFollow();
   window.cancelAnimationFrame(state.playback.animationFrame);
   state.playback.animationFrame = 0;
   if (state.playback.stopTimer) {
@@ -4923,15 +5042,33 @@ function setupEvents() {
     button.addEventListener("click", () => {
       cancelAutoFollowAnimation();
       state.autoFollowMode = button.dataset.autoFollowMode;
+      if (state.autoFollowMode !== "beat") state.rhythmFollow = false;
       resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: true });
       syncControlsFromState();
       saveSettings();
       scheduleAutoFollowEmptyBeatCheck();
+      if (rhythmFollowEnabled()) startRhythmFollow();
     });
   });
   els.flowDisplayButtons.forEach((button) => {
     button.addEventListener("click", () => {
       state.flowDisplay = button.dataset.flowDisplay === "on";
+      syncControlsFromState();
+      saveSettings();
+      drawStaff();
+    });
+  });
+  els.rhythmFollowButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.rhythmFollow = button.dataset.rhythmFollow === "on";
+      if (state.rhythmFollow) {
+        state.autoFollowMode = "beat";
+        state.autoFollow.pausedAfterManualNavigation = false;
+        resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: true });
+        startRhythmFollow();
+      } else {
+        stopRhythmFollow();
+      }
       syncControlsFromState();
       saveSettings();
       drawStaff();
