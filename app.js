@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v216";
+const APP_VERSION = "v217";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2894,6 +2894,10 @@ function evaluateAutoFollowBeat(options = {}) {
       return;
     }
     if (!isTargetGroupMatched(targets)) return;
+    if (!nextUnmatchedTargetGroupAfterTick(beatStart + practiceGridTicks()).length) {
+      finishPracticeRun();
+      return;
+    }
     advancePracticeGrid(1);
     return;
   }
@@ -2907,9 +2911,11 @@ function evaluateAutoFollowBeat(options = {}) {
 
   const groupEndTick = Math.max(...currentGroup.map((target) => target.startTick));
   const nextGroup = nextUnmatchedTargetGroupAfterTick(groupEndTick + 1);
-  const nextTick = nextGroup.length
-    ? Math.min(...nextGroup.map((target) => target.startTick))
-    : practiceEndTick();
+  if (!nextGroup.length) {
+    finishPracticeRun();
+    return;
+  }
+  const nextTick = Math.min(...nextGroup.map((target) => target.startTick));
   animatePracticeViewToTick(nextTick, { snap: false });
 }
 
@@ -2923,10 +2929,24 @@ function evaluateStrictAutoFollow() {
 
   const groupEndTick = Math.max(...currentGroup.map((target) => target.startTick));
   const nextGroup = nextUnmatchedTargetGroupAfterTick(groupEndTick + 1);
-  const nextTick = nextGroup.length
-    ? Math.min(...nextGroup.map((target) => target.startTick))
-    : practiceEndTick();
+  if (!nextGroup.length) {
+    finishPracticeRun();
+    return;
+  }
+  const nextTick = Math.min(...nextGroup.map((target) => target.startTick));
   animatePracticeViewToTick(nextTick, { snap: false });
+}
+
+function finishPracticeRun() {
+  if (!state.practice.measures.length) return;
+  cancelAutoFollowAnimation();
+  stopMeasurePlayback();
+  state.practice.viewStartTick = 0;
+  state.practice.currentMeasure = 0;
+  state.autoFollow.pausedAfterManualNavigation = false;
+  resetAutoFollowBeat(0, { clearPlayed: true });
+  updateAll();
+  scheduleAutoFollowEmptyBeatCheck();
 }
 
 function isAutoFollowTargetMatched(target) {
