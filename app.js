@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v219";
+const APP_VERSION = "v220";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -432,6 +432,7 @@ const state = {
   releasedWhileSustained: new Set(),
   sustainDown: false,
   sustainChannel: 0,
+  chordPedalEpoch: 0,
   softPedalDown: false,
   keySignature: "C",
   noteLabelMode: "degree",
@@ -605,7 +606,10 @@ function chordSuffixLabel(suffix) {
 }
 
 function currentSoundingNotes() {
-  const notes = new Set([...state.activeNotes.keys(), ...state.playback.activeNotes]);
+  const inputNotes = [...state.activeNotes.entries()]
+    .filter(([, active]) => !state.sustainDown || active.chordPedalEpoch === state.chordPedalEpoch)
+    .map(([note]) => note);
+  const notes = new Set([...inputNotes, ...state.playback.activeNotes]);
   return [...notes].sort((a, b) => a - b);
 }
 
@@ -2102,7 +2106,14 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   recordMidiEvent("noteon", { note, velocity, channel });
   state.releasedWhileSustained.delete(note);
   const wrong = isWrongPracticeInputNote(note);
-  state.activeNotes.set(note, { velocity, source, channel, startedAt: performance.now(), wrong });
+  state.activeNotes.set(note, {
+    velocity,
+    source,
+    channel,
+    startedAt: performance.now(),
+    wrong,
+    chordPedalEpoch: state.chordPedalEpoch
+  });
   if (wrong) recordMistake(note);
   startLiveInputTone(note, velocity);
   state.autoFollow.pausedAfterManualNavigation = false;
@@ -4439,9 +4450,12 @@ function handleMidiCommand(status, note, value) {
   if (command === 0xb0 && note === 64) {
     recordMidiEvent("cc", { controller: 64, value, channel });
     const pressed = value >= 64;
+    const wasDown = state.sustainDown;
+    if (pressed && !wasDown) state.chordPedalEpoch += 1;
     state.sustainDown = pressed;
     state.sustainChannel = channel;
     if (!state.sustainDown) releaseSustainedNotes();
+    syncCurrentChord();
     return;
   }
 
