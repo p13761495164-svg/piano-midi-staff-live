@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v230";
+const APP_VERSION = "v232";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -643,8 +643,16 @@ function currentInputVisualNotes() {
 }
 
 function isPracticeTargetVisuallyActive(target, cueBoundaryTick = Infinity) {
+  const activeInput = state.activeNotes.get(target.note);
+  const activeByInput = Boolean(activeInput) &&
+    target.startTick <= cueBoundaryTick &&
+    (
+      !flowDisplayEnabled() ||
+      target.startTick >= (state.practice.viewStartTick || 0) ||
+      activeInput.targetId === target.id
+    );
   return (
-    (isPracticeNoteActive(target.note) || state.playback.activeTargetIds.has(target.id)) &&
+    (activeByInput || state.playback.activeTargetIds.has(target.id)) &&
     target.startTick <= cueBoundaryTick
   );
 }
@@ -1466,6 +1474,7 @@ function isLeftOfPracticePlayheadX(x) {
 
 function shouldDisplayPracticeNoteItem(item) {
   if (!isLeftOfPracticePlayheadX(item.x)) return true;
+  if (flowDisplayEnabled() && item.x <= MEASURE_NOTE_LEFT_X + 1) return false;
   return Boolean(item.active);
 }
 
@@ -2180,18 +2189,19 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   recordMidiEvent("noteon", { note, velocity, channel });
   state.releasedWhileSustained.delete(note);
   const wrong = isWrongPracticeInputNote(note);
+  state.autoFollow.pausedAfterManualNavigation = false;
+  const matchedTarget = markAutoFollowNote(note);
   state.activeNotes.set(note, {
     velocity,
     source,
     channel,
     startedAt: performance.now(),
     wrong,
-    chordPedalEpoch: state.chordPedalEpoch
+    chordPedalEpoch: state.chordPedalEpoch,
+    targetId: matchedTarget?.id || null
   });
   if (wrong) recordMistake(note);
   startLiveInputTone(note, velocity);
-  state.autoFollow.pausedAfterManualNavigation = false;
-  markAutoFollowNote(note);
   evaluateAutoFollowBeat();
   updateAll();
 }
@@ -2986,11 +2996,12 @@ function firstUnmatchedTargetGroup(targets) {
 }
 
 function markAutoFollowNote(note) {
-  if (state.autoFollowMode !== "beat" || state.playback.playing || !state.practice.measures.length) return;
+  if (state.autoFollowMode !== "beat" || state.playback.playing || !state.practice.measures.length) return null;
   const beatStart = currentAutoFollowBeatStart();
   if (state.autoFollow.currentBeatStart !== beatStart) resetAutoFollowBeat(beatStart);
   const target = targetForPlayedNote(note, beatStart);
   if (target) markPlayedTargetForBeat(beatStartForTick(target.startTick), target);
+  return target || null;
 }
 
 function targetForPlayedNote(note, currentBeatStart) {
