@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v225";
+const APP_VERSION = "v226";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -633,6 +633,13 @@ function currentInputVisualNotes() {
   return [...state.activeNotes.keys()]
     .filter((note) => isInputNoteVisuallyHeld(note))
     .sort((a, b) => a - b);
+}
+
+function isPracticeTargetVisuallyActive(target, cueBoundaryTick = Infinity) {
+  return (
+    (isPracticeNoteActive(target.note) || state.playback.activeTargetIds.has(target.id)) &&
+    target.startTick <= cueBoundaryTick
+  );
 }
 
 function currentSoundingNotes() {
@@ -1412,8 +1419,8 @@ function buildPracticeNoteItems() {
       const targetX = Math.max(MEASURE_NOTE_LEFT_X, Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(displayStartTick)));
       const targetEndX = Math.max(MEASURE_NOTE_LEFT_X, Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(target.endTick)));
       const matched = isAutoFollowTargetDisplayMatched(target);
-      const active = isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick;
-      const cue = cueTargetIds.has(target.id) && !matched;
+      const active = isPracticeTargetVisuallyActive(target, cueBoundaryTick);
+      const cue = cueTargetIds.has(target.id) && !matched && !active;
       const exportMode = state.exportMode.active;
       return {
         note: target.note,
@@ -1437,9 +1444,19 @@ function buildPracticeNoteItems() {
         trackRole: target.trackRole || "primary",
         xOffset: 0
       };
-    });
+    })
+    .filter((item) => shouldDisplayPracticeNoteItem(item));
 
   return applyNoteCollisionOffsets(items, 34);
+}
+
+function isLeftOfPracticePlayheadX(x) {
+  return !state.exportMode.active && x < practicePlayheadX() - 1;
+}
+
+function shouldDisplayPracticeNoteItem(item) {
+  if (!isLeftOfPracticePlayheadX(item.x)) return true;
+  return Boolean(item.active);
 }
 
 function drawPracticeDurationLines(svg) {
@@ -1464,10 +1481,12 @@ function drawPracticeDurationLines(svg) {
     const endX = Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(target.endTick));
     if (endX - startX < 16) return;
     const y = yForNote(display.note, display.clef, target.startTick);
+    const active = isPracticeTargetVisuallyActive(target, cueBoundaryTick);
+    if (isLeftOfPracticePlayheadX(noteStartX) && !active) return;
     const classes = ["note-duration-line"];
     if ((target.trackRole || "primary") === "secondary") classes.push("secondary-track-line");
-    if (!state.exportMode.active && isPracticeNoteActive(target.note) && target.startTick <= cueBoundaryTick) classes.push("active-duration-line");
-    if (!state.exportMode.active && cueTargetIds.has(target.id) && !isAutoFollowTargetDisplayMatched(target)) classes.push("cue-duration-line");
+    if (!state.exportMode.active && active) classes.push("active-duration-line");
+    if (!state.exportMode.active && !active && cueTargetIds.has(target.id) && !isAutoFollowTargetDisplayMatched(target)) classes.push("cue-duration-line");
     svg.appendChild(createSvg("line", {
       x1: startX,
       y1: y,
