@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v233";
+const APP_VERSION = "v234";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2218,7 +2218,9 @@ function isWrongPracticeInputNote(note) {
   if (!state.practice.measures.length || state.playback.playing) return false;
   if (state.autoFollowTolerance !== 0) return false;
   const cueNotes = nextPracticeCueNotes();
-  return cueNotes.size > 0 && !cueNotes.has(note);
+  return cueNotes.size > 0 &&
+    !cueNotes.has(note) &&
+    !upcomingAutoFollowTargetForNote(note, currentAutoFollowBeatStart());
 }
 
 function releaseNote(note, source = "midi", channel = 0) {
@@ -2961,27 +2963,27 @@ function nextUnmatchedTargetGroupAfterTick(tick) {
   const remainingTargets = (state.practice.notes || [])
     .filter((target) => target.startTick >= tick && !isAutoFollowTargetMatched(target))
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
-  return targetGroupsByStartTick(remainingTargets)[0] || [];
+  return targetGroupsByStartTick(remainingTargets, { windowTicks: 0 })[0] || [];
 }
 
 function firstTargetGroupAtOrAfterTick(tick) {
   const targets = (state.practice.notes || [])
     .filter((target) => target.startTick >= tick)
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
-  return targetGroupsByStartTick(targets)[0] || [];
+  return targetGroupsByStartTick(targets, { windowTicks: 0 })[0] || [];
 }
 
-function targetGroupsByStartTick(targets) {
+function targetGroupsByStartTick(targets, options = {}) {
   const groups = [];
   let currentTick = null;
   let previousTick = null;
   let currentGroup = [];
-  const arpeggioWindowTicks = arpeggioGroupingWindowTicks();
+  const groupingWindowTicks = options.windowTicks ?? arpeggioGroupingWindowTicks();
   targets
     .slice()
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
     .forEach((target) => {
-    if (currentTick === null || previousTick === null || target.startTick - previousTick > arpeggioWindowTicks) {
+    if (currentTick === null || previousTick === null || target.startTick - previousTick > groupingWindowTicks) {
       if (currentGroup.length) groups.push(currentGroup);
       currentTick = target.startTick;
       currentGroup = [];
@@ -2994,7 +2996,7 @@ function targetGroupsByStartTick(targets) {
 }
 
 function firstUnmatchedTargetGroup(targets) {
-  const groups = targetGroupsByStartTick(targets);
+  const groups = targetGroupsByStartTick(targets, { windowTicks: 0 });
   for (const group of groups) {
     if (!isTargetGroupMatched(group)) {
       return group;
@@ -3015,7 +3017,9 @@ function markAutoFollowNote(note) {
 function targetForPlayedNote(note, currentBeatStart) {
   if (state.autoFollowTolerance === 0) {
     return lockedAutoFollowTargetGroup()
-      .find((target) => target.note === note && !isAutoFollowTargetMatched(target)) || null;
+      .find((target) => target.note === note && !isAutoFollowTargetMatched(target)) ||
+      upcomingAutoFollowTargetForNote(note, currentBeatStart) ||
+      null;
   }
 
   const gridTicks = practiceGridTicks();
@@ -3035,6 +3039,19 @@ function targetForPlayedNote(note, currentBeatStart) {
         a.startTick - b.startTick;
     });
   return candidates.find((target) => !isAutoFollowTargetMatched(target)) || candidates[0] || null;
+}
+
+function upcomingAutoFollowTargetForNote(note, currentBeatStart) {
+  const currentTick = state.practice.viewStartTick || 0;
+  const beatEnd = currentBeatStart + practiceGridTicks();
+  return (state.practice.notes || [])
+    .filter((target) => (
+      target.note === note &&
+      target.startTick >= currentTick &&
+      target.startTick < beatEnd &&
+      !isAutoFollowTargetMatched(target)
+    ))
+    .sort((a, b) => a.startTick - b.startTick || a.note - b.note)[0] || null;
 }
 
 function beatStartForTick(tick) {
@@ -3201,7 +3218,7 @@ function isAutoFollowTargetDisplayMatched(target) {
 }
 
 function targetGroupForTarget(target) {
-  const groups = targetGroupsByStartTick(targetsForBeat(beatStartForTick(target.startTick)));
+  const groups = targetGroupsByStartTick(targetsForBeat(beatStartForTick(target.startTick)), { windowTicks: 0 });
   return groups.find((group) => group.some((item) => item.id === target.id)) || [target];
 }
 
@@ -3378,6 +3395,7 @@ async function startContinuousPlayback() {
 }
 
 function playbackVisualViewTick(playbackTick) {
+  if (flowDisplayEnabled()) return playbackTick;
   if (state.robotPerformance && state.autoFollowTolerance !== 0) {
     const gridTicks = practiceGridTicks();
     const completedGridTick = clampPracticeViewStartTick(Math.floor(Math.max(0, playbackTick) / gridTicks) * gridTicks);
