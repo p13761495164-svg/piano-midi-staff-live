@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v227";
+const APP_VERSION = "v228";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -390,7 +390,7 @@ const BASS_LINE_YS = [420, 460, 500, 540, 580];
 const NOTE_RADIUS = 20;
 const MEASURE_NOTE_LEFT_X = 500;
 const MEASURE_NOTE_RIGHT_X = 1620;
-const FLOW_DISPLAY_PLAYHEAD_PROGRESS = 0.5;
+const FLOW_DISPLAY_PLAYHEAD_PROGRESS = 1 / 3;
 const BEAT_GRID_TOP_Y = TREBLE_LINE_YS[0];
 const BEAT_GRID_BOTTOM_Y = BASS_LINE_YS[4];
 const KEY_SIGNATURE_START_X = 270;
@@ -648,6 +648,9 @@ function currentInputVisualNotes() {
 }
 
 function isPracticeTargetVisuallyActive(target, cueBoundaryTick = Infinity) {
+  if (flowDisplayEnabled() && target.endTick <= (state.practice.viewStartTick || 0)) {
+    return false;
+  }
   return (
     (isPracticeNoteActive(target.note) || state.playback.activeTargetIds.has(target.id)) &&
     target.startTick <= cueBoundaryTick
