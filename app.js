@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v238";
+const APP_VERSION = "v239";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2904,7 +2904,8 @@ function keyboardCueNotes() {
 }
 
 function nextKeyboardCueTargets() {
-  const targets = nextPracticeCueTargets();
+  const targets = nextPracticeCueTargets()
+    .filter((target) => !isAutoFollowTargetDisplayMatched(target));
   if (!flowDisplayEnabled()) return targets;
   const playheadX = practicePlayheadX();
   return targets.filter((target) => {
@@ -4494,7 +4495,7 @@ function updateKeyboardActive() {
     const note = Number(key.dataset.note);
     const inputHeld = isInputNoteVisuallyHeld(note);
     const active = inputHeld || state.playback.activeNotes.has(note);
-    const cue = cueNoteSet.has(note) && !active;
+    const cue = cueNoteSet.has(note);
     const wrong = Boolean(state.activeNotes.get(note)?.wrong);
     key.classList.toggle("active", active);
     key.classList.toggle("input-active", inputHeld && !cueNoteSet.has(note));
