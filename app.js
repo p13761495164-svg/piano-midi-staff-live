@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v229";
+const APP_VERSION = "v230";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -49,8 +49,7 @@ const SETTINGS_FIELD_KEYS = {
   liveInputSound: "piano-midi-staff-live-input-sound",
   silentPlayback: "piano-midi-staff-silent-playback",
   robotPerformance: "piano-midi-staff-robot-performance",
-  flowDisplay: "piano-midi-staff-flow-display",
-  rhythmFollow: "piano-midi-staff-rhythm-follow"
+  flowDisplay: "piano-midi-staff-flow-display"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const KEY_SIGNATURE_BY_FIFTHS = {
@@ -152,7 +151,6 @@ const I18N = {
     "label.leftPedal": "左踏板翻页",
     "label.sustainPedal": "延音踏板翻页",
     "label.autoFollow": "自动跟随",
-    "label.rhythmFollow": "节奏跟随",
     "label.tolerance": "容错",
     "label.timeSignature": "拍号",
     "label.keySignature": "调号",
@@ -231,7 +229,6 @@ const I18N = {
     "label.leftPedal": "左ペダル送り",
     "label.sustainPedal": "サステイン送り",
     "label.autoFollow": "自動追従",
-    "label.rhythmFollow": "リズム追従",
     "label.tolerance": "許容",
     "label.timeSignature": "拍子",
     "label.keySignature": "調号",
@@ -310,7 +307,6 @@ const I18N = {
     "label.leftPedal": "Left Pedal Page",
     "label.sustainPedal": "Sustain Pedal Page",
     "label.autoFollow": "Auto Follow",
-    "label.rhythmFollow": "Rhythm Follow",
     "label.tolerance": "Tolerance",
     "label.timeSignature": "Time Signature",
     "label.keySignature": "Key",
@@ -567,7 +563,6 @@ const els = {
   robotPerformanceFieldLabel: document.getElementById("robotPerformanceFieldLabel"),
   robotPerformanceToggleLabel: document.getElementById("robotPerformanceToggleLabel"),
   flowDisplayLabel: document.getElementById("flowDisplayLabel"),
-  rhythmFollowLabel: document.getElementById("rhythmFollowLabel"),
   displaySettingsTitle: document.getElementById("displaySettingsTitle"),
   practiceSettingsTitle: document.getElementById("practiceSettingsTitle"),
   soundSettingsTitle: document.getElementById("soundSettingsTitle"),
@@ -587,7 +582,6 @@ const els = {
   sustainPedalPageButtons: [...document.querySelectorAll("[data-sustain-pedal-page]")],
   autoFollowButtons: [...document.querySelectorAll("[data-auto-follow-mode]")],
   flowDisplayButtons: [...document.querySelectorAll("[data-flow-display]")],
-  rhythmFollowButtons: [...document.querySelectorAll("[data-rhythm-follow]")],
   toleranceSlider: document.getElementById("toleranceSlider"),
   toleranceValue: document.getElementById("toleranceValue"),
   mistakeLogTitle: document.getElementById("mistakeLogTitle"),
@@ -649,9 +643,6 @@ function currentInputVisualNotes() {
 }
 
 function isPracticeTargetVisuallyActive(target, cueBoundaryTick = Infinity) {
-  if (flowDisplayEnabled() && target.endTick <= (state.practice.viewStartTick || 0)) {
-    return false;
-  }
   return (
     (isPracticeNoteActive(target.note) || state.playback.activeTargetIds.has(target.id)) &&
     target.startTick <= cueBoundaryTick
@@ -748,7 +739,6 @@ function applyLanguage() {
   updateText(document.querySelector(".pedal-field span"), t("label.leftPedal"));
   updateText(document.querySelector(".sustain-page-field span"), t("label.sustainPedal"));
   updateText(document.querySelector(".auto-follow-field span"), t("label.autoFollow"));
-  updateText(els.rhythmFollowLabel, t("label.rhythmFollow"));
   updateText(document.querySelector(".tolerance-field span"), `${t("label.tolerance")} `);
   els.toleranceValue.textContent = `${state.autoFollowTolerance}%`;
   document.querySelector(".tolerance-field span").appendChild(els.toleranceValue);
@@ -789,8 +779,6 @@ function applyLanguage() {
   document.querySelector('[data-auto-follow-mode="beat"]').textContent = t("button.byBeat");
   document.querySelector('[data-flow-display="off"]').textContent = t("button.off");
   document.querySelector('[data-flow-display="on"]').textContent = t("button.on");
-  document.querySelector('[data-rhythm-follow="off"]').textContent = t("button.off");
-  document.querySelector('[data-rhythm-follow="on"]').textContent = t("button.on");
 
   els.inputSelect.options[0].textContent = t("option.autoSelect");
   renderPlaybackInstrumentOptions();
@@ -921,7 +909,6 @@ function readSettings() {
     const silentPlayback = window.localStorage.getItem(SETTINGS_FIELD_KEYS.silentPlayback);
     const robotPerformance = window.localStorage.getItem(SETTINGS_FIELD_KEYS.robotPerformance);
     const flowDisplay = window.localStorage.getItem(SETTINGS_FIELD_KEYS.flowDisplay);
-    const rhythmFollow = window.localStorage.getItem(SETTINGS_FIELD_KEYS.rhythmFollow);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
@@ -938,7 +925,6 @@ function readSettings() {
     if (silentPlayback === "true" || silentPlayback === "false") settings.silentPlayback = silentPlayback === "true";
     if (robotPerformance === "true" || robotPerformance === "false") settings.robotPerformance = robotPerformance === "true";
     if (flowDisplay === "true" || flowDisplay === "false") settings.flowDisplay = flowDisplay === "true";
-    if (rhythmFollow === "true" || rhythmFollow === "false") settings.rhythmFollow = rhythmFollow === "true";
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -961,7 +947,7 @@ function saveSettings() {
     silentPlayback: state.silentPlayback,
     robotPerformance: state.robotPerformance,
     flowDisplay: state.flowDisplay,
-    rhythmFollow: state.rhythmFollow
+    rhythmFollow: false
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -980,7 +966,6 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.silentPlayback, String(settings.silentPlayback));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.robotPerformance, String(settings.robotPerformance));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.flowDisplay, String(settings.flowDisplay));
-    window.localStorage.setItem(SETTINGS_FIELD_KEYS.rhythmFollow, String(settings.rhythmFollow));
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -1016,11 +1001,6 @@ function syncControlsFromState() {
   });
   els.flowDisplayButtons.forEach((button) => {
     const active = (button.dataset.flowDisplay === "on") === state.flowDisplay;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", active ? "true" : "false");
-  });
-  els.rhythmFollowButtons.forEach((button) => {
-    const active = (button.dataset.rhythmFollow === "on") === state.rhythmFollow;
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
@@ -1207,10 +1187,7 @@ function applySavedSettings() {
   if (typeof settings.flowDisplay === "boolean") {
     state.flowDisplay = settings.flowDisplay;
   }
-  if (typeof settings.rhythmFollow === "boolean") {
-    state.rhythmFollow = settings.rhythmFollow;
-    if (state.rhythmFollow) state.autoFollowMode = "beat";
-  }
+  state.rhythmFollow = false;
   if (typeof settings.selectedInputId === "string") {
     state.selectedInputId = settings.selectedInputId;
   }
@@ -1224,9 +1201,6 @@ function applySavedSettings() {
   }
   if (["off", "beat"].includes(settings.autoFollowMode)) {
     state.autoFollowMode = settings.autoFollowMode;
-  }
-  if (state.rhythmFollow) {
-    state.autoFollowMode = "beat";
   }
   if (Number.isFinite(settings.autoFollowTolerance)) {
     state.autoFollowTolerance = clampTolerance(settings.autoFollowTolerance);
@@ -5063,21 +5037,6 @@ function setupEvents() {
   els.flowDisplayButtons.forEach((button) => {
     button.addEventListener("click", () => {
       state.flowDisplay = button.dataset.flowDisplay === "on";
-      syncControlsFromState();
-      saveSettings();
-      drawStaff();
-    });
-  });
-  els.rhythmFollowButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      state.rhythmFollow = button.dataset.rhythmFollow === "on";
-      if (state.rhythmFollow) {
-        state.autoFollowMode = "beat";
-        state.autoFollow.pausedAfterManualNavigation = false;
-        resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: true });
-      } else {
-        stopRhythmFollow();
-      }
       syncControlsFromState();
       saveSettings();
       drawStaff();
