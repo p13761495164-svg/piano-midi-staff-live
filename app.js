@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v222";
+const APP_VERSION = "v223";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -48,7 +48,8 @@ const SETTINGS_FIELD_KEYS = {
   playbackInstrument: "piano-midi-staff-playback-instrument",
   liveInputSound: "piano-midi-staff-live-input-sound",
   silentPlayback: "piano-midi-staff-silent-playback",
-  robotPerformance: "piano-midi-staff-robot-performance"
+  robotPerformance: "piano-midi-staff-robot-performance",
+  flowDisplay: "piano-midi-staff-flow-display"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const KEY_SIGNATURE_BY_FIFTHS = {
@@ -160,6 +161,7 @@ const I18N = {
     "label.playbackInstrument": "音色",
     "label.robotPerformanceField": "演奏",
     "label.robotPerformance": "机器人演奏模式",
+    "label.flowDisplay": "流动显示",
     "label.displaySettings": "显示",
     "label.practiceSettings": "练习",
     "label.soundSettings": "声音",
@@ -237,6 +239,7 @@ const I18N = {
     "label.playbackInstrument": "音色",
     "label.robotPerformanceField": "演奏",
     "label.robotPerformance": "ロボット演奏モード",
+    "label.flowDisplay": "フロー表示",
     "label.displaySettings": "表示",
     "label.practiceSettings": "練習",
     "label.soundSettings": "音",
@@ -314,6 +317,7 @@ const I18N = {
     "label.playbackInstrument": "Tone",
     "label.robotPerformanceField": "Performance",
     "label.robotPerformance": "Robot Performance",
+    "label.flowDisplay": "Flow View",
     "label.displaySettings": "Display",
     "label.practiceSettings": "Practice",
     "label.soundSettings": "Sound",
@@ -382,6 +386,7 @@ const BASS_LINE_YS = [420, 460, 500, 540, 580];
 const NOTE_RADIUS = 20;
 const MEASURE_NOTE_LEFT_X = 500;
 const MEASURE_NOTE_RIGHT_X = 1620;
+const FLOW_DISPLAY_PLAYHEAD_PROGRESS = 0.5;
 const BEAT_GRID_TOP_Y = TREBLE_LINE_YS[0];
 const BEAT_GRID_BOTTOM_Y = BASS_LINE_YS[4];
 const KEY_SIGNATURE_START_X = 270;
@@ -440,6 +445,7 @@ const state = {
   liveInputSound: false,
   silentPlayback: false,
   robotPerformance: false,
+  flowDisplay: false,
   pedalStep: "on",
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
@@ -549,6 +555,7 @@ const els = {
   robotPerformanceToggle: document.getElementById("robotPerformanceToggle"),
   robotPerformanceFieldLabel: document.getElementById("robotPerformanceFieldLabel"),
   robotPerformanceToggleLabel: document.getElementById("robotPerformanceToggleLabel"),
+  flowDisplayLabel: document.getElementById("flowDisplayLabel"),
   displaySettingsTitle: document.getElementById("displaySettingsTitle"),
   practiceSettingsTitle: document.getElementById("practiceSettingsTitle"),
   soundSettingsTitle: document.getElementById("soundSettingsTitle"),
@@ -567,6 +574,7 @@ const els = {
   pedalStepButtons: [...document.querySelectorAll("[data-pedal-step]")],
   sustainPedalPageButtons: [...document.querySelectorAll("[data-sustain-pedal-page]")],
   autoFollowButtons: [...document.querySelectorAll("[data-auto-follow-mode]")],
+  flowDisplayButtons: [...document.querySelectorAll("[data-flow-display]")],
   toleranceSlider: document.getElementById("toleranceSlider"),
   toleranceValue: document.getElementById("toleranceValue"),
   mistakeLogTitle: document.getElementById("mistakeLogTitle"),
@@ -718,6 +726,7 @@ function applyLanguage() {
   updateText(els.playbackInstrumentLabel, t("label.playbackInstrument"));
   updateText(els.robotPerformanceFieldLabel, t("label.robotPerformanceField"));
   updateText(els.robotPerformanceToggleLabel, t("label.robotPerformance"));
+  updateText(els.flowDisplayLabel, t("label.flowDisplay"));
   updateText(els.displaySettingsTitle, t("label.displaySettings"));
   updateText(els.practiceSettingsTitle, t("label.practiceSettings"));
   updateText(els.soundSettingsTitle, t("label.soundSettings"));
@@ -744,6 +753,8 @@ function applyLanguage() {
   document.querySelector('[data-sustain-pedal-page="page"]').textContent = t("button.page");
   document.querySelector('[data-auto-follow-mode="off"]').textContent = t("button.off");
   document.querySelector('[data-auto-follow-mode="beat"]').textContent = t("button.byBeat");
+  document.querySelector('[data-flow-display="off"]').textContent = t("button.off");
+  document.querySelector('[data-flow-display="on"]').textContent = t("button.on");
 
   els.inputSelect.options[0].textContent = t("option.autoSelect");
   renderPlaybackInstrumentOptions();
@@ -873,6 +884,7 @@ function readSettings() {
     const liveInputSound = window.localStorage.getItem(SETTINGS_FIELD_KEYS.liveInputSound);
     const silentPlayback = window.localStorage.getItem(SETTINGS_FIELD_KEYS.silentPlayback);
     const robotPerformance = window.localStorage.getItem(SETTINGS_FIELD_KEYS.robotPerformance);
+    const flowDisplay = window.localStorage.getItem(SETTINGS_FIELD_KEYS.flowDisplay);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
@@ -888,6 +900,7 @@ function readSettings() {
     if (liveInputSound === "true" || liveInputSound === "false") settings.liveInputSound = liveInputSound === "true";
     if (silentPlayback === "true" || silentPlayback === "false") settings.silentPlayback = silentPlayback === "true";
     if (robotPerformance === "true" || robotPerformance === "false") settings.robotPerformance = robotPerformance === "true";
+    if (flowDisplay === "true" || flowDisplay === "false") settings.flowDisplay = flowDisplay === "true";
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -908,7 +921,8 @@ function saveSettings() {
     playbackInstrument: state.playbackInstrument,
     liveInputSound: state.liveInputSound,
     silentPlayback: state.silentPlayback,
-    robotPerformance: state.robotPerformance
+    robotPerformance: state.robotPerformance,
+    flowDisplay: state.flowDisplay
   };
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -926,6 +940,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.liveInputSound, String(settings.liveInputSound));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.silentPlayback, String(settings.silentPlayback));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.robotPerformance, String(settings.robotPerformance));
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.flowDisplay, String(settings.flowDisplay));
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -956,6 +971,11 @@ function syncControlsFromState() {
   });
   els.autoFollowButtons.forEach((button) => {
     const active = button.dataset.autoFollowMode === state.autoFollowMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  els.flowDisplayButtons.forEach((button) => {
+    const active = (button.dataset.flowDisplay === "on") === state.flowDisplay;
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
@@ -1138,6 +1158,9 @@ function applySavedSettings() {
   if (typeof settings.robotPerformance === "boolean") {
     state.robotPerformance = settings.robotPerformance;
   }
+  if (typeof settings.flowDisplay === "boolean") {
+    state.flowDisplay = settings.flowDisplay;
+  }
   if (typeof settings.selectedInputId === "string") {
     state.selectedInputId = settings.selectedInputId;
   }
@@ -1216,10 +1239,11 @@ function drawStaff() {
 }
 
 function drawPracticePlayhead(svg) {
+  const x = practicePlayheadX();
   svg.appendChild(createSvg("line", {
-    x1: MEASURE_NOTE_LEFT_X,
+    x1: x,
     y1: BEAT_GRID_TOP_Y - 54,
-    x2: MEASURE_NOTE_LEFT_X,
+    x2: x,
     y2: BEAT_GRID_BOTTOM_Y + 54,
     class: "practice-playhead-line"
   }));
@@ -1228,9 +1252,8 @@ function drawPracticePlayhead(svg) {
 function drawBeatGrid(svg) {
   if (!state.practice.measures.length) return;
 
-  const viewStartTick = state.practice.viewStartTick || 0;
-  const viewSpanTicks = currentViewSpanTicks();
-  const viewEndTick = viewStartTick + viewSpanTicks;
+  const viewStartTick = currentVisualStartTick();
+  const viewEndTick = currentVisualEndTick();
   const xForTick = xForCurrentViewTick;
 
   state.practice.measures.forEach((measure) => {
@@ -1260,9 +1283,8 @@ function drawPedalTrack(svg) {
   const pedalEvents = state.practice.pedalEvents || [];
   if (!pedalEvents.length) return;
 
-  const viewStartTick = state.practice.viewStartTick || 0;
-  const viewSpanTicks = currentViewSpanTicks();
-  const viewEndTick = viewStartTick + viewSpanTicks;
+  const viewStartTick = currentVisualStartTick();
+  const viewEndTick = currentVisualEndTick();
   const xForTick = xForCurrentViewTick;
 
   pedalIntervalsForView(viewStartTick, viewEndTick).forEach((interval) => {
@@ -1362,8 +1384,6 @@ function buildPracticeNoteItems() {
   const visibleNotes = visiblePracticeTargets();
   if (!visibleNotes.length) return [];
 
-  const viewStartTick = state.practice.viewStartTick || 0;
-  const timeSpan = currentViewSpanTicks();
   const inputX = activeInputColumnX();
   const displayStartById = displayStartTicksForTargets(visibleNotes);
   const primaryCueTargets = nextPrimaryCueTargets();
@@ -1390,7 +1410,7 @@ function buildPracticeNoteItems() {
         displayNote: display.note,
         clef: display.clef,
         step: midiToStaffStep(display.note, target.startTick),
-        x: !exportMode && matched ? inputX : targetX,
+        x: !exportMode && matched && !flowDisplayEnabled() ? inputX : targetX,
         endX: targetEndX,
         startTick: target.startTick,
         displayStartTick,
@@ -1415,8 +1435,7 @@ function buildPracticeNoteItems() {
 function drawPracticeDurationLines(svg) {
   const targets = visiblePracticeDurationTargets();
   if (!targets.length) return;
-  const viewStartTick = state.practice.viewStartTick || 0;
-  const timeSpan = currentViewSpanTicks();
+  const viewStartTick = currentVisualStartTick();
   const displayStartById = displayStartTicksForTargets(targets);
   const cueTargetIds = new Set(nextPracticeCueTargets().map((target) => target.id));
   const primaryCueTargets = nextPrimaryCueTargets();
@@ -1478,6 +1497,12 @@ function displayStartTicksForTargets(targets) {
 function buildActiveInputNoteItems() {
   const soundingNotes = currentInputSoundingNotes();
   if (!state.practice.measures.length || !soundingNotes.length) return [];
+  if (flowDisplayEnabled()) {
+    return buildLeftColumnNoteItems(
+      soundingNotes.filter((note) => Boolean(state.activeNotes.get(note)?.wrong)),
+      "input"
+    );
+  }
   if (state.playback.playing && state.playback.silent) {
     return buildLeftColumnNoteItems(soundingNotes, "input");
   }
@@ -1555,7 +1580,7 @@ function applyNoteCollisionOffsets(items, spread = 34) {
 }
 
 function activeInputColumnX() {
-  return Math.max(360, MEASURE_NOTE_LEFT_X - 74);
+  return flowDisplayEnabled() ? practicePlayheadX() : Math.max(360, MEASURE_NOTE_LEFT_X - 74);
 }
 
 function drawActiveInputNotes(svg) {
@@ -1600,8 +1625,8 @@ function arpeggioGroupingWindowTicks() {
 
 function visiblePracticeTargets() {
   if (!state.practice.measures.length) return [];
-  const viewStartTick = state.practice.viewStartTick || 0;
-  const viewEndTick = viewStartTick + currentViewSpanTicks();
+  const viewStartTick = currentVisualStartTick();
+  const viewEndTick = currentVisualEndTick();
   return state.practice.measures
     .flatMap((measure) => measure.notes)
     .filter((target) => target.startTick >= viewStartTick && target.startTick < viewEndTick);
@@ -1609,8 +1634,8 @@ function visiblePracticeTargets() {
 
 function visiblePracticeDurationTargets() {
   if (!state.practice.measures.length) return [];
-  const viewStartTick = state.practice.viewStartTick || 0;
-  const viewEndTick = viewStartTick + currentViewSpanTicks();
+  const viewStartTick = currentVisualStartTick();
+  const viewEndTick = currentVisualEndTick();
   return state.practice.measures
     .flatMap((measure) => measure.notes)
     .filter((target) => target.startTick < viewEndTick && target.endTick > viewStartTick);
@@ -2441,6 +2466,30 @@ function currentViewSpanTicks() {
   return Math.max(1, (measure?.endTick || 0) - (measure?.startTick || 0) || state.practice.measureTicks || MIDI_PPQ * 4);
 }
 
+function flowDisplayEnabled() {
+  return Boolean(state.flowDisplay && !state.exportMode.active && state.practice.measures.length);
+}
+
+function currentVisualSpanTicks() {
+  const span = currentViewSpanTicks();
+  return flowDisplayEnabled() ? span * 2 : span;
+}
+
+function currentVisualStartTick() {
+  const viewStartTick = state.practice.viewStartTick || 0;
+  if (!flowDisplayEnabled()) return viewStartTick;
+  return viewStartTick - currentVisualSpanTicks() * FLOW_DISPLAY_PLAYHEAD_PROGRESS;
+}
+
+function currentVisualEndTick() {
+  return currentVisualStartTick() + currentVisualSpanTicks();
+}
+
+function practicePlayheadX() {
+  if (!flowDisplayEnabled()) return MEASURE_NOTE_LEFT_X;
+  return MEASURE_NOTE_LEFT_X + (MEASURE_NOTE_RIGHT_X - MEASURE_NOTE_LEFT_X) * FLOW_DISPLAY_PLAYHEAD_PROGRESS;
+}
+
 function progressForCurrentViewTick(tick) {
   if (state.exportMode.active && state.exportMode.rowMeasures.length) {
     const rowMeasures = state.exportMode.rowMeasures;
@@ -2453,8 +2502,7 @@ function progressForCurrentViewTick(tick) {
     const localProgress = Math.max(0, Math.min(1, (tick - measure.startTick) / measureSpan));
     return (safeIndex + localProgress) / rowMeasures.length;
   }
-  const viewStartTick = state.practice.viewStartTick || 0;
-  return (tick - viewStartTick) / currentViewSpanTicks();
+  return (tick - currentVisualStartTick()) / currentVisualSpanTicks();
 }
 
 function xForCurrentViewTick(tick) {
@@ -4850,6 +4898,14 @@ function setupEvents() {
       syncControlsFromState();
       saveSettings();
       scheduleAutoFollowEmptyBeatCheck();
+    });
+  });
+  els.flowDisplayButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.flowDisplay = button.dataset.flowDisplay === "on";
+      syncControlsFromState();
+      saveSettings();
+      drawStaff();
     });
   });
   els.toleranceSlider.addEventListener("input", () => {

@@ -9,9 +9,9 @@
   <meta name="apple-mobile-web-app-title" content="Easy Piano">
   <title>Easy Piano</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon.png?v=222" type="image/png">
-  <link rel="apple-touch-icon" href="icons/icon.png?v=222">
-  <link rel="stylesheet" href="styles.css?v=222">
+  <link rel="icon" href="icons/icon.png?v=223" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon.png?v=223">
+  <link rel="stylesheet" href="styles.css?v=223">
 </head>
 <body>
   <main class="app-shell">
@@ -19,11 +19,11 @@
       <p id="statusText" class="status-banner">等待连接 MIDI 键盘</p>
       <div class="topbar">
         <div class="brand">
-          <img class="brand-mark" src="icons/icon.png?v=222" alt="" aria-hidden="true">
+          <img class="brand-mark" src="icons/icon.png?v=223" alt="" aria-hidden="true">
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
-              <span id="versionBadge" class="version-badge">v222</span>
+              <span id="versionBadge" class="version-badge">v223</span>
             </div>
           </div>
         </div>
@@ -69,6 +69,13 @@
                   <button class="mode-option" type="button" data-time-signature="2/4" aria-pressed="false">2/4</button>
                   <button class="mode-option" type="button" data-time-signature="3/4" aria-pressed="false">3/4</button>
                   <button class="mode-option" type="button" data-time-signature="6/8" aria-pressed="false">6/8</button>
+                </div>
+              </div>
+              <div class="field flow-display-field">
+                <span id="flowDisplayLabel">流动显示</span>
+                <div class="segmented two-part" role="group" aria-label="流动显示">
+                  <button class="mode-option active" type="button" data-flow-display="off" aria-pressed="true">关</button>
+                  <button class="mode-option" type="button" data-flow-display="on" aria-pressed="false">开</button>
                 </div>
               </div>
             </div>
@@ -191,6 +198,6 @@
     </section>
   </main>
   <div id="pdfExportRoot" class="pdf-export-root" aria-hidden="true"></div>
-  <script src="app.js?v=222"></script>
+  <script src="app.js?v=223"></script>
 </body>
 </html>
