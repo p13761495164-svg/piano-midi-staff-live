@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v245";
+const APP_VERSION = "v246";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -50,7 +50,8 @@ const SETTINGS_FIELD_KEYS = {
   liveInputSound: "piano-midi-staff-live-input-sound",
   silentPlayback: "piano-midi-staff-silent-playback",
   robotPerformance: "piano-midi-staff-robot-performance",
-  flowDisplay: "piano-midi-staff-flow-display"
+  flowDisplay: "piano-midi-staff-flow-display",
+  fullUnlocked: "piano-midi-staff-full-unlocked"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 const KEY_SIGNATURE_BY_FIFTHS = {
@@ -220,7 +221,15 @@ const I18N = {
     "status.loaded": "已载入：{name}",
     "status.loadingSample": "正在载入样本乐谱...",
     "trial.title": "免费版乐谱",
-    "trial.message": "免费用户只可以使用样本 MIDI。",
+    "trial.message": "免费用户只可以使用样本 MIDI。解锁后可以载入自己的乐谱。",
+    "button.unlockFull": "解锁全部功能",
+    "button.restorePurchase": "恢复购买",
+    "status.purchaseChecking": "正在检查购买状态...",
+    "status.purchaseUnavailable": "购买功能只在 iOS App 内可用。网页版可以直接使用全部功能。",
+    "status.purchaseStarted": "正在打开购买画面...",
+    "status.purchaseUnlocked": "已解锁全部功能",
+    "status.purchaseCancelled": "购买已取消",
+    "status.purchaseFailed": "购买失败：{message}",
     "status.loadedEmpty": "{type} 已载入，但没有找到可显示的音符",
     "status.loadFailed": "乐谱读取失败：{message}",
     "status.playUnsupported": "当前浏览器不支持网页播放。",
@@ -302,7 +311,15 @@ const I18N = {
     "status.loaded": "読み込みました：{name}",
     "status.loadingSample": "サンプル楽譜を読み込み中...",
     "trial.title": "無料版の楽譜",
-    "trial.message": "無料ユーザーはサンプル MIDI のみ使用できます。",
+    "trial.message": "無料ユーザーはサンプル MIDI のみ使用できます。解除後は自分の楽譜を読み込めます。",
+    "button.unlockFull": "すべての機能を解除",
+    "button.restorePurchase": "購入を復元",
+    "status.purchaseChecking": "購入状態を確認中...",
+    "status.purchaseUnavailable": "購入機能は iOS App 内のみ利用できます。Web版はすべての機能をそのまま使えます。",
+    "status.purchaseStarted": "購入画面を開いています...",
+    "status.purchaseUnlocked": "すべての機能が解除されました",
+    "status.purchaseCancelled": "購入をキャンセルしました",
+    "status.purchaseFailed": "購入に失敗しました：{message}",
     "status.loadedEmpty": "{type} を読み込みましたが、表示できる音符がありません",
     "status.loadFailed": "楽譜の読み込みに失敗：{message}",
     "status.playUnsupported": "このブラウザは再生に対応していません。",
@@ -384,7 +401,15 @@ const I18N = {
     "status.loaded": "Loaded: {name}",
     "status.loadingSample": "Loading sample score...",
     "trial.title": "Free Score Access",
-    "trial.message": "Free users can only use sample MIDI files.",
+    "trial.message": "Free users can only use sample MIDI files. Unlock to load your own scores.",
+    "button.unlockFull": "Unlock All Features",
+    "button.restorePurchase": "Restore Purchase",
+    "status.purchaseChecking": "Checking purchase status...",
+    "status.purchaseUnavailable": "Purchases are only available in the iOS app. The web version keeps all features unlocked.",
+    "status.purchaseStarted": "Opening purchase screen...",
+    "status.purchaseUnlocked": "All features unlocked",
+    "status.purchaseCancelled": "Purchase cancelled",
+    "status.purchaseFailed": "Purchase failed: {message}",
     "status.loadedEmpty": "{type} loaded, but no displayable notes were found",
     "status.loadFailed": "Score load failed: {message}",
     "status.playUnsupported": "This browser does not support web playback.",
@@ -488,6 +513,8 @@ const state = {
   silentPlayback: false,
   robotPerformance: false,
   flowDisplay: true,
+  fullUnlocked: false,
+  purchaseStateKnown: false,
   rhythmFollow: false,
   pedalStep: "on",
   sustainPedalPage: "off",
@@ -589,6 +616,8 @@ const els = {
   trialScoreMessage: document.getElementById("trialScoreMessage"),
   trialScoreList: document.getElementById("trialScoreList"),
   trialScoreCloseButton: document.getElementById("trialScoreCloseButton"),
+  unlockFullButton: document.getElementById("unlockFullButton"),
+  restorePurchaseButton: document.getElementById("restorePurchaseButton"),
   exportPdfButton: document.getElementById("exportPdfButton"),
   midiFileInput: document.getElementById("midiFileInput"),
   fullscreenButton: document.getElementById("fullscreenButton"),
@@ -766,7 +795,8 @@ function statusToneForKey(key) {
     "status.fullscreenUnsupported",
     "status.fullscreenFailed",
     "status.noMidiInput",
-    "status.cacheFailed"
+    "status.cacheFailed",
+    "status.purchaseFailed"
   ]);
   return alertKeys.has(key) ? "alert" : "info";
 }
@@ -816,6 +846,8 @@ function applyLanguage() {
   updateText(els.trialScoreTitle, t("trial.title"));
   updateText(els.trialScoreMessage, t("trial.message"));
   updateIconButtonLabel(els.trialScoreCloseButton, t("button.close"));
+  updateText(els.unlockFullButton, t("button.unlockFull"));
+  updateText(els.restorePurchaseButton, t("button.restorePurchase"));
   updateText(els.exportPdfButton, t("button.exportPdf"));
   updateText(els.refreshButton, t("button.refresh"));
   updateText(els.installButton, t("button.install"));
@@ -967,6 +999,7 @@ function readSettings() {
     const silentPlayback = window.localStorage.getItem(SETTINGS_FIELD_KEYS.silentPlayback);
     const robotPerformance = window.localStorage.getItem(SETTINGS_FIELD_KEYS.robotPerformance);
     const flowDisplay = window.localStorage.getItem(SETTINGS_FIELD_KEYS.flowDisplay);
+    const fullUnlocked = window.localStorage.getItem(SETTINGS_FIELD_KEYS.fullUnlocked);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
     if (showDegrees === "true" || showDegrees === "false") settings.showDegrees = showDegrees === "true";
@@ -983,6 +1016,7 @@ function readSettings() {
     if (silentPlayback === "true" || silentPlayback === "false") settings.silentPlayback = silentPlayback === "true";
     if (robotPerformance === "true" || robotPerformance === "false") settings.robotPerformance = robotPerformance === "true";
     if (flowDisplay === "true" || flowDisplay === "false") settings.flowDisplay = flowDisplay === "true";
+    if (fullUnlocked === "true" || fullUnlocked === "false") settings.fullUnlocked = fullUnlocked === "true";
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
   }
@@ -1005,6 +1039,7 @@ function saveSettings() {
     silentPlayback: state.silentPlayback,
     robotPerformance: state.robotPerformance,
     flowDisplay: state.flowDisplay,
+    fullUnlocked: state.fullUnlocked,
     rhythmFollow: false
   };
   try {
@@ -1024,6 +1059,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.silentPlayback, String(settings.silentPlayback));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.robotPerformance, String(settings.robotPerformance));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.flowDisplay, String(settings.flowDisplay));
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.fullUnlocked, String(settings.fullUnlocked));
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
   }
@@ -1247,6 +1283,9 @@ function applySavedSettings() {
   }
   if (typeof settings.flowDisplay === "boolean") {
     state.flowDisplay = settings.flowDisplay;
+  }
+  if (typeof settings.fullUnlocked === "boolean") {
+    state.fullUnlocked = settings.fullUnlocked;
   }
   state.rhythmFollow = false;
   if (typeof settings.selectedInputId === "string") {
@@ -2695,11 +2734,76 @@ async function loadTrialScore(scoreId) {
 function openTrialScoreModal() {
   if (!els.trialScoreModal) return;
   els.trialScoreModal.classList.remove("hidden");
+  requestNativePurchaseState();
 }
 
 function closeTrialScoreModal() {
   if (!els.trialScoreModal) return;
   els.trialScoreModal.classList.add("hidden");
+}
+
+function isIosNativeApp() {
+  return Boolean(window.webkit?.messageHandlers?.midiBridge);
+}
+
+function canLoadOwnScore() {
+  return !isIosNativeApp() || state.fullUnlocked;
+}
+
+function handleLoadScoreClick() {
+  if (canLoadOwnScore()) {
+    els.midiFileInput.click();
+    return;
+  }
+  openTrialScoreModal();
+}
+
+function postNativePurchaseMessage(type) {
+  if (!isIosNativeApp()) {
+    setStatusKey("status.purchaseUnavailable");
+    return false;
+  }
+  window.webkit.messageHandlers.midiBridge.postMessage({ type });
+  return true;
+}
+
+function requestNativePurchaseState() {
+  if (!isIosNativeApp()) return;
+  postNativePurchaseMessage("getPurchaseState");
+}
+
+function purchaseFullUnlock() {
+  if (state.fullUnlocked) {
+    closeTrialScoreModal();
+    els.midiFileInput.click();
+    return;
+  }
+  if (postNativePurchaseMessage("purchaseUnlock")) {
+    setStatusKey("status.purchaseStarted");
+  }
+}
+
+function restoreFullUnlock() {
+  if (postNativePurchaseMessage("restoreUnlock")) {
+    setStatusKey("status.purchaseChecking");
+  }
+}
+
+function setFullUnlockState(unlocked) {
+  state.fullUnlocked = Boolean(unlocked);
+  state.purchaseStateKnown = true;
+  saveSettings();
+  syncPurchaseControls();
+  if (state.fullUnlocked) {
+    closeTrialScoreModal();
+    setStatusKey("status.purchaseUnlocked");
+  }
+}
+
+function syncPurchaseControls() {
+  const locked = isIosNativeApp() && !state.fullUnlocked;
+  els.unlockFullButton?.classList.toggle("hidden", !locked);
+  els.restorePurchaseButton?.classList.toggle("hidden", !locked);
 }
 
 function isMusicXmlFile(file) {
@@ -4834,6 +4938,17 @@ window.PianoMidiNative = {
   },
   setMidiStatus(text) {
     setStatus(text);
+  },
+  setPurchaseState(data) {
+    setFullUnlockState(Boolean(data?.unlocked));
+  },
+  setPurchaseError(data) {
+    const code = data?.code || "";
+    if (code === "cancelled") {
+      setStatusKey("status.purchaseCancelled");
+      return;
+    }
+    setStatusKey("status.purchaseFailed", { message: data?.message || code || "unknown" });
   }
 };
 
@@ -5037,8 +5152,10 @@ function setupEvents() {
   els.connectButton.addEventListener("click", connectMidi);
   els.recordButton.addEventListener("click", startRecording);
   els.stopRecordButton.addEventListener("click", stopRecording);
-  els.loadMidiButton.addEventListener("click", openTrialScoreModal);
+  els.loadMidiButton.addEventListener("click", handleLoadScoreClick);
   els.trialScoreCloseButton.addEventListener("click", closeTrialScoreModal);
+  els.unlockFullButton.addEventListener("click", purchaseFullUnlock);
+  els.restorePurchaseButton.addEventListener("click", restoreFullUnlock);
   els.trialScoreModal.addEventListener("click", (event) => {
     if (event.target === els.trialScoreModal) closeTrialScoreModal();
   });
@@ -5221,6 +5338,8 @@ function setupEvents() {
 applySavedSettings();
 els.versionBadge.textContent = APP_VERSION;
 applyLanguage();
+syncPurchaseControls();
+requestNativePurchaseState();
 syncRecordingControls();
 syncFullscreenButton();
 syncPracticeControls();

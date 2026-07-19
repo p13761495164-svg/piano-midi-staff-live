@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.png?v=244" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon.png?v=244">
-  <link rel="stylesheet" href="styles.css?v=245">
+  <link rel="stylesheet" href="styles.css?v=246">
 </head>
 <body>
   <main class="app-shell">
@@ -23,7 +23,7 @@
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
-              <span id="versionBadge" class="version-badge">v245</span>
+              <span id="versionBadge" class="version-badge">v246</span>
             </div>
           </div>
         </div>
@@ -204,9 +204,13 @@
       <h2 id="trialScoreTitle">免费版乐谱</h2>
       <p id="trialScoreMessage">免费用户只可以使用样本 MIDI。</p>
       <div id="trialScoreList" class="trial-score-list"></div>
+      <div class="trial-purchase-actions">
+        <button id="unlockFullButton" class="primary trial-unlock-button" type="button">解锁全部功能</button>
+        <button id="restorePurchaseButton" class="ghost trial-restore-button" type="button">恢复购买</button>
+      </div>
     </div>
   </div>
   <div id="pdfExportRoot" class="pdf-export-root" aria-hidden="true"></div>
-  <script src="app.js?v=245"></script>
+  <script src="app.js?v=246"></script>
 </body>
 </html>
