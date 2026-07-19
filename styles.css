@@ -198,6 +198,17 @@ button {
   color: var(--ink);
 }
 
+.sample-select {
+  min-height: 36px;
+  border: 1px solid var(--soft-line);
+  border-radius: 8px;
+  padding: 0 28px 0 11px;
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 750;
+}
+
 .ghost:not(:disabled):active,
 .primary:not(:disabled):active,
 .record-button:not(:disabled):active {
@@ -1252,7 +1263,8 @@ body.pdf-previewing .pdf-export-root {
     gap: 7px;
   }
 
-  .actions button {
+  .actions button,
+  .actions .sample-select {
     flex: 1 1 112px;
     padding: 0 10px;
     min-height: 36px;

@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v242";
+const APP_VERSION = "v243";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -144,6 +144,18 @@ const PLAYBACK_INSTRUMENTS = [
   { id: "pad", labels: { zh: "合成器 Pad", ja: "シンセ Pad", en: "Synth Pad" }, wave: "sawtooth", partials: [1, 0.5, 2], levels: [0.62, 0.23, 0.14], attack: 0.32, decay: 5.6, brightness: 1050 },
   { id: "guitar", labels: { zh: "尼龙吉他", ja: "ナイロンギター", en: "Nylon Guitar" }, wave: "triangle", partials: [1, 2, 3, 5], levels: [1, 0.3, 0.15, 0.06], attack: 0.004, decay: 3.1, brightness: 3000 }
 ];
+const TRIAL_SCORES = [
+  {
+    id: "akatsuka-train",
+    url: "samples/trial-akatsuka-train.mid",
+    labels: { zh: "地下鉄赤塚駅", ja: "地下鉄赤塚駅", en: "Akatsuka Train" }
+  },
+  {
+    id: "seoul-subway-up",
+    url: "samples/trial-seoul-subway-up.mid",
+    labels: { zh: "首尔地铁上行线", ja: "ソウル地下鉄 上り線", en: "Seoul Subway Up" }
+  }
+];
 const I18N = {
   zh: {
     "label.language": "语言",
@@ -176,6 +188,7 @@ const I18N = {
     "button.record": "录 MIDI",
     "button.stopRecord": "停录保存",
     "button.loadScore": "载入乐谱",
+    "button.trialScore": "样本乐谱",
     "button.exportPdf": "导出PDF",
     "button.fullscreen": "全屏",
     "button.exitFullscreen": "退出全屏",
@@ -205,6 +218,7 @@ const I18N = {
     "status.savingIos": "正在打开 iOS 保存面板...",
     "status.midiGenerated": "MIDI 文件已生成",
     "status.loaded": "已载入：{name}",
+    "status.loadingSample": "正在载入样本乐谱...",
     "status.loadedEmpty": "{type} 已载入，但没有找到可显示的音符",
     "status.loadFailed": "乐谱读取失败：{message}",
     "status.playUnsupported": "当前浏览器不支持网页播放。",
@@ -254,6 +268,7 @@ const I18N = {
     "button.record": "MIDI 録音",
     "button.stopRecord": "停止して保存",
     "button.loadScore": "楽譜を読む",
+    "button.trialScore": "サンプル楽譜",
     "button.exportPdf": "PDF書き出し",
     "button.fullscreen": "全画面",
     "button.exitFullscreen": "全画面終了",
@@ -283,6 +298,7 @@ const I18N = {
     "status.savingIos": "iOS 保存画面を開いています...",
     "status.midiGenerated": "MIDI ファイルを生成しました",
     "status.loaded": "読み込みました：{name}",
+    "status.loadingSample": "サンプル楽譜を読み込み中...",
     "status.loadedEmpty": "{type} を読み込みましたが、表示できる音符がありません",
     "status.loadFailed": "楽譜の読み込みに失敗：{message}",
     "status.playUnsupported": "このブラウザは再生に対応していません。",
@@ -332,6 +348,7 @@ const I18N = {
     "button.record": "Record MIDI",
     "button.stopRecord": "Stop & Save",
     "button.loadScore": "Load Score",
+    "button.trialScore": "Sample Score",
     "button.exportPdf": "Export PDF",
     "button.fullscreen": "Fullscreen",
     "button.exitFullscreen": "Exit Fullscreen",
@@ -361,6 +378,7 @@ const I18N = {
     "status.savingIos": "Opening iOS save panel...",
     "status.midiGenerated": "MIDI file generated",
     "status.loaded": "Loaded: {name}",
+    "status.loadingSample": "Loading sample score...",
     "status.loadedEmpty": "{type} loaded, but no displayable notes were found",
     "status.loadFailed": "Score load failed: {message}",
     "status.playUnsupported": "This browser does not support web playback.",
@@ -427,6 +445,20 @@ function renderPlaybackInstrumentOptions() {
   });
   els.playbackInstrumentSelect.value = selected;
   els.playbackInstrumentSelect.setAttribute("aria-label", state.language === "ja" ? "再生音色" : state.language === "en" ? "Playback tone" : "播放音色");
+}
+
+function trialScoreLabel(score) {
+  return score.labels?.[state.language] || score.labels?.en || score.id;
+}
+
+function renderTrialScoreOptions() {
+  if (!els.trialScoreSelect) return;
+  els.trialScoreSelect.replaceChildren(new Option(t("button.trialScore"), ""));
+  TRIAL_SCORES.forEach((score) => {
+    els.trialScoreSelect.appendChild(new Option(trialScoreLabel(score), score.id));
+  });
+  els.trialScoreSelect.value = "";
+  els.trialScoreSelect.setAttribute("aria-label", t("button.trialScore"));
 }
 
 const state = {
@@ -543,6 +575,7 @@ const els = {
   recordButton: document.getElementById("recordButton"),
   stopRecordButton: document.getElementById("stopRecordButton"),
   loadMidiButton: document.getElementById("loadMidiButton"),
+  trialScoreSelect: document.getElementById("trialScoreSelect"),
   exportPdfButton: document.getElementById("exportPdfButton"),
   midiFileInput: document.getElementById("midiFileInput"),
   fullscreenButton: document.getElementById("fullscreenButton"),
@@ -790,6 +823,7 @@ function applyLanguage() {
 
   els.inputSelect.options[0].textContent = t("option.autoSelect");
   renderPlaybackInstrumentOptions();
+  renderTrialScoreOptions();
   els.languageButtons.forEach((button) => {
     const active = button.dataset.language === state.language;
     button.textContent = LANGUAGE_LABELS[button.dataset.language] || button.dataset.language;
@@ -2612,6 +2646,33 @@ async function loadScoreFile(file) {
     updateAll();
   } finally {
     els.midiFileInput.value = "";
+  }
+}
+
+async function loadTrialScore(scoreId) {
+  const score = TRIAL_SCORES.find((item) => item.id === scoreId);
+  if (!score) return;
+
+  try {
+    stopMeasurePlayback();
+    setStatusKey("status.loadingSample");
+    const response = await fetch(score.url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const parsed = parseMidiFile(bytes);
+    applyParsedScore(parsed, trialScoreLabel(score), "MIDI");
+  } catch (error) {
+    cancelAutoFollowAnimation();
+    state.practice.measures = [];
+    state.practice.notes = [];
+    state.practice.pedalEvents = [];
+    state.practice.currentMeasure = 0;
+    state.practice.viewStartTick = 0;
+    resetAutoFollowBeat(null, { clearPlayed: true });
+    setStatusKey("status.loadFailed", { message: error.message || "样本乐谱读取失败" });
+    updateAll();
+  } finally {
+    if (els.trialScoreSelect) els.trialScoreSelect.value = "";
   }
 }
 
@@ -4951,6 +5012,7 @@ function setupEvents() {
   els.recordButton.addEventListener("click", startRecording);
   els.stopRecordButton.addEventListener("click", stopRecording);
   els.loadMidiButton.addEventListener("click", () => els.midiFileInput.click());
+  els.trialScoreSelect.addEventListener("change", () => loadTrialScore(els.trialScoreSelect.value));
   els.exportPdfButton.addEventListener("click", exportScorePdf);
   els.pdfExportRoot.addEventListener("click", (event) => {
     if (event.target.closest("[data-export-print]")) {
