@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v246";
+const APP_VERSION = "v247";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -226,6 +226,7 @@ const I18N = {
     "button.restorePurchase": "恢复购买",
     "status.purchaseChecking": "正在检查购买状态...",
     "status.purchaseUnavailable": "购买功能只在 iOS App 内可用。网页版可以直接使用全部功能。",
+    "status.purchaseBridgeMissing": "当前 TestFlight 版本不支持购买，请安装 Build 4 后再试。",
     "status.purchaseStarted": "正在打开购买画面...",
     "status.purchaseUnlocked": "已解锁全部功能",
     "status.purchaseCancelled": "购买已取消",
@@ -316,6 +317,7 @@ const I18N = {
     "button.restorePurchase": "購入を復元",
     "status.purchaseChecking": "購入状態を確認中...",
     "status.purchaseUnavailable": "購入機能は iOS App 内のみ利用できます。Web版はすべての機能をそのまま使えます。",
+    "status.purchaseBridgeMissing": "この TestFlight 版は購入に対応していません。Build 4 をインストールしてからお試しください。",
     "status.purchaseStarted": "購入画面を開いています...",
     "status.purchaseUnlocked": "すべての機能が解除されました",
     "status.purchaseCancelled": "購入をキャンセルしました",
@@ -406,6 +408,7 @@ const I18N = {
     "button.restorePurchase": "Restore Purchase",
     "status.purchaseChecking": "Checking purchase status...",
     "status.purchaseUnavailable": "Purchases are only available in the iOS app. The web version keeps all features unlocked.",
+    "status.purchaseBridgeMissing": "This TestFlight build does not support purchases. Please install Build 4 and try again.",
     "status.purchaseStarted": "Opening purchase screen...",
     "status.purchaseUnlocked": "All features unlocked",
     "status.purchaseCancelled": "Purchase cancelled",
@@ -515,6 +518,7 @@ const state = {
   flowDisplay: true,
   fullUnlocked: false,
   purchaseStateKnown: false,
+  purchaseRequestTimer: 0,
   rhythmFollow: false,
   pedalStep: "on",
   sustainPedalPage: "off",
@@ -2772,24 +2776,55 @@ function requestNativePurchaseState() {
   postNativePurchaseMessage("getPurchaseState");
 }
 
+function clearPurchaseRequestTimer() {
+  if (!state.purchaseRequestTimer) return;
+  window.clearTimeout(state.purchaseRequestTimer);
+  state.purchaseRequestTimer = 0;
+}
+
+function waitForNativePurchaseBridge(onReady) {
+  if (!isIosNativeApp()) {
+    setStatusKey("status.purchaseUnavailable");
+    return;
+  }
+  if (state.purchaseStateKnown) {
+    onReady();
+    return;
+  }
+
+  clearPurchaseRequestTimer();
+  setStatusKey("status.purchaseChecking");
+  postNativePurchaseMessage("getPurchaseState");
+  state.purchaseRequestTimer = window.setTimeout(() => {
+    if (!state.purchaseStateKnown) {
+      setStatusKey("status.purchaseBridgeMissing");
+    }
+  }, 1800);
+}
+
 function purchaseFullUnlock() {
   if (state.fullUnlocked) {
     closeTrialScoreModal();
     els.midiFileInput.click();
     return;
   }
-  if (postNativePurchaseMessage("purchaseUnlock")) {
-    setStatusKey("status.purchaseStarted");
-  }
+  waitForNativePurchaseBridge(() => {
+    if (postNativePurchaseMessage("purchaseUnlock")) {
+      setStatusKey("status.purchaseStarted");
+    }
+  });
 }
 
 function restoreFullUnlock() {
-  if (postNativePurchaseMessage("restoreUnlock")) {
-    setStatusKey("status.purchaseChecking");
-  }
+  waitForNativePurchaseBridge(() => {
+    if (postNativePurchaseMessage("restoreUnlock")) {
+      setStatusKey("status.purchaseChecking");
+    }
+  });
 }
 
 function setFullUnlockState(unlocked) {
+  clearPurchaseRequestTimer();
   state.fullUnlocked = Boolean(unlocked);
   state.purchaseStateKnown = true;
   saveSettings();
