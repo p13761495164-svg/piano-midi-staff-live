@@ -9,9 +9,9 @@
   <meta name="apple-mobile-web-app-title" content="Easy Piano">
   <title>Easy Piano</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon.png?v=240" type="image/png">
-  <link rel="apple-touch-icon" href="icons/icon.png?v=240">
-  <link rel="stylesheet" href="styles.css?v=243">
+  <link rel="icon" href="icons/icon.png?v=244" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon.png?v=244">
+  <link rel="stylesheet" href="styles.css?v=245">
 </head>
 <body>
   <main class="app-shell">
@@ -19,11 +19,11 @@
       <p id="statusText" class="status-banner">等待连接 MIDI 键盘</p>
       <div class="topbar">
         <div class="brand">
-          <img class="brand-mark" src="icons/icon.png?v=227" alt="" aria-hidden="true">
+          <img class="brand-mark" src="icons/icon.png?v=244" alt="" aria-hidden="true">
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
-              <span id="versionBadge" class="version-badge">v243</span>
+              <span id="versionBadge" class="version-badge">v245</span>
             </div>
           </div>
         </div>
@@ -32,9 +32,6 @@
           <button id="recordButton" class="record-button" type="button">录 MIDI</button>
           <button id="stopRecordButton" class="ghost hidden" type="button">停止 MIDI</button>
           <button id="loadMidiButton" class="ghost" type="button">载入乐谱</button>
-          <select id="trialScoreSelect" class="sample-select" aria-label="样本乐谱">
-            <option value="">样本乐谱</option>
-          </select>
           <button id="exportPdfButton" class="ghost" type="button" disabled>导出PDF</button>
           <button id="fullscreenButton" class="ghost" type="button">全屏</button>
           <button id="refreshButton" class="ghost" type="button">更新</button>
@@ -201,7 +198,15 @@
       </section>
     </section>
   </main>
+  <div id="trialScoreModal" class="trial-modal hidden" role="dialog" aria-modal="true" aria-labelledby="trialScoreTitle">
+    <div class="trial-modal-panel">
+      <button id="trialScoreCloseButton" class="trial-modal-close" type="button" aria-label="关闭">×</button>
+      <h2 id="trialScoreTitle">免费版乐谱</h2>
+      <p id="trialScoreMessage">免费用户只可以使用样本 MIDI。</p>
+      <div id="trialScoreList" class="trial-score-list"></div>
+    </div>
+  </div>
   <div id="pdfExportRoot" class="pdf-export-root" aria-hidden="true"></div>
-  <script src="app.js?v=243"></script>
+  <script src="app.js?v=245"></script>
 </body>
 </html>

@@ -1,39 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" fill="#111111"/>
+  <rect width="1024" height="1024" fill="#010101"/>
   <text
     x="512"
-    y="360"
+    y="450"
     fill="#ffffff"
     font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
-    font-size="152"
+    font-size="150"
     font-weight="300"
-    letter-spacing="18"
     text-anchor="middle">Piano</text>
 
-  <g transform="translate(220 560)">
+  <g transform="translate(226 570)">
     <g fill="#fbfbfb">
-      <rect x="0" y="0" width="80" height="230" rx="5"/>
-      <rect x="84" y="0" width="80" height="230" rx="5"/>
-      <rect x="168" y="0" width="80" height="230" rx="5"/>
-      <rect x="252" y="0" width="80" height="230" rx="5"/>
-      <rect x="336" y="0" width="80" height="230" rx="5"/>
-      <rect x="420" y="0" width="80" height="230" rx="5"/>
-      <rect x="504" y="0" width="80" height="230" rx="5"/>
+      <rect x="0" y="0" width="91" height="228"/>
+      <rect x="96" y="0" width="91" height="228"/>
+      <rect x="192" y="0" width="91" height="228"/>
+      <rect x="288" y="0" width="91" height="228"/>
+      <rect x="384" y="0" width="91" height="228"/>
+      <rect x="480" y="0" width="91" height="228"/>
     </g>
     <g stroke="#d6d6d6" stroke-width="3">
-      <line x1="82" y1="0" x2="82" y2="230"/>
-      <line x1="166" y1="0" x2="166" y2="230"/>
-      <line x1="250" y1="0" x2="250" y2="230"/>
-      <line x1="334" y1="0" x2="334" y2="230"/>
-      <line x1="418" y1="0" x2="418" y2="230"/>
-      <line x1="502" y1="0" x2="502" y2="230"/>
+      <line x1="91" y1="0" x2="91" y2="228"/>
+      <line x1="187" y1="0" x2="187" y2="228"/>
+      <line x1="283" y1="0" x2="283" y2="228"/>
+      <line x1="379" y1="0" x2="379" y2="228"/>
+      <line x1="475" y1="0" x2="475" y2="228"/>
     </g>
-    <g fill="#111111">
-      <rect x="56" y="0" width="52" height="138" rx="4"/>
-      <rect x="140" y="0" width="52" height="138" rx="4"/>
-      <rect x="308" y="0" width="52" height="138" rx="4"/>
-      <rect x="392" y="0" width="52" height="138" rx="4"/>
-      <rect x="476" y="0" width="52" height="138" rx="4"/>
+    <g fill="#010101">
+      <rect x="38" y="0" width="62" height="130"/>
+      <rect x="130" y="0" width="62" height="130"/>
+      <rect x="329" y="0" width="62" height="130"/>
+      <rect x="421" y="0" width="62" height="130"/>
     </g>
   </g>
 </svg>
