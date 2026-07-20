@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.png?v=244" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon.png?v=244">
-  <link rel="stylesheet" href="styles.css?v=248">
+  <link rel="stylesheet" href="styles.css?v=249">
 </head>
 <body>
   <main class="app-shell">
@@ -23,7 +23,7 @@
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
-              <span id="versionBadge" class="version-badge">v248</span>
+              <span id="versionBadge" class="version-badge">v249</span>
             </div>
           </div>
         </div>
@@ -31,6 +31,7 @@
           <button id="connectButton" class="primary" type="button">连接 MIDI</button>
           <button id="recordButton" class="record-button" type="button">录 MIDI</button>
           <button id="stopRecordButton" class="ghost hidden" type="button">停止 MIDI</button>
+          <button id="discardRecordButton" class="ghost hidden" type="button">废弃重录</button>
           <button id="loadMidiButton" class="ghost" type="button">载入乐谱</button>
           <button id="exportPdfButton" class="ghost" type="button" disabled>导出PDF</button>
           <button id="fullscreenButton" class="ghost" type="button">全屏</button>
@@ -211,6 +212,6 @@
     </div>
   </div>
   <div id="pdfExportRoot" class="pdf-export-root" aria-hidden="true"></div>
-  <script src="app.js?v=248"></script>
+  <script src="app.js?v=249"></script>
 </body>
 </html>

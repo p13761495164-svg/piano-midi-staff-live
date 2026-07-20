@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v248";
+const APP_VERSION = "v249";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -20,6 +20,7 @@ const KEY_RANGE = { min: MIDI_MIN, max: MIDI_MAX };
 const SETTINGS_KEY = "piano-midi-staff-settings";
 const MIDI_PPQ = 480;
 const RECORDING_BPM = 120;
+const RECORDING_LEAD_IN_MS = 2000;
 const DISPLAY_FILENAME_MAX = 50;
 const SUSTAIN_PEDAL_PAGE_DEBOUNCE_MS = 260;
 const AUTO_FOLLOW_ANIMATION_MS = 260;
@@ -188,6 +189,7 @@ const I18N = {
     "button.connect": "连接 MIDI",
     "button.record": "录 MIDI",
     "button.stopRecord": "停录保存",
+    "button.discardRecord": "废弃重录",
     "button.loadScore": "载入乐谱",
     "button.close": "关闭",
     "button.exportPdf": "导出PDF",
@@ -214,6 +216,7 @@ const I18N = {
     "status.live": "实时显示",
     "status.measure": "{range} / {total} 小节",
     "status.recording": "录制中...",
+    "status.recordingRestarted": "已废弃，重新录制中...",
     "status.recorded": "录制完成：{count} 个音，正在保存录音文件",
     "status.recordedEmpty": "录制完成：没有记录到音符",
     "status.savingIos": "正在打开 iOS 保存面板...",
@@ -279,6 +282,7 @@ const I18N = {
     "button.connect": "MIDI 接続",
     "button.record": "MIDI 録音",
     "button.stopRecord": "停止して保存",
+    "button.discardRecord": "破棄して再録音",
     "button.loadScore": "楽譜を読む",
     "button.close": "閉じる",
     "button.exportPdf": "PDF書き出し",
@@ -305,6 +309,7 @@ const I18N = {
     "status.live": "リアルタイム表示",
     "status.measure": "{range} / {total} 小節",
     "status.recording": "録音中...",
+    "status.recordingRestarted": "破棄しました。再録音中...",
     "status.recorded": "録音完了：{count} 音。MIDI を保存中",
     "status.recordedEmpty": "録音完了：音符は記録されませんでした",
     "status.savingIos": "iOS 保存画面を開いています...",
@@ -370,6 +375,7 @@ const I18N = {
     "button.connect": "Connect MIDI",
     "button.record": "Record MIDI",
     "button.stopRecord": "Stop & Save",
+    "button.discardRecord": "Discard & Re-record",
     "button.loadScore": "Load Score",
     "button.close": "Close",
     "button.exportPdf": "Export PDF",
@@ -396,6 +402,7 @@ const I18N = {
     "status.live": "Live View",
     "status.measure": "{range} / {total} measures",
     "status.recording": "Recording...",
+    "status.recordingRestarted": "Discarded. Recording again...",
     "status.recorded": "Recorded {count} notes. Saving MIDI",
     "status.recordedEmpty": "Recording finished: no notes captured",
     "status.savingIos": "Opening iOS save panel...",
@@ -614,6 +621,7 @@ const els = {
   connectButton: document.getElementById("connectButton"),
   recordButton: document.getElementById("recordButton"),
   stopRecordButton: document.getElementById("stopRecordButton"),
+  discardRecordButton: document.getElementById("discardRecordButton"),
   loadMidiButton: document.getElementById("loadMidiButton"),
   trialScoreModal: document.getElementById("trialScoreModal"),
   trialScoreTitle: document.getElementById("trialScoreTitle"),
@@ -846,6 +854,7 @@ function applyLanguage() {
   updateText(els.connectButton, t("button.connect"));
   updateText(els.recordButton, t("button.record"));
   updateText(els.stopRecordButton, t("button.stopRecord"));
+  updateText(els.discardRecordButton, t("button.discardRecord"));
   updateText(els.loadMidiButton, t("button.loadScore"));
   updateText(els.trialScoreTitle, t("trial.title"));
   updateText(els.trialScoreMessage, t("trial.message"));
@@ -1157,6 +1166,7 @@ function clampTolerance(value) {
 function syncRecordingControls() {
   els.recordButton.classList.toggle("hidden", state.recording.active);
   els.stopRecordButton.classList.toggle("hidden", !state.recording.active);
+  els.discardRecordButton.classList.toggle("hidden", !state.recording.active);
 }
 
 function syncPracticeControls() {
@@ -2356,6 +2366,15 @@ function startRecording() {
   setStatusKey("status.recording");
 }
 
+function discardAndRestartRecording() {
+  if (!state.recording.active) return;
+  revokeRecordingUrl();
+  state.recording.startedAt = performance.now();
+  state.recording.events = [];
+  syncRecordingControls();
+  setStatusKey("status.recordingRestarted");
+}
+
 function stopRecording() {
   if (!state.recording.active) return;
   [...state.activeNotes.entries()].forEach(([note, active]) => {
@@ -2401,6 +2420,7 @@ function saveRecording() {
     });
     state.recording.takeNumber += 1;
     setStatusKey("status.savingIos");
+    loadGeneratedRecording(bytes, filename);
     return;
   }
 
@@ -2416,6 +2436,16 @@ function saveRecording() {
   anchor.remove();
   state.recording.takeNumber += 1;
   setStatusKey("status.midiGenerated");
+  loadGeneratedRecording(bytes, filename);
+}
+
+function loadGeneratedRecording(bytes, filename) {
+  try {
+    const parsed = parseMidiFile(bytes);
+    applyParsedScore(parsed, filename, "MIDI");
+  } catch (error) {
+    setStatusKey("status.loadFailed", { message: error.message || "录音载入失败" });
+  }
 }
 
 function timestampFilename(date) {
@@ -4656,7 +4686,8 @@ function buildMidiFile(events) {
     .slice()
     .sort((a, b) => a.timeMs - b.timeMs)
     .forEach((event) => {
-      const tick = Math.max(previousTick, Math.round(event.timeMs * MIDI_PPQ * RECORDING_BPM / 60000));
+      const exportTimeMs = Math.max(0, Number(event.timeMs) || 0) + RECORDING_LEAD_IN_MS;
+      const tick = Math.max(previousTick, Math.round(exportTimeMs * MIDI_PPQ * RECORDING_BPM / 60000));
       pushVarLen(track, tick - previousTick);
       previousTick = tick;
       const channel = clampMidiChannel(event.channel);
@@ -5219,6 +5250,7 @@ function setupEvents() {
   els.connectButton.addEventListener("click", connectMidi);
   els.recordButton.addEventListener("click", startRecording);
   els.stopRecordButton.addEventListener("click", stopRecording);
+  els.discardRecordButton.addEventListener("click", discardAndRestartRecording);
   els.loadMidiButton.addEventListener("click", handleLoadScoreClick);
   els.trialScoreCloseButton.addEventListener("click", closeTrialScoreModal);
   els.unlockFullButton.addEventListener("click", purchaseFullUnlock);
