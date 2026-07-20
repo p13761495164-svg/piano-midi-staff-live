@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v249";
+const APP_VERSION = "v250";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -211,6 +211,7 @@ const I18N = {
     "button.play": "播放",
     "button.pause": "暂停",
     "button.stop": "停止",
+    "button.saveTempo": "另存变速版",
     "option.autoSelect": "自动选择",
     "status.waiting": "等待连接 MIDI 键盘",
     "status.live": "实时显示",
@@ -221,6 +222,8 @@ const I18N = {
     "status.recordedEmpty": "录制完成：没有记录到音符",
     "status.savingIos": "正在打开 iOS 保存面板...",
     "status.midiGenerated": "MIDI 文件已生成",
+    "status.tempoSaved": "已另存变速版：{name}",
+    "status.tempoSaveUnavailable": "当前文件不能另存变速版，请先载入 MIDI 文件。",
     "status.loaded": "已载入：{name}",
     "status.loadingSample": "正在载入样本乐谱...",
     "trial.title": "免费版乐谱",
@@ -304,6 +307,7 @@ const I18N = {
     "button.play": "再生",
     "button.pause": "一時停止",
     "button.stop": "停止",
+    "button.saveTempo": "変速版を別名保存",
     "option.autoSelect": "自動選択",
     "status.waiting": "MIDI キーボード接続待ち",
     "status.live": "リアルタイム表示",
@@ -314,6 +318,8 @@ const I18N = {
     "status.recordedEmpty": "録音完了：音符は記録されませんでした",
     "status.savingIos": "iOS 保存画面を開いています...",
     "status.midiGenerated": "MIDI ファイルを生成しました",
+    "status.tempoSaved": "変速版を保存しました：{name}",
+    "status.tempoSaveUnavailable": "変速版を保存できません。MIDI ファイルを読み込んでください。",
     "status.loaded": "読み込みました：{name}",
     "status.loadingSample": "サンプル楽譜を読み込み中...",
     "trial.title": "無料版の楽譜",
@@ -397,6 +403,7 @@ const I18N = {
     "button.play": "Play",
     "button.pause": "Pause",
     "button.stop": "Stop",
+    "button.saveTempo": "Save Tempo Copy",
     "option.autoSelect": "Auto Select",
     "status.waiting": "Waiting for MIDI keyboard",
     "status.live": "Live View",
@@ -407,6 +414,8 @@ const I18N = {
     "status.recordedEmpty": "Recording finished: no notes captured",
     "status.savingIos": "Opening iOS save panel...",
     "status.midiGenerated": "MIDI file generated",
+    "status.tempoSaved": "Saved tempo copy: {name}",
+    "status.tempoSaveUnavailable": "Cannot save a tempo copy. Load a MIDI file first.",
     "status.loaded": "Loaded: {name}",
     "status.loadingSample": "Loading sample score...",
     "trial.title": "Free Score Access",
@@ -570,6 +579,9 @@ const state = {
     ticksPerQuarter: MIDI_PPQ,
     measureTicks: MIDI_PPQ * 4,
     microsecondsPerQuarter: 500000,
+    originalMicrosecondsPerQuarter: 500000,
+    sourceBytes: null,
+    sourceType: "",
     viewStartTick: 0
   },
   playback: {
@@ -642,6 +654,7 @@ const els = {
   tempoDownButton: document.getElementById("tempoDownButton"),
   tempoValue: document.getElementById("tempoValue"),
   tempoUpButton: document.getElementById("tempoUpButton"),
+  saveTempoButton: document.getElementById("saveTempoButton"),
   playbackInstrumentSelect: document.getElementById("playbackInstrumentSelect"),
   playbackInstrumentLabel: document.getElementById("playbackInstrumentLabel"),
   liveSoundToggle: document.getElementById("liveSoundToggle"),
@@ -862,6 +875,7 @@ function applyLanguage() {
   updateText(els.unlockFullButton, t("button.unlockFull"));
   updateText(els.restorePurchaseButton, t("button.restorePurchase"));
   updateText(els.exportPdfButton, t("button.exportPdf"));
+  updateText(els.saveTempoButton, t("button.saveTempo"));
   updateText(els.refreshButton, t("button.refresh"));
   updateText(els.installButton, t("button.install"));
   updateIconButtonLabel(els.startMeasureButton, t("button.start"));
@@ -2442,7 +2456,7 @@ function saveRecording() {
 function loadGeneratedRecording(bytes, filename) {
   try {
     const parsed = parseMidiFile(bytes);
-    applyParsedScore(parsed, filename, "MIDI");
+    applyParsedScore(parsed, filename, "MIDI", { sourceBytes: bytes });
   } catch (error) {
     setStatusKey("status.loadFailed", { message: error.message || "录音载入失败" });
   }
@@ -2475,10 +2489,11 @@ function displayFilename(filename, fallback) {
   return `${value.slice(0, DISPLAY_FILENAME_MAX)}...`;
 }
 
-function applyParsedScore(parsed, filename, typeLabel) {
+function applyParsedScore(parsed, filename, typeLabel, source = {}) {
   cancelAutoFollowAnimation();
   clearMistakes();
   const normalized = trimLeadingScoreSilence(parsed);
+  const originalTempo = normalized.microsecondsPerQuarter || 500000;
   state.practice.notes = normalized.notes || normalized.measures.flatMap((measure) => measure.notes);
   state.practice.pedalEvents = normalized.pedalEvents || [];
   state.practice.currentMeasure = 0;
@@ -2489,6 +2504,9 @@ function applyParsedScore(parsed, filename, typeLabel) {
   state.practice.ticksPerQuarter = normalized.ticksPerQuarter;
   state.practice.measureTicks = normalized.measureTicks;
   state.practice.microsecondsPerQuarter = practiceTempoForParsedScore(normalized);
+  state.practice.originalMicrosecondsPerQuarter = originalTempo;
+  state.practice.sourceBytes = source.sourceBytes instanceof Uint8Array ? new Uint8Array(source.sourceBytes) : null;
+  state.practice.sourceType = typeLabel;
   state.practice.viewStartTick = 0;
   state.practice.measures = normalized.variableMeasures ? normalized.measures : buildMeasuresFromPracticeNotes(state.practice.notes);
   if (normalized.keySignature && MAJOR_KEY_SIGNATURES[normalized.keySignature]) {
@@ -2732,7 +2750,7 @@ async function loadScoreFile(file) {
     } else {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const parsed = parseMidiFile(bytes);
-      applyParsedScore(parsed, name || "MIDI", "MIDI");
+      applyParsedScore(parsed, name || "MIDI", "MIDI", { sourceBytes: bytes });
     }
   } catch (error) {
     cancelAutoFollowAnimation();
@@ -2741,6 +2759,8 @@ async function loadScoreFile(file) {
     state.practice.pedalEvents = [];
     state.practice.currentMeasure = 0;
     state.practice.viewStartTick = 0;
+    state.practice.sourceBytes = null;
+    state.practice.sourceType = "";
     resetAutoFollowBeat(null, { clearPlayed: true });
     setStatusKey("status.loadFailed", { message: error.message || "文件格式不支持" });
     updateAll();
@@ -2760,7 +2780,7 @@ async function loadTrialScore(scoreId) {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const bytes = new Uint8Array(await response.arrayBuffer());
     const parsed = parseMidiFile(bytes);
-    applyParsedScore(parsed, trialScoreLabel(score), "MIDI");
+    applyParsedScore(parsed, trialScoreLabel(score), "MIDI", { sourceBytes: bytes });
   } catch (error) {
     cancelAutoFollowAnimation();
     state.practice.measures = [];
@@ -2768,6 +2788,8 @@ async function loadTrialScore(scoreId) {
     state.practice.pedalEvents = [];
     state.practice.currentMeasure = 0;
     state.practice.viewStartTick = 0;
+    state.practice.sourceBytes = null;
+    state.practice.sourceType = "";
     resetAutoFollowBeat(null, { clearPlayed: true });
     setStatusKey("status.loadFailed", { message: error.message || "样本乐谱读取失败" });
     updateAll();
@@ -3011,6 +3033,189 @@ function adjustPracticeTempo(delta) {
   if (resumeRhythm) restartRhythmFollowFromCurrentTick();
 }
 
+function saveTempoAdjustedMidi() {
+  if (!(state.practice.sourceBytes instanceof Uint8Array) || state.practice.sourceType !== "MIDI") {
+    setStatusKey("status.tempoSaveUnavailable");
+    return;
+  }
+  const bpm = currentTempoBpm();
+  const bytes = rewriteMidiTempoBytes(state.practice.sourceBytes, microsecondsFromBpm(bpm));
+  const filename = tempoAdjustedFilename(state.practice.filename, bpm);
+
+  if (window.webkit?.messageHandlers?.midiBridge) {
+    window.webkit.messageHandlers.midiBridge.postMessage({
+      type: "saveMidi",
+      filename,
+      base64: bytesToBase64(bytes)
+    });
+    loadGeneratedRecording(bytes, filename);
+    setStatusKey("status.tempoSaved", { name: displayFilename(filename, "MIDI") });
+    return;
+  }
+
+  const blob = new Blob([bytes], { type: "audio/midi" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  loadGeneratedRecording(bytes, filename);
+  setStatusKey("status.tempoSaved", { name: displayFilename(filename, "MIDI") });
+}
+
+function tempoAdjustedFilename(filename, bpm) {
+  const base = String(filename || "score")
+    .replace(/\.(mid|midi)$/i, "")
+    .trim() || "score";
+  return `${base}_EP${Math.round(bpm)}bpm.mid`;
+}
+
+function rewriteMidiTempoBytes(sourceBytes, microsecondsPerQuarter) {
+  const bytes = sourceBytes instanceof Uint8Array ? sourceBytes : new Uint8Array(sourceBytes || []);
+  if (bytes.length < 14 || textFromBytes(bytes, 0, 4) !== "MThd") throw new Error("不是标准 MIDI 文件");
+  const tempo = Math.max(1, Math.min(0xffffff, Math.round(Number(microsecondsPerQuarter) || 500000)));
+  const tempoBytes = [(tempo >> 16) & 0xff, (tempo >> 8) & 0xff, tempo & 0xff];
+  const headerLength = readUint32FromBytes(bytes, 4);
+  const headerEnd = Math.min(bytes.length, 8 + headerLength);
+  const chunks = [];
+  let position = headerEnd;
+  let tempoCount = 0;
+  let firstTrackIndex = -1;
+
+  chunks.push([...bytes.slice(0, headerEnd)]);
+  while (position + 8 <= bytes.length) {
+    const type = textFromBytes(bytes, position, 4);
+    const length = readUint32FromBytes(bytes, position + 4);
+    const dataStart = position + 8;
+    const dataEnd = Math.min(bytes.length, dataStart + length);
+    const data = bytes.slice(dataStart, dataEnd);
+    if (type === "MTrk") {
+      if (firstTrackIndex < 0) firstTrackIndex = chunks.length;
+      const rewritten = rewriteMidiTrackTempo(data, tempoBytes);
+      tempoCount += rewritten.tempoCount;
+      chunks.push([...asciiBytes("MTrk"), ...uint32Bytes(rewritten.bytes.length), ...rewritten.bytes]);
+    } else {
+      chunks.push([...bytes.slice(position, dataEnd)]);
+    }
+    position = dataStart + length;
+  }
+  if (position < bytes.length) chunks.push([...bytes.slice(position)]);
+
+  if (!tempoCount && firstTrackIndex >= 0) {
+    const trackChunk = chunks[firstTrackIndex];
+    const trackBytes = trackChunk.slice(8);
+    const inserted = [0x00, 0xff, 0x51, 0x03, ...tempoBytes, ...trackBytes];
+    chunks[firstTrackIndex] = [...asciiBytes("MTrk"), ...uint32Bytes(inserted.length), ...inserted];
+  }
+
+  return new Uint8Array(chunks.flat());
+}
+
+function rewriteMidiTrackTempo(trackBytes, tempoBytes) {
+  const bytes = trackBytes instanceof Uint8Array ? trackBytes : new Uint8Array(trackBytes || []);
+  const out = [];
+  let position = 0;
+  let runningStatus = 0;
+  let tempoCount = 0;
+
+  while (position < bytes.length) {
+    const eventStart = position;
+    const deltaEnd = readVarLenEnd(bytes, position);
+    if (deltaEnd > bytes.length) break;
+    position = deltaEnd;
+    if (position >= bytes.length) break;
+
+    let status = bytes[position];
+    if (status >= 0x80) {
+      position += 1;
+      if (status < 0xf0) runningStatus = status;
+    } else if (runningStatus) {
+      status = runningStatus;
+    } else {
+      out.push(...bytes.slice(eventStart));
+      return { bytes: out, tempoCount };
+    }
+
+    if (status === 0xff) {
+      if (position >= bytes.length) break;
+      const metaType = bytes[position];
+      position += 1;
+      const lengthStart = position;
+      const lengthEnd = readVarLenEnd(bytes, position);
+      const length = readVarLenValue(bytes, lengthStart, lengthEnd);
+      position = lengthEnd;
+      const dataStart = position;
+      const dataEnd = Math.min(bytes.length, dataStart + length);
+      if (metaType === 0x51 && length >= 3) {
+        out.push(...bytes.slice(eventStart, dataStart), ...tempoBytes, ...bytes.slice(dataStart + 3, dataEnd));
+        tempoCount += 1;
+      } else {
+        out.push(...bytes.slice(eventStart, dataEnd));
+      }
+      position = dataEnd;
+      continue;
+    }
+
+    if (status === 0xf0 || status === 0xf7) {
+      const lengthStart = position;
+      const lengthEnd = readVarLenEnd(bytes, position);
+      const length = readVarLenValue(bytes, lengthStart, lengthEnd);
+      position = Math.min(bytes.length, lengthEnd + length);
+      out.push(...bytes.slice(eventStart, position));
+      continue;
+    }
+
+    const dataLength = midiDataLengthForStatus(status);
+    if (!dataLength) {
+      out.push(...bytes.slice(eventStart));
+      return { bytes: out, tempoCount };
+    }
+    if (bytes[eventStart + (deltaEnd - eventStart)] >= 0x80) {
+      position = Math.min(bytes.length, position + dataLength);
+    } else {
+      position = Math.min(bytes.length, position + dataLength);
+    }
+    out.push(...bytes.slice(eventStart, position));
+  }
+
+  if (position < bytes.length) out.push(...bytes.slice(position));
+  return { bytes: out, tempoCount };
+}
+
+function readVarLenEnd(bytes, position) {
+  let index = position;
+  for (let count = 0; count < 4 && index < bytes.length; count += 1) {
+    const byte = bytes[index];
+    index += 1;
+    if (!(byte & 0x80)) return index;
+  }
+  return index;
+}
+
+function readVarLenValue(bytes, start, end) {
+  let value = 0;
+  for (let index = start; index < end; index += 1) {
+    value = (value << 7) | (bytes[index] & 0x7f);
+  }
+  return value;
+}
+
+function readUint32FromBytes(bytes, offset) {
+  return ((bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]) >>> 0;
+}
+
+function uint32Bytes(value) {
+  const safe = Number(value) >>> 0;
+  return [(safe >> 24) & 0xff, (safe >> 16) & 0xff, (safe >> 8) & 0xff, safe & 0xff];
+}
+
+function textFromBytes(bytes, start, length) {
+  return String.fromCharCode(...bytes.slice(start, start + length));
+}
+
 function syncTempoControls() {
   const hasMeasures = state.practice.measures.length > 0;
   const bpm = currentTempoBpm();
@@ -3022,6 +3227,16 @@ function syncTempoControls() {
   if (els.tempoUpButton) {
     els.tempoUpButton.disabled = !hasMeasures || bpm >= 300;
     updateIconButtonLabel(els.tempoUpButton, `${t("label.tempo")} +1`);
+  }
+  if (els.saveTempoButton) {
+    const originalBpm = bpmFromMicroseconds(state.practice.originalMicrosecondsPerQuarter || state.practice.microsecondsPerQuarter || 500000);
+    const canSave = hasMeasures &&
+      state.practice.sourceType === "MIDI" &&
+      state.practice.sourceBytes instanceof Uint8Array &&
+      bpm !== originalBpm;
+    els.saveTempoButton.disabled = !canSave;
+    els.saveTempoButton.classList.toggle("hidden", !canSave);
+    els.saveTempoButton.title = t("button.saveTempo");
   }
 }
 
@@ -5275,6 +5490,7 @@ function setupEvents() {
   els.midiFileInput.addEventListener("change", () => loadScoreFile(els.midiFileInput.files[0]));
   els.startMeasureButton.addEventListener("click", goToPracticeStart);
   els.playMeasureButton.addEventListener("click", toggleContinuousPlayback);
+  els.saveTempoButton.addEventListener("click", saveTempoAdjustedMidi);
   els.mistakeLogList.addEventListener("click", (event) => {
     const removeButton = event.target.closest("[data-mistake-remove]");
     if (removeButton) {

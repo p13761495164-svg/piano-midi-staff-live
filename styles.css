@@ -636,6 +636,7 @@ select {
 .chord-status,
 .measure-play,
 .tempo-control,
+.tempo-save-button,
 .playback-instrument-select,
 .silent-playback-toggle,
 .live-sound-toggle,
@@ -710,6 +711,14 @@ select {
 .tempo-step:disabled {
   color: rgba(35, 34, 31, 0.28);
   cursor: not-allowed;
+}
+
+.tempo-save-button {
+  min-height: 32px;
+  padding: 0 11px;
+  box-shadow: none;
+  font-weight: 800;
+  color: var(--ink);
 }
 
 .playback-instrument-select {

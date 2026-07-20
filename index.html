@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.png?v=244" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon.png?v=244">
-  <link rel="stylesheet" href="styles.css?v=249">
+  <link rel="stylesheet" href="styles.css?v=250">
 </head>
 <body>
   <main class="app-shell">
@@ -23,7 +23,7 @@
           <div>
             <h1>Easy Piano</h1>
             <div class="status-row">
-              <span id="versionBadge" class="version-badge">v249</span>
+              <span id="versionBadge" class="version-badge">v250</span>
             </div>
           </div>
         </div>
@@ -185,6 +185,7 @@
               <span id="tempoValue">120</span>
               <button id="tempoUpButton" class="tempo-step" type="button" aria-label="加快" title="加快" disabled>+</button>
             </div>
+            <button id="saveTempoButton" class="ghost tempo-save-button hidden" type="button" disabled>另存变速版</button>
             <span id="measureStatus" class="measure-status hidden">实时显示</span>
             <span id="currentChord" class="chord-status">-</span>
           </div>
@@ -212,6 +213,6 @@
     </div>
   </div>
   <div id="pdfExportRoot" class="pdf-export-root" aria-hidden="true"></div>
-  <script src="app.js?v=249"></script>
+  <script src="app.js?v=250"></script>
 </body>
 </html>
