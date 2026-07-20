@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v247";
+const APP_VERSION = "v248";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -1641,6 +1641,12 @@ function displayStartTicksForTargets(targets) {
 function buildActiveInputNoteItems() {
   const visualNotes = currentInputVisualNotes();
   if (!state.practice.measures.length || !visualNotes.length) return [];
+  if (state.playback.playing && !state.robotPerformance) {
+    return buildLeftColumnNoteItems(
+      visualNotes.filter((note) => !state.playback.activeNotes.has(note)),
+      "input"
+    );
+  }
   if (flowDisplayEnabled()) {
     return buildLeftColumnNoteItems(
       visualNotes.filter((note) => Boolean(state.activeNotes.get(note)?.wrong)),
@@ -2370,9 +2376,14 @@ function stopRecording() {
 
 function recordMidiEvent(type, detail) {
   if (!state.recording.active) return;
+  recordMidiEventAt(type, detail, performance.now() - state.recording.startedAt);
+}
+
+function recordMidiEventAt(type, detail, timeMs) {
+  if (!state.recording.active) return;
   state.recording.events.push({
     type,
-    timeMs: Math.max(0, performance.now() - state.recording.startedAt),
+    timeMs: Math.max(0, Number(timeMs) || 0),
     ...detail
   });
 }
@@ -3603,6 +3614,8 @@ async function startContinuousPlayback() {
       state.playback.pendingNotes.push({
         targetId: target.id,
         note: target.note,
+        velocity: target.velocity || 88,
+        channel: target.channel ?? 0,
         startTick: audibleStartTick,
         duration: noteDuration,
         gain: human.gain
@@ -3718,8 +3731,27 @@ function triggerPendingPlaybackNotes(playbackTick) {
     const item = state.playback.pendingNotes[state.playback.pendingNoteIndex];
     const offsetSeconds = Math.max(0.006, (item.startTick - playbackTick) * state.playback.secondsPerTick);
     schedulePracticeTone(audioContext, item.note, audioContext.currentTime + offsetSeconds, item.duration, state.playback.activeNodes, item.gain || 1);
+    recordScheduledPlaybackNote(item, offsetSeconds);
     state.playback.pendingNoteIndex += 1;
   }
+}
+
+function recordScheduledPlaybackNote(item, offsetSeconds) {
+  if (!state.recording.active || state.playback.silent) return;
+  const startTimeMs = performance.now() - state.recording.startedAt + offsetSeconds * 1000;
+  const durationMs = Math.max(1, Number(item.duration) * 1000 || 1);
+  recordMidiEventAt("noteon", {
+    note: item.note,
+    velocity: item.velocity || 88,
+    channel: item.channel ?? 0,
+    source: "playback"
+  }, startTimeMs);
+  recordMidiEventAt("noteoff", {
+    note: item.note,
+    velocity: 0,
+    channel: item.channel ?? 0,
+    source: "playback"
+  }, startTimeMs + durationMs);
 }
 
 function updatePlaybackActiveNotes(playbackTick) {
