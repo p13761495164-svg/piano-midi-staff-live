@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v255";
+const APP_VERSION = "v256";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2388,12 +2388,12 @@ function syncWaterfallVisibility() {
   if (els.stage) els.stage.classList.toggle("waterfall-mode", visible);
   els.waterfallBoard.classList.toggle("hidden", !visible);
   if (els.scoreBoard) els.scoreBoard.classList.toggle("waterfall-playback", visible);
-  if ((!visible || (!state.playback.playing && !state.playback.paused)) && els.waterfall) els.waterfall.replaceChildren();
+  if (!visible && els.waterfall) els.waterfall.replaceChildren();
   if (visible && !state.waterfall.layoutReady) syncWaterfallLayout();
 }
 
 function renderWaterfall(playbackTick, options = {}) {
-  if (!state.waterfall || (!state.playback.playing && !state.playback.paused) || !els.waterfall || !els.waterfallBoard) {
+  if (!state.waterfall || !els.waterfall || !els.waterfallBoard) {
     syncWaterfallVisibility();
     return;
   }
@@ -2408,16 +2408,28 @@ function renderWaterfall(playbackTick, options = {}) {
   const endTick = playbackTick + lookaheadTicks;
   const laneHeight = els.waterfallBoard.clientHeight || 128;
   const fragment = document.createDocumentFragment();
-  const notes = state.playback.visualNotes;
+  const practiceWaterfall = state.practice.notes?.length > 0;
+  const notes = practiceWaterfall
+    ? state.practice.notes
+      .map((target) => ({
+        targetId: target.id,
+        note: target.note,
+        startTick: target.startTick,
+        endTick: Math.max(target.startTick + 1, target.endTick)
+      }))
+      .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
+    : state.playback.visualNotes;
 
-  while (
-    state.waterfall.visibleStartIndex < notes.length &&
-    notes[state.waterfall.visibleStartIndex].endTick < startTick
-  ) {
-    state.waterfall.visibleStartIndex += 1;
+  if (!practiceWaterfall) {
+    while (
+      state.waterfall.visibleStartIndex < notes.length &&
+      notes[state.waterfall.visibleStartIndex].endTick < startTick
+    ) {
+      state.waterfall.visibleStartIndex += 1;
+    }
   }
 
-  for (let index = state.waterfall.visibleStartIndex; index < notes.length; index += 1) {
+  for (let index = practiceWaterfall ? 0 : state.waterfall.visibleStartIndex; index < notes.length; index += 1) {
     const item = notes[index];
     if (item.startTick > endTick) break;
     if (item.endTick < startTick) continue;
@@ -5165,12 +5177,10 @@ function updateAll() {
   syncControlsFromState();
   if (state.waterfall) {
     syncWaterfallVisibility();
-    if (state.playback.playing || state.playback.paused) {
-      const tick = waterfallPracticePlaybackActive()
-        ? state.practice.viewStartTick || 0
-        : state.playback.currentTick || state.practice.viewStartTick || 0;
-      renderWaterfall(tick, { force: true });
-    }
+    const tick = waterfallPracticePlaybackActive()
+      ? state.practice.viewStartTick || 0
+      : state.playback.currentTick || state.practice.viewStartTick || 0;
+    renderWaterfall(tick, { force: true });
   } else {
     drawStaff();
   }
