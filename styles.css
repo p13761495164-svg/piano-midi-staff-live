@@ -503,20 +503,28 @@ select {
   border-radius: 8px;
   background: rgba(255, 253, 248, 0.72);
   box-shadow: var(--shadow-soft);
-  padding: 8px 10px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .mistake-log-title {
   color: var(--ink);
   font-size: 13px;
   font-weight: 800;
-  margin-bottom: 6px;
+  margin-bottom: 0;
+  flex: 0 0 auto;
 }
 
 .mistake-log-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .mistake-log-empty {
@@ -528,7 +536,7 @@ select {
   position: relative;
   display: inline-flex;
   align-items: center;
-  padding-top: 6px;
+  padding-top: 3px;
   padding-right: 6px;
 }
 
@@ -538,8 +546,8 @@ select {
   background: #fff5f3;
   color: #b7352c;
   border-radius: 6px;
-  min-height: 32px;
-  padding: 6px 13px 6px 10px;
+  min-height: 28px;
+  padding: 4px 12px 4px 9px;
   font: inherit;
   font-size: 13px;
   font-weight: 800;
@@ -837,7 +845,7 @@ select {
   flex: 1 1 auto;
   height: auto;
   min-height: clamp(280px, 44vh, 760px);
-  margin-top: -18px;
+  margin-top: -28px;
 }
 
 .waterfall {
