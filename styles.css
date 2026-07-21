@@ -640,7 +640,8 @@ select {
 .playback-instrument-select,
 .silent-playback-toggle,
 .live-sound-toggle,
-.robot-performance-toggle {
+.robot-performance-toggle,
+.waterfall-toggle {
   border: 1px solid var(--soft-line);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.68);
@@ -737,7 +738,8 @@ select {
 
 .silent-playback-toggle,
 .live-sound-toggle,
-.robot-performance-toggle {
+.robot-performance-toggle,
+.waterfall-toggle {
   height: 32px;
   min-height: 32px;
   padding: 0 10px;
@@ -751,7 +753,8 @@ select {
 
 .silent-playback-toggle input,
 .live-sound-toggle input,
-.robot-performance-toggle input {
+.robot-performance-toggle input,
+.waterfall-toggle input {
   width: 15px;
   height: 15px;
   margin: 0;
@@ -763,14 +766,17 @@ select {
 .live-sound-toggle.active,
 .live-sound-toggle:has(input:checked),
 .robot-performance-toggle.active,
-.robot-performance-toggle:has(input:checked) {
+.robot-performance-toggle:has(input:checked),
+.waterfall-toggle.active,
+.waterfall-toggle:has(input:checked) {
   border-color: var(--accent);
   background: rgba(31, 127, 132, 0.12);
 }
 
 .silent-playback-toggle span,
 .live-sound-toggle span,
-.robot-performance-toggle span {
+.robot-performance-toggle span,
+.waterfall-toggle span {
   font-size: 12px;
   font-weight: 700;
 }
@@ -779,6 +785,44 @@ select {
 .silent-playback-toggle:has(input:disabled) {
   opacity: 0.56;
   cursor: not-allowed;
+}
+
+.waterfall-board {
+  position: relative;
+  height: clamp(92px, 12vh, 132px);
+  margin-top: 7px;
+  border-radius: 8px;
+  border: 1px solid var(--soft-line);
+  background:
+    linear-gradient(180deg, rgba(250, 253, 253, 0.82), rgba(255, 253, 248, 0.96)),
+    repeating-linear-gradient(90deg, rgba(39, 126, 133, 0.08) 0 1px, transparent 1px 38px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.waterfall {
+  position: relative;
+  height: 100%;
+  min-width: 900px;
+}
+
+.waterfall-note {
+  position: absolute;
+  top: 0;
+  border-radius: 5px;
+  background: linear-gradient(180deg, rgba(91, 193, 230, 0.88), rgba(77, 177, 213, 0.56));
+  border: 1px solid rgba(39, 126, 133, 0.32);
+  box-shadow: 0 3px 10px rgba(50, 139, 161, 0.12);
+  will-change: transform;
+}
+
+.waterfall-note.black-note {
+  background: linear-gradient(180deg, rgba(71, 167, 203, 0.9), rgba(49, 134, 173, 0.66));
+}
+
+.waterfall-note.active {
+  background: linear-gradient(180deg, rgba(246, 199, 82, 0.96), rgba(235, 174, 48, 0.78));
+  border-color: rgba(154, 105, 18, 0.34);
 }
 
 .icon-button {

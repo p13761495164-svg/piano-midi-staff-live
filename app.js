@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v250";
+const APP_VERSION = "v251";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -36,6 +36,8 @@ const ROBOT_TIMING_JITTER_SECONDS = 0.018;
 const ROBOT_CHORD_ROLL_SECONDS = 0.009;
 const ROBOT_GAIN_VARIATION = 0.22;
 const ROBOT_MAX_TIMING_OFFSET_SECONDS = 0.026;
+const WATERFALL_LOOKAHEAD_SECONDS = 2.2;
+const WATERFALL_FRAME_MS = 33;
 const SETTINGS_FIELD_KEYS = {
   keySignature: "piano-midi-staff-key-signature",
   showDegrees: "piano-midi-staff-show-degrees",
@@ -52,6 +54,7 @@ const SETTINGS_FIELD_KEYS = {
   silentPlayback: "piano-midi-staff-silent-playback",
   robotPerformance: "piano-midi-staff-robot-performance",
   flowDisplay: "piano-midi-staff-flow-display",
+  waterfall: "piano-midi-staff-waterfall",
   fullUnlocked: "piano-midi-staff-full-unlocked"
 };
 const MAJOR_SCALE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
@@ -176,6 +179,8 @@ const I18N = {
     "label.playbackInstrument": "音色",
     "label.robotPerformanceField": "演奏",
     "label.robotPerformance": "机器人演奏模式",
+    "label.waterfallField": "瀑布流",
+    "label.waterfall": "瀑布流播放",
     "label.flowDisplay": "流动显示",
     "label.displaySettings": "显示",
     "label.practiceSettings": "练习",
@@ -272,6 +277,8 @@ const I18N = {
     "label.playbackInstrument": "音色",
     "label.robotPerformanceField": "演奏",
     "label.robotPerformance": "ロボット演奏モード",
+    "label.waterfallField": "滝表示",
+    "label.waterfall": "滝表示で再生",
     "label.flowDisplay": "フロー表示",
     "label.displaySettings": "表示",
     "label.practiceSettings": "練習",
@@ -368,6 +375,8 @@ const I18N = {
     "label.playbackInstrument": "Tone",
     "label.robotPerformanceField": "Performance",
     "label.robotPerformance": "Robot Performance",
+    "label.waterfallField": "Waterfall",
+    "label.waterfall": "Waterfall Playback",
     "label.flowDisplay": "Flow View",
     "label.displaySettings": "Display",
     "label.practiceSettings": "Practice",
@@ -531,6 +540,7 @@ const state = {
   liveInputSound: false,
   silentPlayback: false,
   robotPerformance: false,
+  waterfall: false,
   flowDisplay: true,
   fullUnlocked: false,
   purchaseStateKnown: false,
@@ -608,6 +618,9 @@ const state = {
     visualAnimationStartedAt: 0,
     secondsPerTick: 0
   },
+  waterfall: {
+    lastFrameAt: 0
+  },
   liveAudio: {
     audioContext: null,
     activeNodes: [],
@@ -663,6 +676,9 @@ const els = {
   robotPerformanceToggle: document.getElementById("robotPerformanceToggle"),
   robotPerformanceFieldLabel: document.getElementById("robotPerformanceFieldLabel"),
   robotPerformanceToggleLabel: document.getElementById("robotPerformanceToggleLabel"),
+  waterfallToggle: document.getElementById("waterfallToggle"),
+  waterfallFieldLabel: document.getElementById("waterfallFieldLabel"),
+  waterfallToggleLabel: document.getElementById("waterfallToggleLabel"),
   flowDisplayLabel: document.getElementById("flowDisplayLabel"),
   displaySettingsTitle: document.getElementById("displaySettingsTitle"),
   practiceSettingsTitle: document.getElementById("practiceSettingsTitle"),
@@ -690,6 +706,8 @@ const els = {
   timeSignatureButtons: [...document.querySelectorAll("[data-time-signature]")],
   scoreBoard: document.querySelector(".score-board"),
   staffSvg: document.getElementById("staffSvg"),
+  waterfallBoard: document.getElementById("waterfallBoard"),
+  waterfall: document.getElementById("waterfall"),
   keyboard: document.getElementById("keyboard"),
   pdfExportRoot: document.getElementById("pdfExportRoot")
 };
@@ -857,6 +875,8 @@ function applyLanguage() {
   updateText(els.playbackInstrumentLabel, t("label.playbackInstrument"));
   updateText(els.robotPerformanceFieldLabel, t("label.robotPerformanceField"));
   updateText(els.robotPerformanceToggleLabel, t("label.robotPerformance"));
+  updateText(els.waterfallFieldLabel, t("label.waterfallField"));
+  updateText(els.waterfallToggleLabel, t("label.waterfall"));
   updateText(els.flowDisplayLabel, t("label.flowDisplay"));
   updateText(els.displaySettingsTitle, t("label.displaySettings"));
   updateText(els.practiceSettingsTitle, t("label.practiceSettings"));
@@ -1026,6 +1046,7 @@ function readSettings() {
     const silentPlayback = window.localStorage.getItem(SETTINGS_FIELD_KEYS.silentPlayback);
     const robotPerformance = window.localStorage.getItem(SETTINGS_FIELD_KEYS.robotPerformance);
     const flowDisplay = window.localStorage.getItem(SETTINGS_FIELD_KEYS.flowDisplay);
+    const waterfall = window.localStorage.getItem(SETTINGS_FIELD_KEYS.waterfall);
     const fullUnlocked = window.localStorage.getItem(SETTINGS_FIELD_KEYS.fullUnlocked);
     if (keySignature) settings.keySignature = keySignature;
     if (["degree", "pitch", "none"].includes(noteLabelMode)) settings.noteLabelMode = noteLabelMode;
@@ -1043,6 +1064,7 @@ function readSettings() {
     if (silentPlayback === "true" || silentPlayback === "false") settings.silentPlayback = silentPlayback === "true";
     if (robotPerformance === "true" || robotPerformance === "false") settings.robotPerformance = robotPerformance === "true";
     if (flowDisplay === "true" || flowDisplay === "false") settings.flowDisplay = flowDisplay === "true";
+    if (waterfall === "true" || waterfall === "false") settings.waterfall = waterfall === "true";
     if (fullUnlocked === "true" || fullUnlocked === "false") settings.fullUnlocked = fullUnlocked === "true";
   } catch {
     // Storage can be blocked in some browser modes; defaults are fine.
@@ -1066,6 +1088,7 @@ function saveSettings() {
     silentPlayback: state.silentPlayback,
     robotPerformance: state.robotPerformance,
     flowDisplay: state.flowDisplay,
+    waterfall: state.waterfall,
     fullUnlocked: state.fullUnlocked,
     rhythmFollow: false
   };
@@ -1086,6 +1109,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.silentPlayback, String(settings.silentPlayback));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.robotPerformance, String(settings.robotPerformance));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.flowDisplay, String(settings.flowDisplay));
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.waterfall, String(settings.waterfall));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.fullUnlocked, String(settings.fullUnlocked));
   } catch {
     // Settings are a convenience; the app should still work if storage is blocked.
@@ -1157,6 +1181,12 @@ function syncControlsFromState() {
     const wrapper = els.robotPerformanceToggle.closest(".robot-performance-toggle");
     if (wrapper) wrapper.classList.toggle("active", state.robotPerformance);
   }
+  if (els.waterfallToggle) {
+    els.waterfallToggle.checked = state.waterfall;
+    const wrapper = els.waterfallToggle.closest(".waterfall-toggle");
+    if (wrapper) wrapper.classList.toggle("active", state.waterfall);
+  }
+  syncWaterfallVisibility();
 }
 
 function timeSignatureKey(timeSignature) {
@@ -1308,6 +1338,9 @@ function applySavedSettings() {
   }
   if (typeof settings.robotPerformance === "boolean") {
     state.robotPerformance = settings.robotPerformance;
+  }
+  if (typeof settings.waterfall === "boolean") {
+    state.waterfall = settings.waterfall;
   }
   if (typeof settings.flowDisplay === "boolean") {
     state.flowDisplay = settings.flowDisplay;
@@ -2267,6 +2300,7 @@ function buildKeyboard() {
     els.keyboard.appendChild(key);
   }
   updateKeyboardActive();
+  syncWaterfallLayout();
   requestAnimationFrame(centerKeyboardOnMiddleC);
 }
 
@@ -2287,6 +2321,7 @@ function centerKeyboardOnMiddleC() {
   if (!key || !board) return;
   const target = key.offsetLeft + key.offsetWidth / 2 - board.clientWidth / 2;
   board.scrollLeft = Math.max(0, target);
+  syncWaterfallScroll();
 }
 
 function findPreviousWhite(note) {
@@ -2314,6 +2349,62 @@ function makeKey(note, className) {
   key.addEventListener("pointercancel", () => releaseNote(note, "screen"));
   key.addEventListener("lostpointercapture", () => releaseNote(note, "screen"));
   return key;
+}
+
+function syncWaterfallLayout() {
+  if (!els.waterfall || !els.keyboard) return;
+  els.waterfall.style.width = els.keyboard.style.width || `${els.keyboard.offsetWidth}px`;
+  els.waterfall.style.minWidth = els.keyboard.style.minWidth || `${els.keyboard.offsetWidth}px`;
+  syncWaterfallScroll();
+}
+
+function syncWaterfallScroll() {
+  if (!els.waterfallBoard || !els.keyboard?.parentElement) return;
+  els.waterfallBoard.scrollLeft = els.keyboard.parentElement.scrollLeft;
+}
+
+function syncWaterfallVisibility() {
+  if (!els.waterfallBoard) return;
+  const visible = Boolean(state.waterfall && state.playback.playing);
+  els.waterfallBoard.classList.toggle("hidden", !visible);
+  if (!visible && els.waterfall) els.waterfall.replaceChildren();
+  if (visible) syncWaterfallLayout();
+}
+
+function renderWaterfall(playbackTick) {
+  if (!state.waterfall || !state.playback.playing || !els.waterfall || !els.waterfallBoard) {
+    syncWaterfallVisibility();
+    return;
+  }
+  const now = performance.now();
+  if (now - state.waterfall.lastFrameAt < WATERFALL_FRAME_MS && playbackTick < state.playback.endTick) return;
+  state.waterfall.lastFrameAt = now;
+  syncWaterfallVisibility();
+
+  const secondsPerTick = Math.max(0.000001, state.playback.secondsPerTick || secondsPerPracticeTick());
+  const lookaheadTicks = WATERFALL_LOOKAHEAD_SECONDS / secondsPerTick;
+  const laneHeight = els.waterfallBoard.clientHeight || 128;
+  const fragment = document.createDocumentFragment();
+  state.playback.visualNotes.forEach((item) => {
+    if (item.endTick < playbackTick) return;
+    if (item.startTick > playbackTick + lookaheadTicks) return;
+    const key = els.keyboard.querySelector(`[data-note="${item.note}"]`);
+    if (!key) return;
+    const active = playbackTick >= item.startTick && playbackTick < item.endTick;
+    const untilStartSeconds = (item.startTick - playbackTick) * secondsPerTick;
+    const progress = 1 - untilStartSeconds / WATERFALL_LOOKAHEAD_SECONDS;
+    const durationSeconds = Math.max(0.08, (item.endTick - item.startTick) * secondsPerTick);
+    const height = Math.max(18, Math.min(laneHeight * 0.78, durationSeconds / WATERFALL_LOOKAHEAD_SECONDS * laneHeight));
+    const y = Math.max(-height, Math.min(laneHeight - 8, progress * laneHeight - height));
+    const bar = document.createElement("span");
+    bar.className = `waterfall-note ${active ? "active" : ""} ${isWhite(item.note) ? "white-note" : "black-note"}`;
+    bar.style.left = `${key.offsetLeft + Math.max(2, key.offsetWidth * 0.12)}px`;
+    bar.style.width = `${Math.max(8, key.offsetWidth * 0.76)}px`;
+    bar.style.height = `${height}px`;
+    bar.style.transform = `translateY(${y}px)`;
+    fragment.appendChild(bar);
+  });
+  els.waterfall.replaceChildren(fragment);
 }
 
 function pressNote(note, velocity = 96, source = "midi", channel = 0) {
@@ -3928,6 +4019,7 @@ function animatePlaybackView() {
       triggerPendingPlaybackNotes(playbackTick);
       updatePlaybackActiveNotes(playbackTick);
     }
+    renderWaterfall(playbackTick);
     if (now - state.playback.lastVisualFrameAt >= PLAYBACK_VISUAL_FRAME_MS || playbackTick >= state.playback.endTick) {
       state.playback.lastVisualFrameAt = now;
       const viewTick = Math.min(maxPracticeViewStartTick(), playbackVisualViewTick(playbackTick));
@@ -4354,6 +4446,7 @@ function stopMeasurePlayback() {
   state.playback.playing = false;
   state.playback.paused = false;
   state.playback.silent = false;
+  syncWaterfallVisibility();
   updateKeyboardActive();
   syncCurrentChord();
 }
@@ -4368,6 +4461,7 @@ function pauseMeasurePlayback() {
   stopPlaybackAudioNodes();
   state.playback.playing = false;
   state.playback.paused = true;
+  syncWaterfallVisibility();
   updateAll();
 }
 
@@ -5529,9 +5623,15 @@ function setupEvents() {
     syncControlsFromState();
     saveSettings();
   });
+  els.waterfallToggle.addEventListener("change", () => {
+    state.waterfall = els.waterfallToggle.checked;
+    syncControlsFromState();
+    saveSettings();
+  });
   els.playbackSlider.addEventListener("input", () => {
     seekPracticeView(els.playbackSlider.value);
   });
+  els.keyboard.parentElement.addEventListener("scroll", syncWaterfallScroll, { passive: true });
   els.fullscreenButton.addEventListener("click", toggleFullscreen);
   els.refreshButton.addEventListener("click", forceRefreshApp);
   const unlockLiveInputAudio = () => {
@@ -5629,6 +5729,7 @@ function setupEvents() {
   });
   window.addEventListener("resize", () => {
     buildKeyboard();
+    syncWaterfallLayout();
   });
   window.addEventListener("beforeunload", () => {
     stopMeasurePlayback();
