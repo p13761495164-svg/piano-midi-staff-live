@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.png?v=244" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon.png?v=244">
-  <link rel="stylesheet" href="styles.css?v=263">
+  <link rel="stylesheet" href="styles.css?v=264">
 </head>
 <body>
   <main class="app-shell">
@@ -41,9 +41,10 @@
         </div>
       </div>
 
-      <details class="settings-panel">
-        <summary><span id="settingsSummaryLabel">设置</span></summary>
-        <div class="panel-strip" aria-label="连接设置">
+      <section class="settings-card">
+        <details class="settings-panel">
+          <summary><span id="settingsSummaryLabel">设置</span></summary>
+          <div class="panel-strip" aria-label="连接设置">
           <div class="control-row settings-grid">
             <div class="settings-group display-settings">
               <div id="displaySettingsTitle" class="settings-group-title">显示</div>
@@ -164,14 +165,14 @@
               <button class="key-option" type="button" data-key-signature="B" aria-pressed="false">B</button>
             </div>
           </div>
-        </div>
-      </details>
-
-      <section class="mistake-log" aria-live="polite">
-        <div id="mistakeLogTitle" class="mistake-log-title">弹错记录</div>
-        <div id="mistakeLogList" class="mistake-log-list">
-          <span id="mistakeLogEmpty" class="mistake-log-empty">暂无</span>
-        </div>
+          </div>
+        </details>
+        <section class="mistake-log" aria-live="polite">
+          <div id="mistakeLogTitle" class="mistake-log-title">弹错记录</div>
+          <div id="mistakeLogList" class="mistake-log-list">
+            <span id="mistakeLogEmpty" class="mistake-log-empty">暂无</span>
+          </div>
+        </section>
       </section>
 
       <section class="score-board" aria-label="五线谱">
@@ -224,6 +225,6 @@
     </div>
   </div>
   <div id="pdfExportRoot" class="pdf-export-root" aria-hidden="true"></div>
-  <script src="app.js?v=263"></script>
+  <script src="app.js?v=264"></script>
 </body>
 </html>
