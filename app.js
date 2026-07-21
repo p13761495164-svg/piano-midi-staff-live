@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v253";
+const APP_VERSION = "v254";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -609,6 +609,7 @@ const state = {
     silent: false,
     startTick: 0,
     endTick: 0,
+    currentTick: 0,
     startedAtAudioTime: 0,
     startedAtPerformance: 0,
     lastVisualFrameAt: 0,
@@ -2385,17 +2386,17 @@ function syncWaterfallVisibility() {
   const visible = Boolean(state.waterfall);
   els.waterfallBoard.classList.toggle("hidden", !visible);
   if (els.scoreBoard) els.scoreBoard.classList.toggle("waterfall-playback", visible);
-  if ((!visible || !state.playback.playing) && els.waterfall) els.waterfall.replaceChildren();
+  if ((!visible || (!state.playback.playing && !state.playback.paused)) && els.waterfall) els.waterfall.replaceChildren();
   if (visible && !state.waterfall.layoutReady) syncWaterfallLayout();
 }
 
-function renderWaterfall(playbackTick) {
-  if (!state.waterfall || !state.playback.playing || !els.waterfall || !els.waterfallBoard) {
+function renderWaterfall(playbackTick, options = {}) {
+  if (!state.waterfall || (!state.playback.playing && !state.playback.paused) || !els.waterfall || !els.waterfallBoard) {
     syncWaterfallVisibility();
     return;
   }
   const now = performance.now();
-  if (now - state.waterfall.lastFrameAt < WATERFALL_FRAME_MS && playbackTick < state.playback.endTick) return;
+  if (!options.force && now - state.waterfall.lastFrameAt < WATERFALL_FRAME_MS && playbackTick < state.playback.endTick) return;
   state.waterfall.lastFrameAt = now;
   syncWaterfallVisibility();
 
@@ -3918,6 +3919,10 @@ async function startContinuousPlayback() {
   if (!state.practice.measures.length || state.playback.playing) return;
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   const silent = state.silentPlayback;
+  const resumeFromPaused = state.playback.paused;
+  const resumeTick = resumeFromPaused
+    ? Math.max(0, Math.min(state.playback.currentTick || state.practice.viewStartTick || 0, maxPracticeViewStartTick()))
+    : null;
   if (!silent && !AudioContextClass) {
     setStatusKey("status.playUnsupported");
     return;
@@ -3940,7 +3945,7 @@ async function startContinuousPlayback() {
   const secondsPerTick = (state.practice.microsecondsPerQuarter || 500000) / 1000000 / (state.practice.ticksPerQuarter || MIDI_PPQ);
   const audioReady = audioContext && audioContext.state !== "suspended";
   const startAt = audioReady ? audioContext.currentTime + 0.08 : 0;
-  const playbackStartTick = currentAutoFollowBeatStart();
+  const playbackStartTick = resumeFromPaused ? resumeTick : currentAutoFollowBeatStart();
   const lastMeasure = state.practice.measures[state.practice.measures.length - 1];
   const playbackEndTick = Math.max(playbackStartTick + 1, lastMeasure?.endTick || playbackStartTick + practiceBeatTicks());
   const playbackDuration = Math.max(0.1, (playbackEndTick - playbackStartTick) * secondsPerTick);
@@ -3955,6 +3960,7 @@ async function startContinuousPlayback() {
   state.playback.pendingNoteIndex = 0;
   state.playback.startTick = playbackStartTick;
   state.playback.endTick = playbackEndTick;
+  state.playback.currentTick = playbackStartTick;
   state.playback.silent = silent;
   state.playback.startedAtAudioTime = startAt;
   state.playback.startedAtPerformance = performance.now() + 80;
@@ -4052,6 +4058,7 @@ function animatePlaybackView() {
       : 0;
     const elapsed = Math.max(performanceElapsed, audioElapsed);
     const playbackTick = state.playback.startTick + elapsed / Math.max(0.000001, state.playback.secondsPerTick);
+    state.playback.currentTick = playbackTick;
     if (state.playback.silent) {
       state.playback.activeNotes = new Set();
       state.playback.activeTargetIds = new Set();
@@ -4483,6 +4490,7 @@ function stopMeasurePlayback() {
   state.playback.visualAnimationFromTick = 0;
   state.playback.visualAnimationToTick = 0;
   state.playback.visualAnimationStartedAt = 0;
+  state.playback.currentTick = 0;
   state.playback.playing = false;
   state.playback.paused = false;
   state.playback.silent = false;
@@ -4492,6 +4500,9 @@ function stopMeasurePlayback() {
 }
 
 function pauseMeasurePlayback() {
+  const pausedTick = Number.isFinite(state.playback.currentTick)
+    ? state.playback.currentTick
+    : (state.practice.viewStartTick || state.playback.startTick || 0);
   window.cancelAnimationFrame(state.playback.animationFrame);
   state.playback.animationFrame = 0;
   if (state.playback.stopTimer) {
@@ -4499,9 +4510,13 @@ function pauseMeasurePlayback() {
     state.playback.stopTimer = 0;
   }
   stopPlaybackAudioNodes();
+  state.playback.activeNotes = new Set();
+  state.playback.activeTargetIds = new Set();
+  state.playback.currentTick = pausedTick;
   state.playback.playing = false;
   state.playback.paused = true;
   syncWaterfallVisibility();
+  renderWaterfall(pausedTick, { force: true });
   updateAll();
 }
 
