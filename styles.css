@@ -1220,6 +1220,10 @@ select {
   color: transparent;
 }
 
+.keyboard-board.paused-scroll .key {
+  touch-action: pan-x;
+}
+
 .c-key-label {
   color: #8a8178;
   font-size: 12px;

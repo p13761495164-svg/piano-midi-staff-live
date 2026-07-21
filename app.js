@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v257";
+const APP_VERSION = "v258";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -713,6 +713,7 @@ const els = {
   staffSvg: document.getElementById("staffSvg"),
   waterfallBoard: document.getElementById("waterfallBoard"),
   waterfall: document.getElementById("waterfall"),
+  keyboardBoard: document.querySelector(".keyboard-board"),
   keyboard: document.getElementById("keyboard"),
   pdfExportRoot: document.getElementById("pdfExportRoot")
 };
@@ -2346,6 +2347,7 @@ function makeKey(note, className) {
   key.setAttribute("aria-label", noteName(note));
   key.textContent = className === "black-key" ? "" : isC ? noteName(note) : "";
   key.addEventListener("pointerdown", (event) => {
+    if (state.playback.paused) return;
     event.preventDefault();
     key.setPointerCapture(event.pointerId);
     pressNote(note, 96, "screen");
@@ -5191,6 +5193,7 @@ function updateAll() {
 
 function updateKeyboardActive() {
   const cueNoteSet = keyboardCueNotes();
+  els.keyboardBoard?.classList.toggle("paused-scroll", state.playback.paused);
   els.keyboard.querySelectorAll(".key").forEach((key) => {
     const note = Number(key.dataset.note);
     const inputHeld = isInputNoteVisuallyHeld(note);
