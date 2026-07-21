@@ -1,12 +1,9 @@
 "use strict";
 
-const APP_VERSION = "v259";
+const APP_VERSION = "v260";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
-const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
-const LANDSCAPE_VISIBLE_WHITE_KEYS = 42;
-const TABLET_PORTRAIT_VISIBLE_WHITE_KEYS = 28;
-const PHONE_PORTRAIT_VISIBLE_WHITE_KEYS = 21;
+const FULL_KEYBOARD_WHITE_KEYS = 52;
 const LEFT_PEDAL_CONTROLLERS = new Set([65, 66, 67, 68, 69]);
 const WHITE_PATTERN = new Set([0, 2, 4, 5, 7, 9, 11]);
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -2314,18 +2311,12 @@ function buildKeyboard() {
   }
   updateKeyboardActive();
   syncWaterfallLayout();
-  requestAnimationFrame(centerKeyboardOnMiddleC);
+  syncWaterfallScroll();
 }
 
 function keyboardWhiteWidth() {
   const boardWidth = els.keyboard.parentElement?.clientWidth || window.innerWidth || 1024;
-  return Math.max(22, Math.min(DEFAULT_WHITE_KEY_WIDTH_PX, boardWidth / visibleKeyboardWhiteKeys(boardWidth)));
-}
-
-function visibleKeyboardWhiteKeys(boardWidth) {
-  if (boardWidth < 560) return PHONE_PORTRAIT_VISIBLE_WHITE_KEYS;
-  if (boardWidth < 900) return TABLET_PORTRAIT_VISIBLE_WHITE_KEYS;
-  return LANDSCAPE_VISIBLE_WHITE_KEYS;
+  return Math.max(1, boardWidth / FULL_KEYBOARD_WHITE_KEYS);
 }
 
 function centerKeyboardOnMiddleC() {
