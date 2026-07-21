@@ -1221,7 +1221,7 @@ select {
 }
 
 .keyboard-board.paused-scroll .key {
-  touch-action: pan-x;
+  touch-action: none;
 }
 
 .c-key-label {

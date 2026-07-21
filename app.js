@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v258";
+const APP_VERSION = "v259";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -635,6 +635,13 @@ const state = {
     pointerId: 0,
     startX: 0,
     startY: 0
+  },
+  keyboardScrollPointer: {
+    active: false,
+    pointerId: 0,
+    startX: 0,
+    startScrollLeft: 0,
+    moved: false
   },
   recording: {
     active: false,
@@ -5534,6 +5541,37 @@ function setupScoreClickPaging() {
   setupClickPagingSurface(els.waterfallBoard);
 }
 
+function setupPausedKeyboardScroll() {
+  if (!els.keyboardBoard) return;
+  els.keyboardBoard.addEventListener("pointerdown", (event) => {
+    if (!state.playback.paused || !event.isPrimary) return;
+    state.keyboardScrollPointer = {
+      active: true,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startScrollLeft: els.keyboardBoard.scrollLeft,
+      moved: false
+    };
+    els.keyboardBoard.setPointerCapture?.(event.pointerId);
+  });
+
+  els.keyboardBoard.addEventListener("pointermove", (event) => {
+    if (!state.keyboardScrollPointer.active || event.pointerId !== state.keyboardScrollPointer.pointerId) return;
+    const dx = event.clientX - state.keyboardScrollPointer.startX;
+    if (Math.abs(dx) > 3) state.keyboardScrollPointer.moved = true;
+    els.keyboardBoard.scrollLeft = state.keyboardScrollPointer.startScrollLeft - dx;
+    syncWaterfallScroll();
+    event.preventDefault();
+  });
+
+  ["pointerup", "pointercancel", "lostpointercapture"].forEach((eventName) => {
+    els.keyboardBoard.addEventListener(eventName, (event) => {
+      if (event.pointerId !== state.keyboardScrollPointer.pointerId) return;
+      state.keyboardScrollPointer.active = false;
+    });
+  });
+}
+
 function setupClickPagingSurface(surface) {
   if (!surface) return;
   surface.addEventListener("pointerdown", (event) => {
@@ -5875,6 +5913,7 @@ setupEvents();
 setupPwa();
 setupWakeLock();
 setupScoreClickPaging();
+setupPausedKeyboardScroll();
 setupHardwarePedalKeys();
 preventPageZoom();
 buildKeyboard();
