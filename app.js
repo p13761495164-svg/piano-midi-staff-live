@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v256";
+const APP_VERSION = "v257";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -5527,20 +5527,27 @@ function setupWakeLock() {
 }
 
 function setupScoreClickPaging() {
-  els.scoreBoard.addEventListener("pointerdown", (event) => {
+  setupClickPagingSurface(els.scoreBoard);
+  setupClickPagingSurface(els.waterfallBoard);
+}
+
+function setupClickPagingSurface(surface) {
+  if (!surface) return;
+  surface.addEventListener("pointerdown", (event) => {
     if (!event.isPrimary || event.target.closest("button")) return;
     state.scorePointer = {
       active: true,
       pointerId: event.pointerId,
       startX: event.clientX,
-      startY: event.clientY
+      startY: event.clientY,
+      surface
     };
   });
 
-  els.scoreBoard.addEventListener("pointerup", (event) => {
+  surface.addEventListener("pointerup", (event) => {
     handleScoreClickEnd(event);
   });
-  els.scoreBoard.addEventListener("pointercancel", (event) => {
+  surface.addEventListener("pointercancel", () => {
     state.scorePointer.active = false;
   });
 }
@@ -5552,7 +5559,8 @@ function handleScoreClickEnd(event) {
   state.scorePointer.active = false;
 
   if (Math.abs(dx) > 14 || Math.abs(dy) > 14) return;
-  const rect = els.scoreBoard.getBoundingClientRect();
+  const surface = state.scorePointer.surface || els.scoreBoard;
+  const rect = surface.getBoundingClientRect();
   const direction = event.clientX < rect.left + rect.width / 2 ? -1 : 1;
   advancePracticeGrid(direction, { clearPlayed: true, pauseAutoFollow: true });
 }

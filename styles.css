@@ -829,7 +829,7 @@ select {
     linear-gradient(180deg, rgba(250, 253, 253, 0.82), rgba(255, 253, 248, 0.96)),
     repeating-linear-gradient(90deg, rgba(39, 126, 133, 0.08) 0 1px, transparent 1px 38px);
   overflow: hidden;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .stage.waterfall-mode .waterfall-board {
@@ -856,6 +856,7 @@ select {
   border: 1px solid rgba(39, 126, 133, 0.32);
   box-shadow: 0 3px 10px rgba(50, 139, 161, 0.12);
   will-change: transform;
+  pointer-events: none;
 }
 
 .waterfall-note-label {
