@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v251";
+const APP_VERSION = "v252";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -2367,6 +2367,7 @@ function syncWaterfallVisibility() {
   if (!els.waterfallBoard) return;
   const visible = Boolean(state.waterfall && state.playback.playing);
   els.waterfallBoard.classList.toggle("hidden", !visible);
+  if (els.scoreBoard) els.scoreBoard.classList.toggle("waterfall-playback", visible);
   if (!visible && els.waterfall) els.waterfall.replaceChildren();
   if (visible) syncWaterfallLayout();
 }
@@ -2402,6 +2403,13 @@ function renderWaterfall(playbackTick) {
     bar.style.width = `${Math.max(8, key.offsetWidth * 0.76)}px`;
     bar.style.height = `${height}px`;
     bar.style.transform = `translateY(${y}px)`;
+    const label = noteInnerLabel(item.note, item.startTick);
+    if (label) {
+      const labelNode = document.createElement("span");
+      labelNode.className = "waterfall-note-label";
+      labelNode.textContent = label;
+      bar.appendChild(labelNode);
+    }
     fragment.appendChild(bar);
   });
   els.waterfall.replaceChildren(fragment);
