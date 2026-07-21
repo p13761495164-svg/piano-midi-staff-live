@@ -54,6 +54,13 @@ select {
   gap: 9px;
 }
 
+.stage.waterfall-mode {
+  min-height: calc(100vh - 34px);
+  min-height: calc(100dvh - 34px);
+  display: flex;
+  flex-direction: column;
+}
+
 .topbar,
 .settings-panel {
   background: var(--glass);
@@ -825,6 +832,12 @@ select {
   pointer-events: none;
 }
 
+.stage.waterfall-mode .waterfall-board {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: clamp(280px, 44vh, 760px);
+}
+
 .waterfall {
   position: relative;
   height: 100%;
@@ -1177,6 +1190,7 @@ select {
 .waterfall-board:not(.hidden) + .keyboard-board {
   margin-top: 0;
   border-radius: 0 0 8px 8px;
+  flex: 0 0 auto;
 }
 
 .keyboard-board::-webkit-scrollbar {

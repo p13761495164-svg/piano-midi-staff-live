@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v254";
+const APP_VERSION = "v255";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const DEFAULT_WHITE_KEY_WIDTH_PX = 38;
@@ -646,6 +646,7 @@ const state = {
 };
 
 const els = {
+  stage: document.querySelector(".stage"),
   statusText: document.getElementById("statusText"),
   connectButton: document.getElementById("connectButton"),
   recordButton: document.getElementById("recordButton"),
@@ -2384,6 +2385,7 @@ function syncWaterfallScroll() {
 function syncWaterfallVisibility() {
   if (!els.waterfallBoard) return;
   const visible = Boolean(state.waterfall);
+  if (els.stage) els.stage.classList.toggle("waterfall-mode", visible);
   els.waterfallBoard.classList.toggle("hidden", !visible);
   if (els.scoreBoard) els.scoreBoard.classList.toggle("waterfall-playback", visible);
   if ((!visible || (!state.playback.playing && !state.playback.paused)) && els.waterfall) els.waterfall.replaceChildren();
@@ -2468,7 +2470,7 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
 }
 
 function isWrongPracticeInputNote(note) {
-  if (!state.practice.measures.length || state.playback.playing) return false;
+  if (!state.practice.measures.length || autoFollowBlockedByPlayback()) return false;
   if (state.autoFollowTolerance !== 0) return false;
   const cueNotes = nextPracticeCueNotes();
   return cueNotes.size > 0 && !cueNotes.has(note);
@@ -2818,6 +2820,14 @@ function currentVisualStartTick() {
   const viewStartTick = state.practice.viewStartTick || 0;
   if (!flowDisplayEnabled()) return viewStartTick;
   return viewStartTick - currentVisualSpanTicks() * FLOW_DISPLAY_PLAYHEAD_PROGRESS;
+}
+
+function waterfallPracticePlaybackActive() {
+  return Boolean(state.waterfall && state.playback.playing && state.playback.silent && !state.robotPerformance);
+}
+
+function autoFollowBlockedByPlayback() {
+  return state.playback.playing && !waterfallPracticePlaybackActive();
 }
 
 function currentVisualEndTick() {
@@ -3550,7 +3560,7 @@ function nextPrimaryCueTargets() {
 }
 
 function lockedAutoFollowTargetGroup() {
-  if (!state.practice.measures.length || state.playback.playing) return [];
+  if (!state.practice.measures.length || autoFollowBlockedByPlayback()) return [];
   const locked = targetsForLockedAutoFollowGroup();
   if (locked.length) return locked;
 
@@ -3573,7 +3583,7 @@ function targetsForLockedAutoFollowGroup() {
 }
 
 function computeNextPrimaryCueTargets() {
-  if (!state.practice.measures.length || state.playback.playing) return [];
+  if (!state.practice.measures.length || autoFollowBlockedByPlayback()) return [];
   const gridTicks = practiceGridTicks();
   const startTick = currentAutoFollowBeatStart();
   const endTick = practiceEndTick();
@@ -3635,7 +3645,7 @@ function firstUnmatchedTargetGroup(targets) {
 }
 
 function markAutoFollowNote(note) {
-  if (state.autoFollowMode !== "beat" || state.playback.playing || !state.practice.measures.length) return null;
+  if (state.autoFollowMode !== "beat" || autoFollowBlockedByPlayback() || !state.practice.measures.length) return null;
   const beatStart = currentAutoFollowBeatStart();
   if (state.autoFollow.currentBeatStart !== beatStart) resetAutoFollowBeat(beatStart);
   const target = targetForPlayedNote(note, beatStart);
@@ -3695,7 +3705,7 @@ function scheduleAutoFollowEmptyBeatCheck() {
   if (
     state.autoFollowMode !== "beat" ||
     state.rhythmFollow ||
-    state.playback.playing ||
+    autoFollowBlockedByPlayback() ||
     state.autoFollow.animating ||
     state.autoFollow.pausedAfterManualNavigation ||
     !state.practice.measures.length
@@ -3712,7 +3722,7 @@ function scheduleAutoFollowEmptyBeatCheck() {
 function evaluateAutoFollowBeat(options = {}) {
   if (
     state.autoFollowMode !== "beat" ||
-    state.playback.playing ||
+    autoFollowBlockedByPlayback() ||
     state.autoFollow.animating ||
     state.autoFollow.pausedAfterManualNavigation ||
     !state.practice.measures.length
@@ -3859,7 +3869,7 @@ function animatePracticeViewToTick(targetTick, options = {}) {
     state.autoFollow.pausedAfterManualNavigation = true;
   }
 
-  stopMeasurePlayback();
+  if (!waterfallPracticePlaybackActive()) stopMeasurePlayback();
   stopRhythmFollow();
   window.cancelAnimationFrame(state.autoFollow.animationFrame);
   window.clearTimeout(state.autoFollow.emptyAdvanceTimer);
@@ -3872,6 +3882,7 @@ function animatePracticeViewToTick(targetTick, options = {}) {
     const progress = Math.min(1, (now - startedAt) / durationMs);
     const eased = options.linear ? progress : 1 - Math.pow(1 - progress, 3);
     state.practice.viewStartTick = startTick + (endTick - startTick) * eased;
+    if (waterfallPracticePlaybackActive()) state.playback.currentTick = state.practice.viewStartTick;
     state.practice.currentMeasure = measureIndexForTick(state.practice.viewStartTick);
     updateAll();
 
@@ -3881,6 +3892,7 @@ function animatePracticeViewToTick(targetTick, options = {}) {
     }
 
     state.practice.viewStartTick = endTick;
+    if (waterfallPracticePlaybackActive()) state.playback.currentTick = endTick;
     state.practice.currentMeasure = measureIndexForTick(endTick);
     state.autoFollow.animating = false;
     resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: Boolean(options.clearPlayed) });
@@ -4010,6 +4022,19 @@ async function startContinuousPlayback() {
       });
     });
   state.playback.pendingNotes.sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+
+  if (waterfallPracticePlaybackActive()) {
+    state.practice.viewStartTick = playbackStartTick;
+    state.practice.currentMeasure = measureIndexForTick(playbackStartTick);
+    resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: false });
+    syncWaterfallVisibility();
+    renderWaterfall(playbackStartTick, { force: true });
+    updateKeyboardActive();
+    syncCurrentChord();
+    syncPracticeControls();
+    scheduleAutoFollowEmptyBeatCheck();
+    return;
+  }
 
   animatePlaybackView();
   state.playback.stopTimer = window.setTimeout(() => {
@@ -5140,6 +5165,12 @@ function updateAll() {
   syncControlsFromState();
   if (state.waterfall) {
     syncWaterfallVisibility();
+    if (state.playback.playing || state.playback.paused) {
+      const tick = waterfallPracticePlaybackActive()
+        ? state.practice.viewStartTick || 0
+        : state.playback.currentTick || state.practice.viewStartTick || 0;
+      renderWaterfall(tick, { force: true });
+    }
   } else {
     drawStaff();
   }
