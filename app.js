@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v261";
+const APP_VERSION = "v262";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -2834,12 +2834,8 @@ function currentVisualStartTick() {
   return viewStartTick - currentVisualSpanTicks() * FLOW_DISPLAY_PLAYHEAD_PROGRESS;
 }
 
-function waterfallPracticePlaybackActive() {
-  return Boolean(state.waterfall && state.playback.playing && state.playback.silent && !state.robotPerformance);
-}
-
 function autoFollowBlockedByPlayback() {
-  return state.playback.playing && !waterfallPracticePlaybackActive();
+  return state.playback.playing;
 }
 
 function currentVisualEndTick() {
@@ -3881,7 +3877,7 @@ function animatePracticeViewToTick(targetTick, options = {}) {
     state.autoFollow.pausedAfterManualNavigation = true;
   }
 
-  if (!waterfallPracticePlaybackActive()) stopMeasurePlayback();
+  stopMeasurePlayback();
   stopRhythmFollow();
   window.cancelAnimationFrame(state.autoFollow.animationFrame);
   window.clearTimeout(state.autoFollow.emptyAdvanceTimer);
@@ -3894,7 +3890,6 @@ function animatePracticeViewToTick(targetTick, options = {}) {
     const progress = Math.min(1, (now - startedAt) / durationMs);
     const eased = options.linear ? progress : 1 - Math.pow(1 - progress, 3);
     state.practice.viewStartTick = startTick + (endTick - startTick) * eased;
-    if (waterfallPracticePlaybackActive()) state.playback.currentTick = state.practice.viewStartTick;
     state.practice.currentMeasure = measureIndexForTick(state.practice.viewStartTick);
     updateAll();
 
@@ -3904,7 +3899,6 @@ function animatePracticeViewToTick(targetTick, options = {}) {
     }
 
     state.practice.viewStartTick = endTick;
-    if (waterfallPracticePlaybackActive()) state.playback.currentTick = endTick;
     state.practice.currentMeasure = measureIndexForTick(endTick);
     state.autoFollow.animating = false;
     resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: Boolean(options.clearPlayed) });
@@ -4034,19 +4028,6 @@ async function startContinuousPlayback() {
       });
     });
   state.playback.pendingNotes.sort((a, b) => a.startTick - b.startTick || a.note - b.note);
-
-  if (waterfallPracticePlaybackActive()) {
-    state.practice.viewStartTick = playbackStartTick;
-    state.practice.currentMeasure = measureIndexForTick(playbackStartTick);
-    resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: false });
-    syncWaterfallVisibility();
-    renderWaterfall(playbackStartTick, { force: true });
-    updateKeyboardActive();
-    syncCurrentChord();
-    syncPracticeControls();
-    scheduleAutoFollowEmptyBeatCheck();
-    return;
-  }
 
   animatePlaybackView();
   state.playback.stopTimer = window.setTimeout(() => {
@@ -5177,9 +5158,7 @@ function updateAll() {
   syncControlsFromState();
   if (state.waterfall) {
     syncWaterfallVisibility();
-    const tick = waterfallPracticePlaybackActive()
-      ? state.practice.viewStartTick || 0
-      : state.playback.currentTick || state.practice.viewStartTick || 0;
+    const tick = state.playback.currentTick || state.practice.viewStartTick || 0;
     renderWaterfall(tick, { force: true });
   } else {
     drawStaff();

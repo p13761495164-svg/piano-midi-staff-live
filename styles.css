@@ -837,7 +837,7 @@ select {
   flex: 1 1 auto;
   height: auto;
   min-height: clamp(280px, 44vh, 760px);
-  margin-top: -2px;
+  margin-top: -18px;
 }
 
 .waterfall {
