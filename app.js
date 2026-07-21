@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v260";
+const APP_VERSION = "v261";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;

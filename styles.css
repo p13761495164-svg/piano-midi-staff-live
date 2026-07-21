@@ -592,12 +592,13 @@ select {
 .score-board.waterfall-playback {
   aspect-ratio: auto;
   min-height: 0;
-  height: auto;
+  height: 0;
   padding: 0;
   overflow: visible;
   background: transparent;
   border-color: transparent;
   box-shadow: none;
+  z-index: 6;
 }
 
 .score-board.waterfall-playback #staffSvg {
@@ -605,11 +606,11 @@ select {
 }
 
 .score-board.waterfall-playback .measure-tools {
-  position: relative;
-  top: auto;
-  left: auto;
-  transform: none;
-  margin: 0 auto;
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
 }
 
 .measure-tools {
@@ -836,6 +837,7 @@ select {
   flex: 1 1 auto;
   height: auto;
   min-height: clamp(280px, 44vh, 760px);
+  margin-top: -2px;
 }
 
 .waterfall {
