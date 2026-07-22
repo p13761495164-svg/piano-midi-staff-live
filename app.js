@@ -1,9 +1,11 @@
 "use strict";
 
-const APP_VERSION = "v264";
+const APP_VERSION = "v265";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
+const FULL_KEYBOARD_TOTAL_KEYS = MIDI_MAX - MIDI_MIN + 1;
+const PORTRAIT_VISIBLE_KEYS = 48;
 const LEFT_PEDAL_CONTROLLERS = new Set([65, 66, 67, 68, 69]);
 const WHITE_PATTERN = new Set([0, 2, 4, 5, 7, 9, 11]);
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -2276,8 +2278,13 @@ function escapeHtml(value) {
   })[char]);
 }
 
-function buildKeyboard() {
+function buildKeyboard(options = {}) {
+  const { preserveScroll = false } = options;
   const { min, max } = KEY_RANGE;
+  const board = els.keyboard.parentElement;
+  const previousScrollRatio = board && els.keyboard.offsetWidth > board.clientWidth
+    ? board.scrollLeft / Math.max(1, els.keyboard.offsetWidth - board.clientWidth)
+    : 0;
   const whiteNotes = [];
   for (let note = min; note <= max; note += 1) {
     if (isWhite(note)) whiteNotes.push(note);
@@ -2311,12 +2318,20 @@ function buildKeyboard() {
   }
   updateKeyboardActive();
   syncWaterfallLayout();
+  if (preserveScroll && board) {
+    const maxScrollLeft = Math.max(0, els.keyboard.offsetWidth - board.clientWidth);
+    board.scrollLeft = Math.max(0, Math.min(maxScrollLeft, previousScrollRatio * maxScrollLeft));
+  }
   syncWaterfallScroll();
 }
 
 function keyboardWhiteWidth() {
   const boardWidth = els.keyboard.parentElement?.clientWidth || window.innerWidth || 1024;
-  return Math.max(1, boardWidth / FULL_KEYBOARD_WHITE_KEYS);
+  const portrait = window.matchMedia?.("(orientation: portrait)")?.matches || window.innerHeight > window.innerWidth;
+  const visibleWhiteKeys = portrait
+    ? FULL_KEYBOARD_WHITE_KEYS * (PORTRAIT_VISIBLE_KEYS / FULL_KEYBOARD_TOTAL_KEYS)
+    : FULL_KEYBOARD_WHITE_KEYS;
+  return Math.max(1, boardWidth / visibleWhiteKeys);
 }
 
 function centerKeyboardOnMiddleC() {
@@ -5848,7 +5863,7 @@ function setupEvents() {
     saveSettings();
   });
   window.addEventListener("resize", () => {
-    buildKeyboard();
+    buildKeyboard({ preserveScroll: true });
     syncWaterfallLayout();
   });
   window.addEventListener("beforeunload", () => {
@@ -5887,5 +5902,6 @@ setupPausedKeyboardScroll();
 setupHardwarePedalKeys();
 preventPageZoom();
 buildKeyboard();
+centerKeyboardOnMiddleC();
 drawStaff();
 autoConnectMidi();
