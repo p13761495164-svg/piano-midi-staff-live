@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v267";
+const APP_VERSION = "v268";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -618,7 +618,7 @@ const state = {
     visualAnimationStartedAt: 0,
     secondsPerTick: 0
   },
-  waterfall: {
+  waterfallState: {
     lastFrameAt: 0,
     visibleStartIndex: 0,
     keyMetrics: new Map(),
@@ -2391,16 +2391,16 @@ function syncWaterfallLayout() {
 }
 
 function rebuildWaterfallKeyMetrics() {
-  state.waterfall.keyMetrics = new Map();
+  state.waterfallState.keyMetrics = new Map();
   els.keyboard.querySelectorAll(".key").forEach((key) => {
     const note = Number(key.dataset.note);
     if (!Number.isFinite(note)) return;
-    state.waterfall.keyMetrics.set(note, {
+    state.waterfallState.keyMetrics.set(note, {
       left: key.offsetLeft,
       width: key.offsetWidth
     });
   });
-  state.waterfall.layoutReady = state.waterfall.keyMetrics.size > 0;
+  state.waterfallState.layoutReady = state.waterfallState.keyMetrics.size > 0;
 }
 
 function syncWaterfallScroll() {
@@ -2415,7 +2415,7 @@ function syncWaterfallVisibility() {
   els.waterfallBoard.classList.toggle("hidden", !visible);
   if (els.scoreBoard) els.scoreBoard.classList.toggle("waterfall-playback", visible);
   if (!visible && els.waterfall) els.waterfall.replaceChildren();
-  if (visible && !state.waterfall.layoutReady) syncWaterfallLayout();
+  if (visible && !state.waterfallState.layoutReady) syncWaterfallLayout();
 }
 
 function renderWaterfall(playbackTick, options = {}) {
@@ -2424,8 +2424,8 @@ function renderWaterfall(playbackTick, options = {}) {
     return;
   }
   const now = performance.now();
-  if (!options.force && now - state.waterfall.lastFrameAt < WATERFALL_FRAME_MS && playbackTick < state.playback.endTick) return;
-  state.waterfall.lastFrameAt = now;
+  if (!options.force && now - state.waterfallState.lastFrameAt < WATERFALL_FRAME_MS && playbackTick < state.playback.endTick) return;
+  state.waterfallState.lastFrameAt = now;
   syncWaterfallVisibility();
 
   const secondsPerTick = Math.max(0.000001, state.playback.secondsPerTick || secondsPerPracticeTick());
@@ -2448,18 +2448,18 @@ function renderWaterfall(playbackTick, options = {}) {
 
   if (!practiceWaterfall) {
     while (
-      state.waterfall.visibleStartIndex < notes.length &&
-      notes[state.waterfall.visibleStartIndex].endTick < startTick
+      state.waterfallState.visibleStartIndex < notes.length &&
+      notes[state.waterfallState.visibleStartIndex].endTick < startTick
     ) {
-      state.waterfall.visibleStartIndex += 1;
+      state.waterfallState.visibleStartIndex += 1;
     }
   }
 
-  for (let index = practiceWaterfall ? 0 : state.waterfall.visibleStartIndex; index < notes.length; index += 1) {
+  for (let index = practiceWaterfall ? 0 : state.waterfallState.visibleStartIndex; index < notes.length; index += 1) {
     const item = notes[index];
     if (item.startTick > endTick) break;
     if (item.endTick < startTick) continue;
-    const metric = state.waterfall.keyMetrics.get(item.note);
+    const metric = state.waterfallState.keyMetrics.get(item.note);
     if (!metric) continue;
     const active = playbackTick >= item.startTick && playbackTick < item.endTick;
     const untilStartSeconds = (item.startTick - playbackTick) * secondsPerTick;
@@ -4014,9 +4014,9 @@ async function startContinuousPlayback() {
   state.playback.visualAnimationToTick = playbackStartTick;
   state.playback.visualAnimationStartedAt = 0;
   state.playback.secondsPerTick = secondsPerTick;
-  state.waterfall.lastFrameAt = 0;
-  state.waterfall.visibleStartIndex = 0;
-  state.waterfall.layoutReady = false;
+  state.waterfallState.lastFrameAt = 0;
+  state.waterfallState.visibleStartIndex = 0;
+  state.waterfallState.layoutReady = false;
 
   const pedalIntervals = pedalIntervalsForPlayback(playbackStartTick, playbackEndTick);
   const playbackTargets = state.practice.notes
@@ -5473,7 +5473,7 @@ function setStatus(text) {
 
 function setupPwa() {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js").catch(() => {
+    navigator.serviceWorker.register(`sw.js?v=${encodeURIComponent(APP_VERSION)}`).catch(() => {
       setStatusKey("status.cacheFailed");
     });
   }
@@ -5503,7 +5503,7 @@ async function forceRefreshApp() {
   }
 
   const url = new URL(window.location.href);
-  url.searchParams.delete("v");
+  url.searchParams.set("v", APP_VERSION);
   url.searchParams.set("fresh", Date.now().toString());
   window.location.replace(url.toString());
 }
@@ -5771,6 +5771,9 @@ function setupEvents() {
   els.waterfallToggle.addEventListener("change", () => {
     state.waterfall = els.waterfallToggle.checked;
     syncControlsFromState();
+    syncWaterfallVisibility();
+    syncWaterfallLayout();
+    renderWaterfall(state.playback.currentTick || state.practice.viewStartTick || 0, { force: true });
     drawStaff();
     saveSettings();
   });
