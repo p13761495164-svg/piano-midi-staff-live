@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v268";
+const APP_VERSION = "v269";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -646,6 +646,7 @@ const state = {
     active: false,
     startedAt: 0,
     events: [],
+    heldNotes: new Set(),
     lastBlobUrl: "",
     takeNumber: 1
   }
@@ -2487,6 +2488,18 @@ function renderWaterfall(playbackTick, options = {}) {
 
 function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   if (note < MIDI_MIN || note > MIDI_MAX) return;
+  const duplicateHeldNote = state.activeNotes.has(note) && !state.releasedWhileSustained.has(note);
+  if (duplicateHeldNote) {
+    const active = state.activeNotes.get(note);
+    state.activeNotes.set(note, {
+      ...active,
+      velocity,
+      source,
+      channel
+    });
+    updateKeyboardActive();
+    return;
+  }
   recordMidiEvent("noteon", { note, velocity, channel });
   state.releasedWhileSustained.delete(note);
   const wrong = isWrongPracticeInputNote(note);
@@ -2545,6 +2558,7 @@ function startRecording() {
   state.recording.active = true;
   state.recording.startedAt = performance.now();
   state.recording.events = [];
+  state.recording.heldNotes = new Set();
   syncRecordingControls();
   setStatusKey("status.recording");
 }
@@ -2554,6 +2568,7 @@ function discardAndRestartRecording() {
   revokeRecordingUrl();
   state.recording.startedAt = performance.now();
   state.recording.events = [];
+  state.recording.heldNotes = new Set();
   syncRecordingControls();
   setStatusKey("status.recordingRestarted");
 }
@@ -2583,6 +2598,13 @@ function recordMidiEvent(type, detail) {
 
 function recordMidiEventAt(type, detail, timeMs) {
   if (!state.recording.active) return;
+  const noteKey = `${clampMidiChannel(detail.channel)}:${clampMidiByte(detail.note)}`;
+  if (type === "noteon") {
+    if (state.recording.heldNotes.has(noteKey)) return;
+    state.recording.heldNotes.add(noteKey);
+  } else if (type === "noteoff") {
+    state.recording.heldNotes.delete(noteKey);
+  }
   state.recording.events.push({
     type,
     timeMs: Math.max(0, Number(timeMs) || 0),
@@ -4627,8 +4649,10 @@ function parseMidiFile(bytes) {
   const sortedKeySignatureEvents = normalizedMidiKeySignatureEvents(keySignatureEvents);
   const keySignature = sortedKeySignatureEvents[0]?.keySignature || null;
 
-  const notes = noteEvents
-    .filter((item) => item.note >= MIDI_MIN && item.note <= MIDI_MAX)
+  const notes = deduplicateMidiNotes(
+    noteEvents.filter((item) => item.note >= MIDI_MIN && item.note <= MIDI_MAX),
+    ticksPerQuarter
+  )
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
   if (notes.length) {
     const lastNoteTick = Math.max(...notes.map((note) => Math.max(note.endTick, note.startTick + 1)));
@@ -4958,6 +4982,42 @@ function buildMidiMeasuresFromTimeSignatures(notes, signatureEvents, lastTick, t
   });
 
   return measures;
+}
+
+function deduplicateMidiNotes(notes, ticksPerQuarter = MIDI_PPQ) {
+  const duplicateStartTolerance = Math.max(2, Math.round((ticksPerQuarter || MIDI_PPQ) / 60));
+  const normalized = [];
+  const sorted = (notes || [])
+    .slice()
+    .sort((a, b) =>
+      (a.trackIndex ?? 0) - (b.trackIndex ?? 0) ||
+      (a.channel ?? 0) - (b.channel ?? 0) ||
+      a.note - b.note ||
+      a.startTick - b.startTick ||
+      a.endTick - b.endTick
+    );
+
+  sorted.forEach((note) => {
+    const existingIndex = normalized.findIndex((item) =>
+      (item.trackIndex ?? 0) === (note.trackIndex ?? 0) &&
+      (item.channel ?? 0) === (note.channel ?? 0) &&
+      item.note === note.note &&
+      Math.abs((item.startTick || 0) - (note.startTick || 0)) <= duplicateStartTolerance
+    );
+    if (existingIndex < 0) {
+      normalized.push(note);
+      return;
+    }
+
+    const existing = normalized[existingIndex];
+    const existingDuration = Math.max(1, (existing.endTick || 0) - (existing.startTick || 0));
+    const noteDuration = Math.max(1, (note.endTick || 0) - (note.startTick || 0));
+    if (noteDuration < existingDuration || (noteDuration === existingDuration && (note.velocity || 0) > (existing.velocity || 0))) {
+      normalized[existingIndex] = note;
+    }
+  });
+
+  return normalized;
 }
 
 function parseMidiTrack(bytes, start, end) {
