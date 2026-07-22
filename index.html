@@ -11,37 +11,36 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.png?v=244" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon.png?v=244">
-  <link rel="stylesheet" href="styles.css?v=265">
+  <link rel="stylesheet" href="styles.css?v=266">
 </head>
 <body>
   <main class="app-shell">
     <section class="stage" aria-label="实时钢琴 MIDI 显示">
       <p id="statusText" class="status-banner">等待连接 MIDI 键盘</p>
-      <div class="topbar">
-        <div class="brand">
-          <img class="brand-mark" src="icons/icon.png?v=244" alt="" aria-hidden="true">
-          <div>
-            <h1>Easy Piano</h1>
-            <div class="status-row">
-              <span id="versionBadge" class="version-badge">v254</span>
+      <section class="control-card">
+        <div class="topbar">
+          <div class="brand">
+            <img class="brand-mark" src="icons/icon.png?v=244" alt="" aria-hidden="true">
+            <div>
+              <h1>Easy Piano</h1>
+              <div class="status-row">
+                <span id="versionBadge" class="version-badge">v254</span>
+              </div>
             </div>
           </div>
+          <div class="actions">
+            <button id="connectButton" class="primary" type="button">连接 MIDI</button>
+            <button id="recordButton" class="record-button" type="button">录 MIDI</button>
+            <button id="stopRecordButton" class="ghost hidden" type="button">停止 MIDI</button>
+            <button id="discardRecordButton" class="ghost hidden" type="button">废弃重录</button>
+            <button id="loadMidiButton" class="ghost" type="button">载入乐谱</button>
+            <button id="exportPdfButton" class="ghost" type="button" disabled>导出PDF</button>
+            <button id="fullscreenButton" class="ghost" type="button">全屏</button>
+            <button id="refreshButton" class="ghost" type="button">更新</button>
+            <button id="installButton" class="ghost hidden" type="button">安装</button>
+            <input id="midiFileInput" class="file-input" type="file" accept=".mid,.midi,.musicxml,.xml,audio/midi,audio/x-midi,application/vnd.recordare.musicxml+xml,text/xml,application/xml">
+          </div>
         </div>
-        <div class="actions">
-          <button id="connectButton" class="primary" type="button">连接 MIDI</button>
-          <button id="recordButton" class="record-button" type="button">录 MIDI</button>
-          <button id="stopRecordButton" class="ghost hidden" type="button">停止 MIDI</button>
-          <button id="discardRecordButton" class="ghost hidden" type="button">废弃重录</button>
-          <button id="loadMidiButton" class="ghost" type="button">载入乐谱</button>
-          <button id="exportPdfButton" class="ghost" type="button" disabled>导出PDF</button>
-          <button id="fullscreenButton" class="ghost" type="button">全屏</button>
-          <button id="refreshButton" class="ghost" type="button">更新</button>
-          <button id="installButton" class="ghost hidden" type="button">安装</button>
-          <input id="midiFileInput" class="file-input" type="file" accept=".mid,.midi,.musicxml,.xml,audio/midi,audio/x-midi,application/vnd.recordare.musicxml+xml,text/xml,application/xml">
-        </div>
-      </div>
-
-      <section class="settings-card">
         <details class="settings-panel">
           <summary><span id="settingsSummaryLabel">设置</span></summary>
           <div class="panel-strip" aria-label="连接设置">
@@ -225,6 +224,6 @@
     </div>
   </div>
   <div id="pdfExportRoot" class="pdf-export-root" aria-hidden="true"></div>
-  <script src="app.js?v=265"></script>
+  <script src="app.js?v=266"></script>
 </body>
 </html>

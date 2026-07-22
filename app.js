@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v265";
+const APP_VERSION = "v266";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -2327,11 +2327,15 @@ function buildKeyboard(options = {}) {
 
 function keyboardWhiteWidth() {
   const boardWidth = els.keyboard.parentElement?.clientWidth || window.innerWidth || 1024;
-  const portrait = window.matchMedia?.("(orientation: portrait)")?.matches || window.innerHeight > window.innerWidth;
+  const portrait = isPortraitLayout();
   const visibleWhiteKeys = portrait
     ? FULL_KEYBOARD_WHITE_KEYS * (PORTRAIT_VISIBLE_KEYS / FULL_KEYBOARD_TOTAL_KEYS)
     : FULL_KEYBOARD_WHITE_KEYS;
   return Math.max(1, boardWidth / visibleWhiteKeys);
+}
+
+function isPortraitLayout() {
+  return window.matchMedia?.("(orientation: portrait)")?.matches || window.innerHeight > window.innerWidth;
 }
 
 function centerKeyboardOnMiddleC() {
@@ -2341,6 +2345,11 @@ function centerKeyboardOnMiddleC() {
   const target = key.offsetLeft + key.offsetWidth / 2 - board.clientWidth / 2;
   board.scrollLeft = Math.max(0, target);
   syncWaterfallScroll();
+}
+
+function queueCenterKeyboardOnMiddleC() {
+  centerKeyboardOnMiddleC();
+  window.requestAnimationFrame?.(centerKeyboardOnMiddleC);
 }
 
 function findPreviousWhite(note) {
@@ -5864,6 +5873,7 @@ function setupEvents() {
   });
   window.addEventListener("resize", () => {
     buildKeyboard({ preserveScroll: true });
+    if (isPortraitLayout()) queueCenterKeyboardOnMiddleC();
     syncWaterfallLayout();
   });
   window.addEventListener("beforeunload", () => {
@@ -5902,6 +5912,6 @@ setupPausedKeyboardScroll();
 setupHardwarePedalKeys();
 preventPageZoom();
 buildKeyboard();
-centerKeyboardOnMiddleC();
+queueCenterKeyboardOnMiddleC();
 drawStaff();
 autoConnectMidi();
