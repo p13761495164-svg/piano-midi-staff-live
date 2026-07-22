@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v279";
+const APP_VERSION = "v280";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -752,7 +752,6 @@ function chordSuffixLabel(suffix) {
   if (suffix === "maj7") return "M7";
   if (suffix === "maj9") return "M9";
   if (suffix === "mMaj7") return "mM7";
-  if (suffix === "madd9") return "add9";
   return suffix;
 }
 
