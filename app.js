@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v275";
+const APP_VERSION = "v276";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -3260,7 +3260,7 @@ function saveTempoAdjustedMidi() {
     setStatusKey("status.tempoSaveUnavailable");
     return;
   }
-  const filename = tempoAdjustedFilename(state.practice.filename, bpm);
+  const filename = tempoAdjustedFilename(state.practice.filename, bpm, keySignature);
 
   if (window.webkit?.messageHandlers?.midiBridge) {
     window.webkit.messageHandlers.midiBridge.postMessage({
@@ -3286,11 +3286,17 @@ function saveTempoAdjustedMidi() {
   setStatusKey("status.tempoSaved", { name: displayFilename(filename, "MIDI") });
 }
 
-function tempoAdjustedFilename(filename, bpm) {
+function tempoAdjustedFilename(filename, bpm, keySignature) {
   const base = String(filename || "score")
     .replace(/\.(mid|midi)$/i, "")
     .trim() || "score";
-  return `${base}_EP${Math.round(bpm)}bpm.mid`;
+  const keyName = filenameSafeKeySignature(keySignature);
+  return `${base}_EP${Math.round(bpm)}bpm_${keyName}.mid`;
+}
+
+function filenameSafeKeySignature(keySignature) {
+  const key = MAJOR_KEY_SIGNATURES[keySignature] ? keySignature : "C";
+  return key.replace("#", "sharp").replace("b", "flat");
 }
 
 function rewriteMidiTempoAndKeyBytes(sourceBytes, microsecondsPerQuarter, keySignature) {
