@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v272";
+const APP_VERSION = "v273";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -2439,11 +2439,6 @@ function renderWaterfall(playbackTick, options = {}) {
   const cueTargets = nextKeyboardCueTargets();
   const cueTargetIds = new Set(cueTargets.map((target) => target.id));
   const cueNotes = new Set(cueTargets.map((target) => target.note));
-  const primaryCueTargets = nextPrimaryCueTargets();
-  const isPlaybackMode = state.playback.playing || state.playback.paused;
-  const cueBoundaryTick = primaryCueTargets.length
-    ? Math.max(...primaryCueTargets.map((target) => target.startTick))
-    : isPlaybackMode ? (state.practice.viewStartTick || 0) : Infinity;
   const notes = practiceWaterfall
     ? state.practice.notes
       .map((target) => ({
@@ -2451,8 +2446,7 @@ function renderWaterfall(playbackTick, options = {}) {
         note: target.note,
         startTick: target.startTick,
         endTick: Math.max(target.startTick + 1, target.endTick),
-        matched: isAutoFollowTargetDisplayMatched(target),
-        activeVisual: isPracticeTargetVisuallyActive(target, cueBoundaryTick)
+        matched: isAutoFollowTargetMatched(target)
       }))
       .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
     : state.playback.visualNotes;
@@ -2473,7 +2467,13 @@ function renderWaterfall(playbackTick, options = {}) {
     const metric = state.waterfallState.keyMetrics.get(item.note);
     if (!metric) continue;
     const playbackActive = playbackTick >= item.startTick && playbackTick < item.endTick;
-    const active = Boolean(item.activeVisual) || playbackActive;
+    const activeInput = item.targetId
+      ? state.activeNotes.get(item.note)?.targetId === item.targetId
+      : false;
+    const activePlayback = item.targetId
+      ? state.playback.activeTargetIds.has(item.targetId)
+      : playbackActive;
+    const active = activeInput || activePlayback || Boolean(item.matched);
     const cue = (item.targetId && cueTargetIds.has(item.targetId)) || (!item.targetId && cueNotes.has(item.note));
     const matched = Boolean(item.matched);
     const untilStartSeconds = (item.startTick - playbackTick) * secondsPerTick;
