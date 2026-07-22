@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v277";
+const APP_VERSION = "v278";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -623,7 +623,8 @@ const state = {
     lastFrameAt: 0,
     visibleStartIndex: 0,
     keyMetrics: new Map(),
-    layoutReady: false
+    layoutReady: false,
+    keyEdgeNotes: new Set()
   },
   liveAudio: {
     audioContext: null,
@@ -808,7 +809,8 @@ function isPracticeTargetVisuallyActive(target, cueBoundaryTick = Infinity) {
 
 function currentSoundingNotes() {
   const inputNotes = currentInputSoundingNotes();
-  const notes = new Set([...inputNotes, ...state.playback.activeNotes]);
+  const waterfallNotes = state.waterfall ? [...(state.waterfallState.keyEdgeNotes || new Set())] : [];
+  const notes = new Set([...inputNotes, ...state.playback.activeNotes, ...waterfallNotes]);
   return [...notes].sort((a, b) => a - b);
 }
 
@@ -2455,7 +2457,10 @@ function syncWaterfallVisibility() {
   if (els.stage) els.stage.classList.toggle("waterfall-mode", visible);
   els.waterfallBoard.classList.toggle("hidden", !visible);
   if (els.scoreBoard) els.scoreBoard.classList.toggle("waterfall-playback", visible);
-  if (!visible && els.waterfall) els.waterfall.replaceChildren();
+  if (!visible) {
+    state.waterfallState.keyEdgeNotes = new Set();
+    if (els.waterfall) els.waterfall.replaceChildren();
+  }
   if (visible && !state.waterfallState.layoutReady) syncWaterfallLayout();
 }
 
@@ -2476,6 +2481,7 @@ function renderWaterfall(playbackTick, options = {}) {
   const laneHeight = els.waterfallBoard.clientHeight || 128;
   const fragment = document.createDocumentFragment();
   const keyLabelNotes = new Set();
+  const keyEdgeNotes = new Set();
   const practiceWaterfall = state.practice.notes?.length > 0;
   const cueTargets = nextKeyboardCueTargets();
   const cueTargetIds = new Set(cueTargets.map((target) => target.id));
@@ -2522,6 +2528,9 @@ function renderWaterfall(playbackTick, options = {}) {
     const durationSeconds = Math.max(0.08, (item.endTick - item.startTick) * secondsPerTick);
     const height = Math.max(18, Math.min(laneHeight * 0.78, durationSeconds / WATERFALL_LOOKAHEAD_SECONDS * laneHeight));
     const y = Math.max(-height, Math.min(laneHeight - 8, progress * laneHeight - height));
+    const keyEdgeVisible = y < laneHeight && y + height >= laneHeight - 72;
+    const keyEdgeSounding = keyEdgeVisible && (active || matched || playbackActive);
+    if (keyEdgeSounding) keyEdgeNotes.add(item.note);
     const bar = document.createElement("span");
     bar.className = `waterfall-note ${active ? "active" : ""} ${matched ? "matched" : ""} ${cue && !active && !matched ? "cue" : ""} ${isWhite(item.note) ? "white-note" : "black-note"}`;
     bar.style.left = `${metric.left + Math.max(2, metric.width * 0.12)}px`;
@@ -2536,7 +2545,7 @@ function renderWaterfall(playbackTick, options = {}) {
       bar.appendChild(labelNode);
     }
     fragment.appendChild(bar);
-    if ((active || matched) && label && y + height >= laneHeight - 18 && !keyLabelNotes.has(item.note)) {
+    if (keyEdgeSounding && label && !keyLabelNotes.has(item.note)) {
       keyLabelNotes.add(item.note);
       const keyLabel = document.createElement("span");
       keyLabel.className = `waterfall-key-label ${isWhite(item.note) ? "white-note" : "black-note"}`;
@@ -2545,6 +2554,7 @@ function renderWaterfall(playbackTick, options = {}) {
       fragment.appendChild(keyLabel);
     }
   }
+  state.waterfallState.keyEdgeNotes = keyEdgeNotes;
   els.waterfall.replaceChildren(fragment);
 }
 

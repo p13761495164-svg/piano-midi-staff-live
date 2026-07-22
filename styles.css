@@ -885,7 +885,7 @@ select {
 
 .waterfall-key-label {
   position: absolute;
-  bottom: 6px;
+  bottom: 24px;
   z-index: 4;
   min-width: 18px;
   height: 18px;
