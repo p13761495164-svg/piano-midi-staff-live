@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v270";
+const APP_VERSION = "v271";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -2445,7 +2445,8 @@ function renderWaterfall(playbackTick, options = {}) {
         targetId: target.id,
         note: target.note,
         startTick: target.startTick,
-        endTick: Math.max(target.startTick + 1, target.endTick)
+        endTick: Math.max(target.startTick + 1, target.endTick),
+        matched: isAutoFollowTargetDisplayMatched(target)
       }))
       .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
     : state.playback.visualNotes;
@@ -2467,13 +2468,14 @@ function renderWaterfall(playbackTick, options = {}) {
     if (!metric) continue;
     const active = playbackTick >= item.startTick && playbackTick < item.endTick;
     const cue = (item.targetId && cueTargetIds.has(item.targetId)) || (!item.targetId && cueNotes.has(item.note));
+    const matched = Boolean(item.matched);
     const untilStartSeconds = (item.startTick - playbackTick) * secondsPerTick;
     const progress = 1 - untilStartSeconds / WATERFALL_LOOKAHEAD_SECONDS;
     const durationSeconds = Math.max(0.08, (item.endTick - item.startTick) * secondsPerTick);
     const height = Math.max(18, Math.min(laneHeight * 0.78, durationSeconds / WATERFALL_LOOKAHEAD_SECONDS * laneHeight));
     const y = Math.max(-height, Math.min(laneHeight - 8, progress * laneHeight - height));
     const bar = document.createElement("span");
-    bar.className = `waterfall-note ${active ? "active" : ""} ${cue ? "cue" : ""} ${isWhite(item.note) ? "white-note" : "black-note"}`;
+    bar.className = `waterfall-note ${active ? "active" : ""} ${matched ? "matched" : ""} ${cue && !matched ? "cue" : ""} ${isWhite(item.note) ? "white-note" : "black-note"}`;
     bar.style.left = `${metric.left + Math.max(2, metric.width * 0.12)}px`;
     bar.style.width = `${Math.max(8, metric.width * 0.76)}px`;
     bar.style.height = `${height}px`;

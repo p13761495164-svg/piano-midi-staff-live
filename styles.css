@@ -887,7 +887,8 @@ select {
   background: linear-gradient(180deg, rgba(38, 36, 33, 0.96), rgba(11, 10, 9, 0.78));
 }
 
-.waterfall-note.active {
+.waterfall-note.active,
+.waterfall-note.matched {
   background: linear-gradient(180deg, rgba(246, 199, 82, 0.96), rgba(235, 174, 48, 0.78));
   border-color: rgba(154, 105, 18, 0.34);
 }
@@ -899,7 +900,8 @@ select {
 }
 
 .waterfall-note.cue .waterfall-note-label,
-.waterfall-note.active .waterfall-note-label {
+.waterfall-note.active .waterfall-note-label,
+.waterfall-note.matched .waterfall-note-label {
   color: rgba(31, 27, 23, 0.82);
 }
 
