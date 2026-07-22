@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v278";
+const APP_VERSION = "v279";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -113,6 +113,8 @@ const CHORD_TEMPLATES = [
   { suffix: "maj7", intervals: [0, 4, 7, 11] },
   { suffix: "maj7omit3", intervals: [0, 7, 11] },
   { suffix: "maj7omit5", intervals: [0, 4, 11] },
+  { suffix: "add9", intervals: [0, 2, 4, 7] },
+  { suffix: "madd9", intervals: [0, 2, 3, 7] },
   { suffix: "∅", intervals: [0, 3, 6, 10] },
   { suffix: "dim7", intervals: [0, 3, 6, 9] },
   { suffix: "m7", intervals: [0, 3, 7, 10] },
@@ -750,6 +752,7 @@ function chordSuffixLabel(suffix) {
   if (suffix === "maj7") return "M7";
   if (suffix === "maj9") return "M9";
   if (suffix === "mMaj7") return "mM7";
+  if (suffix === "madd9") return "add9";
   return suffix;
 }
 
