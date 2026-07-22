@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v276";
+const APP_VERSION = "v277";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -752,6 +752,23 @@ function chordSuffixLabel(suffix) {
   return suffix;
 }
 
+function chordOmitSuffix(templateSuffix, missingIntervals) {
+  if (!missingIntervals.length) return templateSuffix;
+  const names = missingIntervals.map((interval) => ({
+    2: "9",
+    3: "3",
+    4: "3",
+    5: "4",
+    6: "5",
+    7: "5",
+    8: "#5",
+    9: "6",
+    10: "7",
+    11: "7"
+  }[interval] || String(interval)));
+  return `${templateSuffix || ""}(omit${names.join(",")})`;
+}
+
 function isInputNoteSounding(note) {
   const active = state.activeNotes.get(note);
   if (!active) return false;
@@ -814,6 +831,27 @@ function currentChordName() {
       }
     });
   });
+
+  if (!best) {
+    pitchClasses.forEach((root) => {
+      CHORD_TEMPLATES
+        .filter((template) => template.intervals.length >= 4 && !template.suffix.includes("omit"))
+        .forEach((template, templateIndex) => {
+          const required = template.intervals.map((interval) => (root + interval) % 12);
+          if (!pitchClasses.includes(root)) return;
+          const missingIntervals = template.intervals.filter((interval, index) => !pitchClasses.includes(required[index]));
+          if (missingIntervals.length !== 1) return;
+          const matchedCount = template.intervals.length - missingIntervals.length;
+          if (matchedCount < 3) return;
+          const extras = pitchClasses.filter((pitchClass) => !required.includes(pitchClass)).length;
+          const suffix = chordOmitSuffix(template.suffix, missingIntervals);
+          const score = matchedCount * 9 - extras * 3 + (root === bass ? 4 : 0) - templateIndex * 0.01 - 2;
+          if (!best || score > best.score) {
+            best = { root, suffix, score };
+          }
+        });
+    });
+  }
 
   if (!best) return "-";
   return `${chordToneLabel(best.root)}${chordSuffixLabel(best.suffix)}`;
@@ -2437,6 +2475,7 @@ function renderWaterfall(playbackTick, options = {}) {
   const endTick = playbackTick + lookaheadTicks;
   const laneHeight = els.waterfallBoard.clientHeight || 128;
   const fragment = document.createDocumentFragment();
+  const keyLabelNotes = new Set();
   const practiceWaterfall = state.practice.notes?.length > 0;
   const cueTargets = nextKeyboardCueTargets();
   const cueTargetIds = new Set(cueTargets.map((target) => target.id));
@@ -2497,6 +2536,14 @@ function renderWaterfall(playbackTick, options = {}) {
       bar.appendChild(labelNode);
     }
     fragment.appendChild(bar);
+    if ((active || matched) && label && y + height >= laneHeight - 18 && !keyLabelNotes.has(item.note)) {
+      keyLabelNotes.add(item.note);
+      const keyLabel = document.createElement("span");
+      keyLabel.className = `waterfall-key-label ${isWhite(item.note) ? "white-note" : "black-note"}`;
+      keyLabel.textContent = label;
+      keyLabel.style.left = `${metric.left + metric.width / 2}px`;
+      fragment.appendChild(keyLabel);
+    }
   }
   els.waterfall.replaceChildren(fragment);
 }
