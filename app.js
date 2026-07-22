@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v266";
+const APP_VERSION = "v267";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -2350,6 +2350,8 @@ function centerKeyboardOnMiddleC() {
 function queueCenterKeyboardOnMiddleC() {
   centerKeyboardOnMiddleC();
   window.requestAnimationFrame?.(centerKeyboardOnMiddleC);
+  window.setTimeout(centerKeyboardOnMiddleC, 80);
+  window.setTimeout(centerKeyboardOnMiddleC, 260);
 }
 
 function findPreviousWhite(note) {
@@ -5872,10 +5874,22 @@ function setupEvents() {
     saveSettings();
   });
   window.addEventListener("resize", () => {
-    buildKeyboard({ preserveScroll: true });
+    buildKeyboard({ preserveScroll: !isPortraitLayout() });
     if (isPortraitLayout()) queueCenterKeyboardOnMiddleC();
     syncWaterfallLayout();
   });
+  window.addEventListener("orientationchange", () => {
+    window.setTimeout(() => {
+      buildKeyboard({ preserveScroll: false });
+      queueCenterKeyboardOnMiddleC();
+      syncWaterfallLayout();
+    }, 120);
+  });
+  window.visualViewport?.addEventListener("resize", () => {
+    if (!isPortraitLayout()) return;
+    window.setTimeout(queueCenterKeyboardOnMiddleC, 60);
+  }, { passive: true });
+  window.addEventListener("load", queueCenterKeyboardOnMiddleC);
   window.addEventListener("beforeunload", () => {
     stopMeasurePlayback();
     revokeRecordingUrl();
