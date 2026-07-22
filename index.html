@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.png?v=244" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon.png?v=244">
-  <link rel="stylesheet" href="styles.css?v=274">
+  <link rel="stylesheet" href="styles.css?v=275">
 </head>
 <body>
   <main class="app-shell">
@@ -35,6 +35,7 @@
             <button id="discardRecordButton" class="ghost hidden" type="button">废弃重录</button>
             <button id="loadMidiButton" class="ghost" type="button">载入乐谱</button>
             <button id="exportPdfButton" class="ghost" type="button" disabled>导出PDF</button>
+            <button id="saveTempoButton" class="ghost tempo-save-button hidden" type="button" disabled>另存变化</button>
             <button id="fullscreenButton" class="ghost" type="button">全屏</button>
             <button id="refreshButton" class="ghost" type="button">更新</button>
             <button id="installButton" class="ghost hidden" type="button">安装</button>
@@ -192,7 +193,6 @@
               <span id="tempoValue">120</span>
               <button id="tempoUpButton" class="tempo-step" type="button" aria-label="加快" title="加快" disabled>+</button>
             </div>
-            <button id="saveTempoButton" class="ghost tempo-save-button hidden" type="button" disabled>另存变速版</button>
             <span id="measureStatus" class="measure-status hidden">实时显示</span>
             <span id="currentChord" class="chord-status">-</span>
           </div>
@@ -224,6 +224,6 @@
     </div>
   </div>
   <div id="pdfExportRoot" class="pdf-export-root" aria-hidden="true"></div>
-  <script src="app.js?v=274"></script>
+  <script src="app.js?v=275"></script>
 </body>
 </html>

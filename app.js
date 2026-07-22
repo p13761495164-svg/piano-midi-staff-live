@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v274";
+const APP_VERSION = "v275";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -215,7 +215,7 @@ const I18N = {
     "button.play": "播放",
     "button.pause": "暂停",
     "button.stop": "停止",
-    "button.saveTempo": "另存变速版",
+    "button.saveTempo": "另存变化",
     "option.autoSelect": "自动选择",
     "status.waiting": "等待连接 MIDI 键盘",
     "status.live": "实时显示",
@@ -226,8 +226,8 @@ const I18N = {
     "status.recordedEmpty": "录制完成：没有记录到音符",
     "status.savingIos": "正在打开 iOS 保存面板...",
     "status.midiGenerated": "MIDI 文件已生成",
-    "status.tempoSaved": "已另存变速版：{name}",
-    "status.tempoSaveUnavailable": "当前文件不能另存变速版，请先载入 MIDI 文件。",
+    "status.tempoSaved": "已另存变化版：{name}",
+    "status.tempoSaveUnavailable": "当前文件不能另存变化版，请先载入 MIDI 文件。",
     "status.loaded": "已载入：{name}",
     "status.loadingSample": "正在载入样本乐谱...",
     "trial.title": "免费版乐谱",
@@ -313,7 +313,7 @@ const I18N = {
     "button.play": "再生",
     "button.pause": "一時停止",
     "button.stop": "停止",
-    "button.saveTempo": "変速版を別名保存",
+    "button.saveTempo": "変更を別名保存",
     "option.autoSelect": "自動選択",
     "status.waiting": "MIDI キーボード接続待ち",
     "status.live": "リアルタイム表示",
@@ -324,8 +324,8 @@ const I18N = {
     "status.recordedEmpty": "録音完了：音符は記録されませんでした",
     "status.savingIos": "iOS 保存画面を開いています...",
     "status.midiGenerated": "MIDI ファイルを生成しました",
-    "status.tempoSaved": "変速版を保存しました：{name}",
-    "status.tempoSaveUnavailable": "変速版を保存できません。MIDI ファイルを読み込んでください。",
+    "status.tempoSaved": "変更版を保存しました：{name}",
+    "status.tempoSaveUnavailable": "変更版を保存できません。MIDI ファイルを読み込んでください。",
     "status.loaded": "読み込みました：{name}",
     "status.loadingSample": "サンプル楽譜を読み込み中...",
     "trial.title": "無料版の楽譜",
@@ -411,7 +411,7 @@ const I18N = {
     "button.play": "Play",
     "button.pause": "Pause",
     "button.stop": "Stop",
-    "button.saveTempo": "Save Tempo Copy",
+    "button.saveTempo": "Save Changes",
     "option.autoSelect": "Auto Select",
     "status.waiting": "Waiting for MIDI keyboard",
     "status.live": "Live View",
@@ -422,8 +422,8 @@ const I18N = {
     "status.recordedEmpty": "Recording finished: no notes captured",
     "status.savingIos": "Opening iOS save panel...",
     "status.midiGenerated": "MIDI file generated",
-    "status.tempoSaved": "Saved tempo copy: {name}",
-    "status.tempoSaveUnavailable": "Cannot save a tempo copy. Load a MIDI file first.",
+    "status.tempoSaved": "Saved changed copy: {name}",
+    "status.tempoSaveUnavailable": "Cannot save a changed copy. Load a MIDI file first.",
     "status.loaded": "Loaded: {name}",
     "status.loadingSample": "Loading sample score...",
     "trial.title": "Free Score Access",
@@ -585,6 +585,7 @@ const state = {
     timeSignature: { numerator: 4, denominator: 4 },
     timeSignatureEvents: [],
     keySignatureEvents: [],
+    originalKeySignature: "C",
     ticksPerQuarter: MIDI_PPQ,
     measureTicks: MIDI_PPQ * 4,
     microsecondsPerQuarter: 500000,
@@ -911,6 +912,7 @@ function applyLanguage() {
   updateText(els.saveTempoButton, t("button.saveTempo"));
   updateText(els.refreshButton, t("button.refresh"));
   updateText(els.installButton, t("button.install"));
+  syncFullscreenButton();
   updateIconButtonLabel(els.startMeasureButton, t("button.start"));
   updateIconButtonLabel(els.playMeasureButton, t("button.play"));
 
@@ -2705,6 +2707,9 @@ function applyParsedScore(parsed, filename, typeLabel, source = {}) {
   state.practice.timeSignature = normalized.timeSignature;
   state.practice.timeSignatureEvents = normalized.timeSignatureEvents || [];
   state.practice.keySignatureEvents = normalized.keySignatureEvents || [];
+  state.practice.originalKeySignature = normalized.keySignature && MAJOR_KEY_SIGNATURES[normalized.keySignature]
+    ? normalized.keySignature
+    : (MAJOR_KEY_SIGNATURES[state.keySignature] ? state.keySignature : "C");
   state.practice.ticksPerQuarter = normalized.ticksPerQuarter;
   state.practice.measureTicks = normalized.measureTicks;
   state.practice.microsecondsPerQuarter = practiceTempoForParsedScore(normalized);
@@ -3247,7 +3252,14 @@ function saveTempoAdjustedMidi() {
     return;
   }
   const bpm = currentTempoBpm();
-  const bytes = rewriteMidiTempoBytes(state.practice.sourceBytes, microsecondsFromBpm(bpm));
+  const keySignature = MAJOR_KEY_SIGNATURES[state.keySignature] ? state.keySignature : "C";
+  let bytes;
+  try {
+    bytes = rewriteMidiTempoAndKeyBytes(state.practice.sourceBytes, microsecondsFromBpm(bpm), keySignature);
+  } catch (error) {
+    setStatusKey("status.tempoSaveUnavailable");
+    return;
+  }
   const filename = tempoAdjustedFilename(state.practice.filename, bpm);
 
   if (window.webkit?.messageHandlers?.midiBridge) {
@@ -3281,16 +3293,18 @@ function tempoAdjustedFilename(filename, bpm) {
   return `${base}_EP${Math.round(bpm)}bpm.mid`;
 }
 
-function rewriteMidiTempoBytes(sourceBytes, microsecondsPerQuarter) {
+function rewriteMidiTempoAndKeyBytes(sourceBytes, microsecondsPerQuarter, keySignature) {
   const bytes = sourceBytes instanceof Uint8Array ? sourceBytes : new Uint8Array(sourceBytes || []);
   if (bytes.length < 14 || textFromBytes(bytes, 0, 4) !== "MThd") throw new Error("不是标准 MIDI 文件");
   const tempo = Math.max(1, Math.min(0xffffff, Math.round(Number(microsecondsPerQuarter) || 500000)));
   const tempoBytes = [(tempo >> 16) & 0xff, (tempo >> 8) & 0xff, tempo & 0xff];
+  const keyBytes = midiKeySignatureBytes(keySignature);
   const headerLength = readUint32FromBytes(bytes, 4);
   const headerEnd = Math.min(bytes.length, 8 + headerLength);
   const chunks = [];
   let position = headerEnd;
   let tempoCount = 0;
+  let keyCount = 0;
   let firstTrackIndex = -1;
 
   chunks.push([...bytes.slice(0, headerEnd)]);
@@ -3302,8 +3316,9 @@ function rewriteMidiTempoBytes(sourceBytes, microsecondsPerQuarter) {
     const data = bytes.slice(dataStart, dataEnd);
     if (type === "MTrk") {
       if (firstTrackIndex < 0) firstTrackIndex = chunks.length;
-      const rewritten = rewriteMidiTrackTempo(data, tempoBytes);
+      const rewritten = rewriteMidiTrackTempoAndKey(data, tempoBytes, keyBytes);
       tempoCount += rewritten.tempoCount;
+      keyCount += rewritten.keyCount;
       chunks.push([...asciiBytes("MTrk"), ...uint32Bytes(rewritten.bytes.length), ...rewritten.bytes]);
     } else {
       chunks.push([...bytes.slice(position, dataEnd)]);
@@ -3318,16 +3333,23 @@ function rewriteMidiTempoBytes(sourceBytes, microsecondsPerQuarter) {
     const inserted = [0x00, 0xff, 0x51, 0x03, ...tempoBytes, ...trackBytes];
     chunks[firstTrackIndex] = [...asciiBytes("MTrk"), ...uint32Bytes(inserted.length), ...inserted];
   }
+  if (!keyCount && firstTrackIndex >= 0) {
+    const trackChunk = chunks[firstTrackIndex];
+    const trackBytes = trackChunk.slice(8);
+    const inserted = [0x00, 0xff, 0x59, 0x02, ...keyBytes, ...trackBytes];
+    chunks[firstTrackIndex] = [...asciiBytes("MTrk"), ...uint32Bytes(inserted.length), ...inserted];
+  }
 
   return new Uint8Array(chunks.flat());
 }
 
-function rewriteMidiTrackTempo(trackBytes, tempoBytes) {
+function rewriteMidiTrackTempoAndKey(trackBytes, tempoBytes, keyBytes) {
   const bytes = trackBytes instanceof Uint8Array ? trackBytes : new Uint8Array(trackBytes || []);
   const out = [];
   let position = 0;
   let runningStatus = 0;
   let tempoCount = 0;
+  let keyCount = 0;
 
   while (position < bytes.length) {
     const eventStart = position;
@@ -3344,7 +3366,7 @@ function rewriteMidiTrackTempo(trackBytes, tempoBytes) {
       status = runningStatus;
     } else {
       out.push(...bytes.slice(eventStart));
-      return { bytes: out, tempoCount };
+      return { bytes: out, tempoCount, keyCount };
     }
 
     if (status === 0xff) {
@@ -3360,6 +3382,9 @@ function rewriteMidiTrackTempo(trackBytes, tempoBytes) {
       if (metaType === 0x51 && length >= 3) {
         out.push(...bytes.slice(eventStart, dataStart), ...tempoBytes, ...bytes.slice(dataStart + 3, dataEnd));
         tempoCount += 1;
+      } else if (metaType === 0x59 && length >= 2) {
+        out.push(...bytes.slice(eventStart, dataStart), ...keyBytes, ...bytes.slice(dataStart + 2, dataEnd));
+        keyCount += 1;
       } else {
         out.push(...bytes.slice(eventStart, dataEnd));
       }
@@ -3379,7 +3404,7 @@ function rewriteMidiTrackTempo(trackBytes, tempoBytes) {
     const dataLength = midiDataLengthForStatus(status);
     if (!dataLength) {
       out.push(...bytes.slice(eventStart));
-      return { bytes: out, tempoCount };
+      return { bytes: out, tempoCount, keyCount };
     }
     if (bytes[eventStart + (deltaEnd - eventStart)] >= 0x80) {
       position = Math.min(bytes.length, position + dataLength);
@@ -3390,7 +3415,14 @@ function rewriteMidiTrackTempo(trackBytes, tempoBytes) {
   }
 
   if (position < bytes.length) out.push(...bytes.slice(position));
-  return { bytes: out, tempoCount };
+  return { bytes: out, tempoCount, keyCount };
+}
+
+function midiKeySignatureBytes(keySignature) {
+  const entries = Object.entries(KEY_SIGNATURE_BY_FIFTHS);
+  const match = entries.find(([, key]) => key === keySignature);
+  const fifths = Math.max(-7, Math.min(7, Number(match?.[0]) || 0));
+  return [fifths < 0 ? 0x100 + fifths : fifths, 0x00];
 }
 
 function readVarLenEnd(bytes, position) {
@@ -3438,10 +3470,14 @@ function syncTempoControls() {
   }
   if (els.saveTempoButton) {
     const originalBpm = bpmFromMicroseconds(state.practice.originalMicrosecondsPerQuarter || state.practice.microsecondsPerQuarter || 500000);
+    const originalKeySignature = MAJOR_KEY_SIGNATURES[state.practice.originalKeySignature]
+      ? state.practice.originalKeySignature
+      : "C";
+    const currentKeySignature = MAJOR_KEY_SIGNATURES[state.keySignature] ? state.keySignature : "C";
     const canSave = hasMeasures &&
       state.practice.sourceType === "MIDI" &&
       state.practice.sourceBytes instanceof Uint8Array &&
-      bpm !== originalBpm;
+      (bpm !== originalBpm || currentKeySignature !== originalKeySignature);
     els.saveTempoButton.disabled = !canSave;
     els.saveTempoButton.classList.toggle("hidden", !canSave);
     els.saveTempoButton.title = t("button.saveTempo");
@@ -5343,7 +5379,14 @@ async function toggleFullscreen() {
 }
 
 function syncFullscreenButton() {
+  if (!els.fullscreenButton) return;
   const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+  const standaloneDisplay = window.matchMedia?.("(display-mode: standalone)")?.matches;
+  const iosStandalone = Boolean(window.navigator.standalone);
+  const iosNativeApp = Boolean(window.webkit?.messageHandlers?.midiBridge);
+  const supportsFullscreen = Boolean(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+  const shouldHide = Boolean(fullscreenElement || standaloneDisplay || iosStandalone || iosNativeApp || !supportsFullscreen);
+  els.fullscreenButton.classList.toggle("hidden", shouldHide);
   els.fullscreenButton.textContent = fullscreenElement ? t("button.exitFullscreen") : t("button.fullscreen");
 }
 
@@ -5885,6 +5928,7 @@ function setupEvents() {
       state.keySignature = button.dataset.keySignature;
       state.practice.keySignatureEvents = [];
       syncControlsFromState();
+      syncPracticeControls();
       saveSettings();
       drawStaff();
       syncCurrentChord();
