@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v285";
+const APP_VERSION = "v286";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -1047,6 +1047,7 @@ function applyLanguage() {
 }
 
 function accidentalForNote(note, tick = state.practice.viewStartTick || 0) {
+  if (whiteKeyModeEnabled()) return "";
   const pitchClass = note % 12;
   const key = MAJOR_KEY_SIGNATURES[keySignatureAtTick(tick)] || MAJOR_KEY_SIGNATURES.C;
   if (key.tones.includes(pitchClass)) return "";
@@ -1105,7 +1106,7 @@ function centerRealNoteForWhiteKeyMode(tick = state.practice.viewStartTick || 0)
   return best;
 }
 
-function realNoteForWhiteKeyNote(whiteNote, tick = state.practice.viewStartTick || 0) {
+function realNoteForWhiteKeyNoteUnclamped(whiteNote, tick = state.practice.viewStartTick || 0) {
   if (!whiteKeyModeEnabled() || !isWhite(whiteNote)) return whiteNote;
   const centerIndex = whiteKeyIndex(60);
   const keyIndex = whiteKeyIndex(whiteNote);
@@ -1113,7 +1114,11 @@ function realNoteForWhiteKeyNote(whiteNote, tick = state.practice.viewStartTick 
   const stepDelta = keyIndex - centerIndex;
   const octaveDelta = Math.floor(stepDelta / MAJOR_SCALE_OFFSETS.length);
   const degree = ((stepDelta % MAJOR_SCALE_OFFSETS.length) + MAJOR_SCALE_OFFSETS.length) % MAJOR_SCALE_OFFSETS.length;
-  const realNote = centerRealNoteForWhiteKeyMode(tick) + octaveDelta * 12 + MAJOR_SCALE_OFFSETS[degree];
+  return centerRealNoteForWhiteKeyMode(tick) + octaveDelta * 12 + MAJOR_SCALE_OFFSETS[degree];
+}
+
+function realNoteForWhiteKeyNote(whiteNote, tick = state.practice.viewStartTick || 0) {
+  const realNote = realNoteForWhiteKeyNoteUnclamped(whiteNote, tick);
   return realNote >= MIDI_MIN && realNote <= MIDI_MAX ? realNote : whiteNote;
 }
 
@@ -1129,8 +1134,12 @@ function displayNoteForKeyboard(note, tick = state.practice.viewStartTick || 0) 
   return whiteKeyNoteForRealNote(note, tick);
 }
 
+function displayNoteForStaff(note, tick = state.practice.viewStartTick || 0) {
+  return whiteKeyModeEnabled() ? whiteKeyNoteForRealNote(note, tick) : note;
+}
+
 function keyboardLabelForNote(note, tick = state.practice.viewStartTick || 0) {
-  return whiteKeyModeEnabled() && isWhite(note) ? noteName(realNoteForWhiteKeyNote(note, tick)) : noteName(note);
+  return whiteKeyModeEnabled() && isWhite(note) ? noteName(realNoteForWhiteKeyNoteUnclamped(note, tick)) : noteName(note);
 }
 
 function staffPitchName(note, tick = state.practice.viewStartTick || 0) {
@@ -1643,9 +1652,10 @@ function drawStaff() {
   }
 
   const noteItems = visibleNotes.map((note) => {
-    const clef = preferredClef(note);
-    const step = midiToStaffStep(note);
-    return { note, clef, step, x: STAFF_VIEWBOX.width / 2, xOffset: 0 };
+    const displayNote = displayNoteForStaff(note);
+    const clef = preferredClef(displayNote);
+    const step = midiToStaffStep(displayNote);
+    return { note, displayNote, clef, step, x: STAFF_VIEWBOX.width / 2, xOffset: 0 };
   });
 
   applyNoteCollisionOffsets(noteItems, 35).forEach((item) => drawNote(svg, item));
@@ -1822,7 +1832,8 @@ function buildPracticeNoteItems() {
     .slice()
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note)
     .map((target) => {
-      const display = displayInfoForPracticeNote(target.note, target.startTick);
+      const displayNote = displayNoteForStaff(target.note, target.startTick);
+      const display = displayInfoForPracticeNote(displayNote, target.startTick);
       const durationKind = durationKindForTicks(Math.max(1, target.endTick - target.startTick));
       const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
       const targetX = Math.max(MEASURE_NOTE_LEFT_X, Math.min(MEASURE_NOTE_RIGHT_X, xForCurrentViewTick(displayStartTick)));
@@ -1882,7 +1893,8 @@ function drawPracticeDurationLines(svg) {
     : isPlaybackMode ? (state.practice.viewStartTick || 0) : Infinity;
 
   targets.forEach((target) => {
-    const display = displayInfoForPracticeNote(target.note, target.startTick);
+    const displayNote = displayNoteForStaff(target.note, target.startTick);
+    const display = displayInfoForPracticeNote(displayNote, target.startTick);
     const displayStartTick = displayStartById.get(target.id) ?? target.startTick;
     const noteStartX = xForCurrentViewTick(displayStartTick);
     const startX = displayStartTick < viewStartTick
@@ -1973,7 +1985,8 @@ function buildLeftColumnNoteItems(notes, trackRole) {
   const items = notes
     .sort((a, b) => a - b)
     .map((note) => {
-      const display = displayInfoForPracticeNote(note);
+      const displayNote = displayNoteForStaff(note);
+      const display = displayInfoForPracticeNote(displayNote);
       return {
         note,
         displayNote: display.note,
@@ -2342,6 +2355,7 @@ function noteInnerLabel(note, tick = state.practice.viewStartTick || 0) {
 }
 
 function drawKeySignature(svg) {
+  if (whiteKeyModeEnabled()) return;
   const key = MAJOR_KEY_SIGNATURES[keySignatureAtTick(state.practice.viewStartTick || 0)] || MAJOR_KEY_SIGNATURES.C;
   if (!key.accidental || !key.count) return;
 
@@ -2376,7 +2390,8 @@ function drawTimeSignature(svg) {
   const numerator = Math.max(1, Number(signature.numerator) || 4);
   const denominator = Math.max(1, Number(signature.denominator) || 4);
   const key = MAJOR_KEY_SIGNATURES[keySignatureAtTick(state.practice.viewStartTick || 0)] || MAJOR_KEY_SIGNATURES.C;
-  const x = KEY_SIGNATURE_START_X + Math.max(1, key.count || 0) * KEY_SIGNATURE_GAP_X + 38;
+  const keySignatureCount = whiteKeyModeEnabled() ? 0 : key.count || 0;
+  const x = KEY_SIGNATURE_START_X + Math.max(1, keySignatureCount) * KEY_SIGNATURE_GAP_X + 38;
   [
     { y1: 222, y2: 282 },
     { y1: 502, y2: 562 }
