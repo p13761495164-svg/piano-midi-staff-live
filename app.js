@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v280";
+const APP_VERSION = "v281";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -46,6 +46,8 @@ const SETTINGS_FIELD_KEYS = {
   sustainPedalPage: "piano-midi-staff-sustain-pedal-page",
   autoFollowMode: "piano-midi-staff-auto-follow-mode",
   autoFollowTolerance: "piano-midi-staff-auto-follow-tolerance",
+  practiceHand: "piano-midi-staff-practice-hand",
+  handSplitNote: "piano-midi-staff-hand-split-note",
   timeSignature: "piano-midi-staff-time-signature",
   language: "piano-midi-staff-language",
   playbackInstrument: "piano-midi-staff-playback-instrument",
@@ -171,6 +173,8 @@ const I18N = {
     "label.sustainPedal": "延音踏板翻页",
     "label.autoFollow": "自动跟随",
     "label.tolerance": "容错",
+    "label.practiceHand": "练习手部",
+    "label.handSplit": "分界音",
     "label.timeSignature": "拍号",
     "label.keySignature": "调号",
     "label.currentChord": "和弦",
@@ -213,6 +217,9 @@ const I18N = {
     "button.halfPage": "半页",
     "button.page": "一页",
     "button.byBeat": "按格",
+    "button.bothHands": "双手",
+    "button.leftHand": "左手",
+    "button.rightHand": "右手",
     "button.start": "开头",
     "button.play": "播放",
     "button.pause": "暂停",
@@ -269,6 +276,8 @@ const I18N = {
     "label.sustainPedal": "サステイン送り",
     "label.autoFollow": "自動追従",
     "label.tolerance": "許容",
+    "label.practiceHand": "練習する手",
+    "label.handSplit": "分割音",
     "label.timeSignature": "拍子",
     "label.keySignature": "調号",
     "label.currentChord": "コード",
@@ -311,6 +320,9 @@ const I18N = {
     "button.halfPage": "半ページ",
     "button.page": "1ページ",
     "button.byBeat": "コマごと",
+    "button.bothHands": "両手",
+    "button.leftHand": "左手",
+    "button.rightHand": "右手",
     "button.start": "先頭",
     "button.play": "再生",
     "button.pause": "一時停止",
@@ -367,6 +379,8 @@ const I18N = {
     "label.sustainPedal": "Sustain Pedal Page",
     "label.autoFollow": "Auto Follow",
     "label.tolerance": "Tolerance",
+    "label.practiceHand": "Practice Hand",
+    "label.handSplit": "Split Note",
     "label.timeSignature": "Time Signature",
     "label.keySignature": "Key",
     "label.currentChord": "Chord",
@@ -409,6 +423,9 @@ const I18N = {
     "button.halfPage": "Half Page",
     "button.page": "Page",
     "button.byBeat": "By Cell",
+    "button.bothHands": "Both",
+    "button.leftHand": "Left",
+    "button.rightHand": "Right",
     "button.start": "Start",
     "button.play": "Play",
     "button.pause": "Pause",
@@ -547,6 +564,8 @@ const state = {
   purchaseStateKnown: false,
   purchaseRequestTimer: 0,
   rhythmFollow: false,
+  practiceHand: "both",
+  handSplitNote: 60,
   pedalStep: "on",
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
@@ -568,6 +587,15 @@ const state = {
     animating: false,
     finishingRun: false,
     pausedAfterManualNavigation: false
+  },
+  autoAccompaniment: {
+    enabled: false,
+    audioContext: null,
+    activeNodes: [],
+    activeNotes: new Set(),
+    activeTargetIds: new Set(),
+    timers: [],
+    playedKeys: new Set()
   },
   exportMode: {
     active: false,
@@ -716,6 +744,10 @@ const els = {
   autoFollowButtons: [...document.querySelectorAll("[data-auto-follow-mode]")],
   flowDisplayButtons: [...document.querySelectorAll("[data-flow-display]")],
   toleranceButtons: [...document.querySelectorAll("[data-tolerance-mode]")],
+  practiceHandButtons: [...document.querySelectorAll("[data-practice-hand]")],
+  practiceHandLabel: document.getElementById("practiceHandLabel"),
+  handSplitLabel: document.getElementById("handSplitLabel"),
+  handSplitInput: document.getElementById("handSplitInput"),
   mistakeLogTitle: document.getElementById("mistakeLogTitle"),
   mistakeLogList: document.getElementById("mistakeLogList"),
   mistakeLogEmpty: document.getElementById("mistakeLogEmpty"),
@@ -804,7 +836,7 @@ function isPracticeTargetVisuallyActive(target, cueBoundaryTick = Infinity) {
       activeInput.targetId === target.id
     );
   return (
-    (activeByInput || state.playback.activeTargetIds.has(target.id)) &&
+    (activeByInput || state.playback.activeTargetIds.has(target.id) || state.autoAccompaniment.activeTargetIds.has(target.id)) &&
     target.startTick <= cueBoundaryTick
   );
 }
@@ -812,7 +844,7 @@ function isPracticeTargetVisuallyActive(target, cueBoundaryTick = Infinity) {
 function currentSoundingNotes() {
   const inputNotes = currentInputSoundingNotes();
   const waterfallNotes = state.waterfall ? [...(state.waterfallState.keyEdgeNotes || new Set())] : [];
-  const notes = new Set([...inputNotes, ...state.playback.activeNotes, ...waterfallNotes]);
+  const notes = new Set([...inputNotes, ...state.playback.activeNotes, ...state.autoAccompaniment.activeNotes, ...waterfallNotes]);
   return [...notes].sort((a, b) => a - b);
 }
 
@@ -923,6 +955,8 @@ function applyLanguage() {
   updateText(document.querySelector(".sustain-page-field span"), t("label.sustainPedal"));
   updateText(document.querySelector(".auto-follow-field span"), t("label.autoFollow"));
   updateText(document.querySelector(".tolerance-field span"), t("label.tolerance"));
+  updateText(els.practiceHandLabel, t("label.practiceHand"));
+  updateText(els.handSplitLabel, t("label.handSplit"));
   updateText(document.querySelector(".time-field span"), t("label.timeSignature"));
   updateText(document.querySelector(".key-field span"), t("label.keySignature"));
   updateText(els.liveSoundFieldLabel, t("label.liveInputSoundField"));
@@ -970,6 +1004,9 @@ function applyLanguage() {
   document.querySelector('[data-auto-follow-mode="beat"]').textContent = t("button.byBeat");
   document.querySelector('[data-tolerance-mode="off"]').textContent = t("button.off");
   document.querySelector('[data-tolerance-mode="on"]').textContent = t("button.on");
+  document.querySelector('[data-practice-hand="both"]').textContent = t("button.bothHands");
+  document.querySelector('[data-practice-hand="left"]').textContent = t("button.leftHand");
+  document.querySelector('[data-practice-hand="right"]').textContent = t("button.rightHand");
   document.querySelector('[data-flow-display="off"]').textContent = t("button.off");
   document.querySelector('[data-flow-display="on"]').textContent = t("button.on");
 
@@ -1096,6 +1133,8 @@ function readSettings() {
     const sustainPedalPage = window.localStorage.getItem(SETTINGS_FIELD_KEYS.sustainPedalPage);
     const autoFollowMode = window.localStorage.getItem(SETTINGS_FIELD_KEYS.autoFollowMode);
     const autoFollowTolerance = window.localStorage.getItem(SETTINGS_FIELD_KEYS.autoFollowTolerance);
+    const practiceHand = window.localStorage.getItem(SETTINGS_FIELD_KEYS.practiceHand);
+    const handSplitNote = window.localStorage.getItem(SETTINGS_FIELD_KEYS.handSplitNote);
     const timeSignature = window.localStorage.getItem(SETTINGS_FIELD_KEYS.timeSignature);
     const language = window.localStorage.getItem(SETTINGS_FIELD_KEYS.language);
     const playbackInstrument = window.localStorage.getItem(SETTINGS_FIELD_KEYS.playbackInstrument);
@@ -1114,6 +1153,8 @@ function readSettings() {
     if (["off", "half", "page"].includes(sustainPedalPage)) settings.sustainPedalPage = sustainPedalPage;
     if (["off", "beat"].includes(autoFollowMode)) settings.autoFollowMode = autoFollowMode;
     if (autoFollowTolerance !== null) settings.autoFollowTolerance = clampTolerance(autoFollowTolerance);
+    if (["both", "left", "right"].includes(practiceHand)) settings.practiceHand = practiceHand;
+    if (handSplitNote !== null) settings.handSplitNote = clampHandSplitNote(handSplitNote);
     if (/^\d+\/\d+$/.test(timeSignature || "")) settings.timeSignature = timeSignature;
     if (language) settings.language = normalizeLanguage(language);
     if (playbackInstrumentId(playbackInstrument)) settings.playbackInstrument = playbackInstrument;
@@ -1138,6 +1179,8 @@ function saveSettings() {
     sustainPedalPage: state.sustainPedalPage,
     autoFollowMode: state.autoFollowMode,
     autoFollowTolerance: state.autoFollowTolerance,
+    practiceHand: state.practiceHand,
+    handSplitNote: state.handSplitNote,
     timeSignature: timeSignatureKey(state.practice.timeSignature),
     language: state.language,
     playbackInstrument: state.playbackInstrument,
@@ -1159,6 +1202,8 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.sustainPedalPage, settings.sustainPedalPage);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.autoFollowMode, settings.autoFollowMode);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.autoFollowTolerance, String(settings.autoFollowTolerance));
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.practiceHand, settings.practiceHand);
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.handSplitNote, String(settings.handSplitNote));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.timeSignature, settings.timeSignature);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.language, settings.language);
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.playbackInstrument, settings.playbackInstrument);
@@ -1211,6 +1256,18 @@ function syncControlsFromState() {
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
+  els.practiceHandButtons.forEach((button) => {
+    const active = button.dataset.practiceHand === state.practiceHand;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  if (els.handSplitInput) {
+    els.handSplitInput.value = String(state.handSplitNote);
+    els.handSplitInput.closest(".hand-split-field")?.classList.toggle(
+      "hidden",
+      state.practiceHand === "both" || usesTrackHandAssignment()
+    );
+  }
   els.timeSignatureButtons.forEach((button) => {
     const active = button.dataset.timeSignature === timeSignatureKey(state.practice.timeSignature);
     button.classList.toggle("active", active);
@@ -1262,6 +1319,10 @@ function parseTimeSignatureKey(value) {
 
 function clampTolerance(value) {
   return Number(value) > 0 ? 50 : 0;
+}
+
+function clampHandSplitNote(value) {
+  return Math.max(MIDI_MIN, Math.min(MIDI_MAX, Math.round(Number(value) || 60)));
 }
 
 function syncRecordingControls() {
@@ -1422,6 +1483,12 @@ function applySavedSettings() {
   }
   if (Number.isFinite(settings.autoFollowTolerance)) {
     state.autoFollowTolerance = clampTolerance(settings.autoFollowTolerance);
+  }
+  if (["both", "left", "right"].includes(settings.practiceHand)) {
+    state.practiceHand = settings.practiceHand;
+  }
+  if (Number.isFinite(settings.handSplitNote)) {
+    state.handSplitNote = clampHandSplitNote(settings.handSplitNote);
   }
   if (typeof settings.timeSignature === "string") {
     state.practice.timeSignature = parseTimeSignatureKey(settings.timeSignature);
@@ -2521,6 +2588,7 @@ function renderWaterfall(playbackTick, options = {}) {
       : false;
     const activePlayback = item.targetId
       ? state.playback.activeTargetIds.has(item.targetId)
+        || state.autoAccompaniment.activeTargetIds.has(item.targetId)
       : playbackActive;
     const active = activeInput || activePlayback || Boolean(item.matched);
     const cue = (item.targetId && cueTargetIds.has(item.targetId)) || (!item.targetId && cueNotes.has(item.note));
@@ -2578,6 +2646,10 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   state.releasedWhileSustained.delete(note);
   const wrong = isWrongPracticeInputNote(note);
   state.autoFollow.pausedAfterManualNavigation = false;
+  if (state.practiceHand !== "both") {
+    state.autoAccompaniment.enabled = true;
+    playAutoAccompanimentForBeat(currentAutoFollowBeatStart());
+  }
   const matchedTarget = markAutoFollowNote(note);
   state.activeNotes.set(note, {
     velocity,
@@ -2596,6 +2668,7 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
 
 function isWrongPracticeInputNote(note) {
   if (!state.practice.measures.length || autoFollowBlockedByPlayback()) return false;
+  if (isCurrentAccompanimentNote(note)) return false;
   if (state.autoFollowTolerance !== 0) return false;
   const cueNotes = nextPracticeCueNotes();
   return cueNotes.size > 0 && !cueNotes.has(note);
@@ -2748,6 +2821,65 @@ function isPracticeNoteActive(note) {
   return isInputNoteVisuallyHeld(note);
 }
 
+function usesTrackHandAssignment(notes = state.practice.notes) {
+  const trackIndexes = new Set((notes || []).map((note) => note.trackIndex ?? 0));
+  return trackIndexes.size >= 2 && (notes || []).some((note) => note.trackRole === "secondary");
+}
+
+function handForPracticeNote(note, options = {}) {
+  const splitNote = clampHandSplitNote(options.splitNote ?? state.handSplitNote);
+  const useTracks = options.useTracks ?? usesTrackHandAssignment();
+  if (useTracks) return note.trackRole === "secondary" ? "left" : "right";
+  return note.note >= splitNote ? "right" : "left";
+}
+
+function assignPracticeHands() {
+  const useTracks = usesTrackHandAssignment(state.practice.notes);
+  const byId = new Map();
+  state.practice.notes.forEach((note) => {
+    note.hand = handForPracticeNote(note, { useTracks });
+    if (note.id) byId.set(note.id, note.hand);
+  });
+  state.practice.measures.forEach((measure) => {
+    (measure.notes || []).forEach((note) => {
+      note.hand = byId.get(note.id) || handForPracticeNote(note, { useTracks });
+    });
+  });
+}
+
+function isPracticeTargetJudged(target) {
+  return state.practiceHand === "both" || (target.hand || handForPracticeNote(target)) === state.practiceHand;
+}
+
+function isPracticeTargetAccompaniment(target) {
+  return state.practiceHand !== "both" && !isPracticeTargetJudged(target);
+}
+
+function practiceJudgmentTargets(targets) {
+  return (targets || []).filter((target) => isPracticeTargetJudged(target));
+}
+
+function allTargetsForBeat(beatStart) {
+  const gridTicks = practiceGridTicks();
+  const beatEnd = beatStart + gridTicks;
+  return (state.practice.notes || [])
+    .filter((target) => target.startTick >= beatStart && target.startTick < beatEnd)
+    .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+}
+
+function accompanimentTargetsForBeat(beatStart) {
+  if (state.practiceHand === "both") return [];
+  return allTargetsForBeat(beatStart).filter((target) => isPracticeTargetAccompaniment(target));
+}
+
+function isCurrentAccompanimentNote(note) {
+  return accompanimentTargetsForBeat(currentAutoFollowBeatStart()).some((target) => target.note === note);
+}
+
+function autoAccompanimentKey(beatStart, targets) {
+  return `${beatStart}:${targets.map((target) => target.id).sort().join("|")}`;
+}
+
 function displayFilename(filename, fallback) {
   const value = String(filename || fallback || "").trim();
   if (value.length <= DISPLAY_FILENAME_MAX) return value;
@@ -2756,6 +2888,7 @@ function displayFilename(filename, fallback) {
 
 function applyParsedScore(parsed, filename, typeLabel, source = {}) {
   cancelAutoFollowAnimation();
+  resetAutoAccompaniment();
   clearMistakes();
   const normalized = trimLeadingScoreSilence(parsed);
   const originalTempo = normalized.microsecondsPerQuarter || 500000;
@@ -2777,6 +2910,8 @@ function applyParsedScore(parsed, filename, typeLabel, source = {}) {
   state.practice.sourceType = typeLabel;
   state.practice.viewStartTick = 0;
   state.practice.measures = normalized.variableMeasures ? normalized.measures : buildMeasuresFromPracticeNotes(state.practice.notes);
+  assignPracticeHands();
+  state.autoAccompaniment.enabled = state.practiceHand !== "both";
   if (normalized.keySignature && MAJOR_KEY_SIGNATURES[normalized.keySignature]) {
     state.keySignature = normalized.keySignature;
     saveSettings();
@@ -3574,6 +3709,7 @@ function seekPracticeView(tick) {
   if (!state.practice.measures.length) return;
   stopMeasurePlayback();
   stopRhythmFollow();
+  resetAutoAccompaniment({ keepEnabled: true, clearPlayed: true });
   const nextTick = clampPracticeViewStartTick(Number(tick) || 0);
   state.practice.viewStartTick = nextTick;
   state.practice.currentMeasure = measureIndexForTick(nextTick);
@@ -3604,6 +3740,7 @@ function resetAutoFollowBeat(beatStart = null, options = {}) {
     state.autoFollow.playedNotesByBeat = new Map();
     state.autoFollow.correctTargetIds = new Set();
     state.autoFollow.finishingRun = false;
+    if (state.autoAccompaniment?.playedKeys) state.autoAccompaniment.playedKeys = new Set();
   }
 }
 
@@ -3681,11 +3818,7 @@ function restartRhythmFollowFromCurrentTick() {
 }
 
 function targetsForBeat(beatStart) {
-  const gridTicks = practiceGridTicks();
-  const beatEnd = beatStart + gridTicks;
-  return (state.practice.notes || [])
-    .filter((target) => target.startTick >= beatStart && target.startTick < beatEnd)
-    .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+  return practiceJudgmentTargets(allTargetsForBeat(beatStart));
 }
 
 function nextPracticeCueNotes() {
@@ -3766,14 +3899,14 @@ function computeNextPrimaryCueTargets() {
 
 function nextUnmatchedTargetGroupAfterTick(tick) {
   const remainingTargets = (state.practice.notes || [])
-    .filter((target) => target.startTick >= tick && !isAutoFollowTargetMatched(target))
+    .filter((target) => isPracticeTargetJudged(target) && target.startTick >= tick && !isAutoFollowTargetMatched(target))
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
   return autoFollowTargetGroups(remainingTargets)[0] || [];
 }
 
 function firstTargetGroupAtOrAfterTick(tick) {
   const targets = (state.practice.notes || [])
-    .filter((target) => target.startTick >= tick)
+    .filter((target) => isPracticeTargetJudged(target) && target.startTick >= tick)
     .sort((a, b) => a.startTick - b.startTick || a.note - b.note);
   return autoFollowTargetGroups(targets)[0] || [];
 }
@@ -3834,6 +3967,7 @@ function targetForPlayedNote(note, currentBeatStart) {
   const currentBeatEnd = currentBeatStart + gridTicks;
   const candidates = (state.practice.notes || [])
     .filter((target) => (
+      isPracticeTargetJudged(target) &&
       target.note === note &&
       target.startTick >= currentBeatStart &&
       target.startTick < currentBeatEnd
@@ -3846,6 +3980,101 @@ function targetForPlayedNote(note, currentBeatStart) {
         a.startTick - b.startTick;
     });
   return candidates.find((target) => !isAutoFollowTargetMatched(target)) || candidates[0] || null;
+}
+
+function resetAutoAccompaniment(options = {}) {
+  state.autoAccompaniment.timers.forEach((timer) => window.clearTimeout(timer));
+  state.autoAccompaniment.timers = [];
+  stopAudioNodes(state.autoAccompaniment.activeNodes, state.autoAccompaniment.activeNodes, { fadeSeconds: 0.08 });
+  state.autoAccompaniment.activeNotes = new Set();
+  state.autoAccompaniment.activeTargetIds = new Set();
+  if (options.clearPlayed) state.autoAccompaniment.playedKeys = new Set();
+  if (!options.keepEnabled) {
+    state.autoAccompaniment.enabled = false;
+    state.autoAccompaniment.playedKeys = new Set();
+  }
+}
+
+async function ensureAutoAccompanimentAudioContext() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  if (!state.autoAccompaniment.audioContext) {
+    state.autoAccompaniment.audioContext = new AudioContextClass();
+  }
+  const audioContext = state.autoAccompaniment.audioContext;
+  if (audioContext.state === "suspended") {
+    try {
+      await audioContext.resume();
+    } catch {
+      return null;
+    }
+  }
+  unlockPlaybackAudio(audioContext, state.autoAccompaniment.activeNodes);
+  return audioContext;
+}
+
+function renderAutoAccompanimentState() {
+  updateKeyboardActive();
+  syncCurrentChord();
+  if (state.waterfall) {
+    renderWaterfall(state.playback.currentTick || state.practice.viewStartTick || 0, { force: true });
+  } else {
+    drawStaff();
+  }
+}
+
+function playAutoAccompanimentForBeat(beatStart = currentAutoFollowBeatStart()) {
+  if (state.practiceHand === "both" || !state.autoAccompaniment.enabled || !state.practice.measures.length) return;
+  const targets = accompanimentTargetsForBeat(beatStart);
+  if (!targets.length) return;
+  const key = autoAccompanimentKey(beatStart, targets);
+  if (state.autoAccompaniment.playedKeys.has(key)) return;
+  state.autoAccompaniment.playedKeys.add(key);
+
+  const secondsPerTick = secondsPerPracticeTick();
+  ensureAutoAccompanimentAudioContext().then((audioContext) => {
+    const audioReady = audioContext && audioContext.state !== "suspended";
+    targets.forEach((target) => {
+      const delayMs = Math.max(0, (target.startTick - beatStart) * secondsPerTick * 1000);
+      const durationSeconds = Math.max(0.08, (target.endTick - target.startTick) * secondsPerTick);
+      if (audioReady) {
+        schedulePracticeTone(
+          audioContext,
+          target.note,
+          audioContext.currentTime + delayMs / 1000,
+          durationSeconds,
+          state.autoAccompaniment.activeNodes,
+          0.9
+        );
+      }
+      const startTimer = window.setTimeout(() => {
+        state.autoAccompaniment.activeNotes.add(target.note);
+        state.autoAccompaniment.activeTargetIds.add(target.id);
+        renderAutoAccompanimentState();
+      }, delayMs);
+      const stopTimer = window.setTimeout(() => {
+        state.autoAccompaniment.activeTargetIds.delete(target.id);
+        const stillActive = [...state.autoAccompaniment.activeTargetIds]
+          .some((id) => state.practice.notes.find((note) => note.id === id)?.note === target.note);
+        if (!stillActive) state.autoAccompaniment.activeNotes.delete(target.note);
+        renderAutoAccompanimentState();
+      }, delayMs + durationSeconds * 1000 + 90);
+      state.autoAccompaniment.timers.push(startTimer, stopTimer);
+    });
+  });
+}
+
+function autoAdvanceAfterAccompanimentOnlyBeat(beatStart) {
+  const targets = accompanimentTargetsForBeat(beatStart);
+  if (!targets.length) return false;
+  playAutoAccompanimentForBeat(beatStart);
+  const maxEndTick = Math.max(...targets.map((target) => target.endTick));
+  const delayMs = Math.max(180, Math.min(4000, (maxEndTick - beatStart) * secondsPerPracticeTick() * 1000 + 120));
+  state.autoFollow.emptyAdvanceTimer = window.setTimeout(() => {
+    state.autoFollow.emptyAdvanceTimer = 0;
+    if (Math.abs(currentAutoFollowBeatStart() - beatStart) < 1) advancePracticeGrid(1);
+  }, delayMs);
+  return true;
 }
 
 function beatStartForTick(tick) {
@@ -3903,7 +4132,7 @@ function evaluateAutoFollowBeat(options = {}) {
   if (state.autoFollowTolerance !== 0) {
     const targets = targetsForBeat(beatStart);
     if (!targets.length) {
-      if (options.advanceEmptyBeat) advancePracticeGrid(1);
+      if (options.advanceEmptyBeat && !autoAdvanceAfterAccompanimentOnlyBeat(beatStart)) advancePracticeGrid(1);
       return;
     }
     if (!isTargetGroupMatched(targets)) return;
@@ -3923,7 +4152,7 @@ function evaluateAutoFollowBeat(options = {}) {
 
   const currentGroup = lockedAutoFollowTargetGroup();
   if (!currentGroup.length) {
-    if (options.advanceEmptyBeat) advancePracticeGrid(1);
+    if (options.advanceEmptyBeat && !autoAdvanceAfterAccompanimentOnlyBeat(currentAutoFollowBeatStart())) advancePracticeGrid(1);
     return;
   }
   if (!isTargetGroupMatched(currentGroup)) return;
@@ -3992,6 +4221,8 @@ function finishPracticeRun() {
   if (!state.practice.measures.length) return;
   cancelAutoFollowAnimation();
   stopMeasurePlayback();
+  resetAutoAccompaniment();
+  state.autoAccompaniment.enabled = state.practiceHand !== "both";
   state.practice.viewStartTick = 0;
   state.practice.currentMeasure = 0;
   state.autoFollow.finishingRun = false;
@@ -4064,6 +4295,7 @@ function animatePracticeViewToTick(targetTick, options = {}) {
     state.practice.currentMeasure = measureIndexForTick(endTick);
     state.autoFollow.animating = false;
     resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: Boolean(options.clearPlayed) });
+    playAutoAccompanimentForBeat(currentAutoFollowBeatStart());
     if (options.finishPracticeRun) {
       finishPracticeRun();
       return;
@@ -5374,7 +5606,7 @@ function updateKeyboardActive() {
   els.keyboard.querySelectorAll(".key").forEach((key) => {
     const note = Number(key.dataset.note);
     const inputHeld = isInputNoteVisuallyHeld(note);
-    const active = inputHeld || state.playback.activeNotes.has(note);
+    const active = inputHeld || state.playback.activeNotes.has(note) || state.autoAccompaniment.activeNotes.has(note);
     const cue = cueNoteSet.has(note);
     const wrong = Boolean(state.activeNotes.get(note)?.wrong);
     key.classList.toggle("active", active);
@@ -6048,6 +6280,33 @@ function setupEvents() {
       saveSettings();
       evaluateAutoFollowBeat();
     });
+  });
+  els.practiceHandButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const nextHand = button.dataset.practiceHand;
+      if (!["both", "left", "right"].includes(nextHand)) return;
+      state.practiceHand = nextHand;
+      cancelAutoFollowAnimation();
+      resetAutoAccompaniment({ clearPlayed: true });
+      state.autoAccompaniment.enabled = state.practiceHand !== "both";
+      resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: true });
+      syncControlsFromState();
+      saveSettings();
+      updateAll();
+      scheduleAutoFollowEmptyBeatCheck();
+    });
+  });
+  els.handSplitInput?.addEventListener("change", () => {
+    state.handSplitNote = clampHandSplitNote(els.handSplitInput.value);
+    assignPracticeHands();
+    cancelAutoFollowAnimation();
+    resetAutoAccompaniment({ clearPlayed: true });
+    state.autoAccompaniment.enabled = state.practiceHand !== "both";
+    resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: true });
+    syncControlsFromState();
+    saveSettings();
+    updateAll();
+    scheduleAutoFollowEmptyBeatCheck();
   });
   els.timeSignatureButtons.forEach((button) => {
     button.addEventListener("click", () => {

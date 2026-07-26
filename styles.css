@@ -432,6 +432,18 @@ select {
   padding: 0 34px 0 11px;
 }
 
+.field input[type="number"] {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--soft-line);
+  border-radius: 8px;
+  background: white;
+  color: var(--ink);
+  padding: 0 11px;
+  font: inherit;
+  font-weight: 750;
+}
+
 .segmented {
   min-height: 34px;
   display: grid;
