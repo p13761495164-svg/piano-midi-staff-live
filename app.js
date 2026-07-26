@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v284";
+const APP_VERSION = "v285";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -1129,6 +1129,10 @@ function displayNoteForKeyboard(note, tick = state.practice.viewStartTick || 0) 
   return whiteKeyNoteForRealNote(note, tick);
 }
 
+function keyboardLabelForNote(note, tick = state.practice.viewStartTick || 0) {
+  return whiteKeyModeEnabled() && isWhite(note) ? noteName(realNoteForWhiteKeyNote(note, tick)) : noteName(note);
+}
+
 function staffPitchName(note, tick = state.practice.viewStartTick || 0) {
   const pitchClass = ((note % 12) + 12) % 12;
   const key = MAJOR_KEY_SIGNATURES[keySignatureAtTick(tick)] || MAJOR_KEY_SIGNATURES.C;
@@ -1650,13 +1654,13 @@ function drawStaff() {
 function drawWhiteKeyModeCenterLabel(svg) {
   if (!whiteKeyModeEnabled()) return;
   const x = 322;
-  const y = yForNote(60, "treble") + 28;
+  const y = (TREBLE_LINE_YS[TREBLE_LINE_YS.length - 1] + BASS_LINE_YS[0]) / 2;
   const label = createSvg("text", {
     x,
     y,
     class: "white-key-center-label"
   });
-  label.textContent = noteName(centerRealNoteForWhiteKeyMode());
+  label.textContent = keyboardLabelForNote(60);
   svg.appendChild(label);
 }
 
@@ -2590,9 +2594,7 @@ function makeKey(note, className) {
   if (isC) key.classList.add("c-key-label");
   if (note === 60) key.classList.add("middle-c-key");
   key.dataset.note = String(note);
-  const keyLabel = note === 60 && whiteKeyModeEnabled()
-    ? noteName(centerRealNoteForWhiteKeyMode())
-    : noteName(note);
+  const keyLabel = keyboardLabelForNote(note);
   key.setAttribute("aria-label", keyLabel);
   key.textContent = className === "black-key" ? "" : isC ? keyLabel : "";
   key.addEventListener("pointerdown", (event) => {
@@ -5737,9 +5739,7 @@ function updateKeyboardActive() {
   els.keyboard.querySelectorAll(".key").forEach((key) => {
     const note = Number(key.dataset.note);
     if (isWhite(note) && note % 12 === 0) {
-      const keyLabel = note === 60 && whiteKeyModeEnabled()
-        ? noteName(centerRealNoteForWhiteKeyMode())
-        : noteName(note);
+      const keyLabel = keyboardLabelForNote(note);
       key.textContent = keyLabel;
       key.setAttribute("aria-label", keyLabel);
     }
