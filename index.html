@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.png?v=244" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon.png?v=244">
-  <link rel="stylesheet" href="styles.css?v=281">
+  <link rel="stylesheet" href="styles.css?v=282">
 </head>
 <body>
   <main class="app-shell">
@@ -126,10 +126,10 @@
                   <button class="mode-option" type="button" data-practice-hand="right" aria-pressed="false">右手</button>
                 </div>
               </div>
-              <label class="field hand-split-field">
+              <div class="field hand-split-field">
                 <span id="handSplitLabel">分界音</span>
-                <input id="handSplitInput" type="number" min="21" max="108" step="1" value="60" inputmode="numeric">
-              </label>
+                <button id="handSplitButton" class="mode-option hand-split-button" type="button">C4</button>
+              </div>
             </div>
             <div class="settings-group sound-settings">
               <div id="soundSettingsTitle" class="settings-group-title">声音</div>
@@ -236,6 +236,6 @@
     </div>
   </div>
   <div id="pdfExportRoot" class="pdf-export-root" aria-hidden="true"></div>
-  <script src="app.js?v=281"></script>
+  <script src="app.js?v=282"></script>
 </body>
 </html>

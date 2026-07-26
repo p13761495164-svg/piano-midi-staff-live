@@ -444,6 +444,12 @@ select {
   font-weight: 750;
 }
 
+.hand-split-button {
+  width: 100%;
+  border: 1px solid var(--soft-line);
+  border-radius: 8px;
+}
+
 .segmented {
   min-height: 34px;
   display: grid;

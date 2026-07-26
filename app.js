@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v281";
+const APP_VERSION = "v282";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -220,6 +220,7 @@ const I18N = {
     "button.bothHands": "双手",
     "button.leftHand": "左手",
     "button.rightHand": "右手",
+    "button.chooseSplit": "按琴键选择",
     "button.start": "开头",
     "button.play": "播放",
     "button.pause": "暂停",
@@ -323,6 +324,7 @@ const I18N = {
     "button.bothHands": "両手",
     "button.leftHand": "左手",
     "button.rightHand": "右手",
+    "button.chooseSplit": "鍵盤で選択",
     "button.start": "先頭",
     "button.play": "再生",
     "button.pause": "一時停止",
@@ -426,6 +428,7 @@ const I18N = {
     "button.bothHands": "Both",
     "button.leftHand": "Left",
     "button.rightHand": "Right",
+    "button.chooseSplit": "Press a Key",
     "button.start": "Start",
     "button.play": "Play",
     "button.pause": "Pause",
@@ -566,6 +569,7 @@ const state = {
   rhythmFollow: false,
   practiceHand: "both",
   handSplitNote: 60,
+  selectingHandSplit: false,
   pedalStep: "on",
   sustainPedalPage: "off",
   lastSustainPedalPageAt: 0,
@@ -747,7 +751,7 @@ const els = {
   practiceHandButtons: [...document.querySelectorAll("[data-practice-hand]")],
   practiceHandLabel: document.getElementById("practiceHandLabel"),
   handSplitLabel: document.getElementById("handSplitLabel"),
-  handSplitInput: document.getElementById("handSplitInput"),
+  handSplitButton: document.getElementById("handSplitButton"),
   mistakeLogTitle: document.getElementById("mistakeLogTitle"),
   mistakeLogList: document.getElementById("mistakeLogList"),
   mistakeLogEmpty: document.getElementById("mistakeLogEmpty"),
@@ -1261,9 +1265,11 @@ function syncControlsFromState() {
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
-  if (els.handSplitInput) {
-    els.handSplitInput.value = String(state.handSplitNote);
-    els.handSplitInput.closest(".hand-split-field")?.classList.toggle(
+  if (els.handSplitButton) {
+    els.handSplitButton.textContent = state.selectingHandSplit ? t("button.chooseSplit") : noteName(state.handSplitNote);
+    els.handSplitButton.classList.toggle("active", state.selectingHandSplit);
+    els.handSplitButton.setAttribute("aria-pressed", state.selectingHandSplit ? "true" : "false");
+    els.handSplitButton.closest(".hand-split-field")?.classList.toggle(
       "hidden",
       state.practiceHand === "both" || usesTrackHandAssignment()
     );
@@ -1323,6 +1329,20 @@ function clampTolerance(value) {
 
 function clampHandSplitNote(value) {
   return Math.max(MIDI_MIN, Math.min(MIDI_MAX, Math.round(Number(value) || 60)));
+}
+
+function setHandSplitNote(note) {
+  state.handSplitNote = clampHandSplitNote(note);
+  state.selectingHandSplit = false;
+  assignPracticeHands();
+  cancelAutoFollowAnimation();
+  resetAutoAccompaniment({ clearPlayed: true });
+  state.autoAccompaniment.enabled = state.practiceHand !== "both";
+  resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: true });
+  syncControlsFromState();
+  saveSettings();
+  updateAll();
+  scheduleAutoFollowEmptyBeatCheck();
 }
 
 function syncRecordingControls() {
@@ -2630,6 +2650,10 @@ function renderWaterfall(playbackTick, options = {}) {
 
 function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   if (note < MIDI_MIN || note > MIDI_MAX) return;
+  if (state.selectingHandSplit) {
+    setHandSplitNote(note);
+    return;
+  }
   const duplicateHeldNote = state.activeNotes.has(note) && !state.releasedWhileSustained.has(note);
   if (duplicateHeldNote) {
     const active = state.activeNotes.get(note);
@@ -6286,6 +6310,7 @@ function setupEvents() {
       const nextHand = button.dataset.practiceHand;
       if (!["both", "left", "right"].includes(nextHand)) return;
       state.practiceHand = nextHand;
+      if (state.practiceHand === "both" || usesTrackHandAssignment()) state.selectingHandSplit = false;
       cancelAutoFollowAnimation();
       resetAutoAccompaniment({ clearPlayed: true });
       state.autoAccompaniment.enabled = state.practiceHand !== "both";
@@ -6296,17 +6321,9 @@ function setupEvents() {
       scheduleAutoFollowEmptyBeatCheck();
     });
   });
-  els.handSplitInput?.addEventListener("change", () => {
-    state.handSplitNote = clampHandSplitNote(els.handSplitInput.value);
-    assignPracticeHands();
-    cancelAutoFollowAnimation();
-    resetAutoAccompaniment({ clearPlayed: true });
-    state.autoAccompaniment.enabled = state.practiceHand !== "both";
-    resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: true });
+  els.handSplitButton?.addEventListener("click", () => {
+    state.selectingHandSplit = !state.selectingHandSplit;
     syncControlsFromState();
-    saveSettings();
-    updateAll();
-    scheduleAutoFollowEmptyBeatCheck();
   });
   els.timeSignatureButtons.forEach((button) => {
     button.addEventListener("click", () => {
