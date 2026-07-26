@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v282";
+const APP_VERSION = "v283";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -2672,7 +2672,6 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   state.autoFollow.pausedAfterManualNavigation = false;
   if (state.practiceHand !== "both") {
     state.autoAccompaniment.enabled = true;
-    playAutoAccompanimentForBeat(currentAutoFollowBeatStart());
   }
   const matchedTarget = markAutoFollowNote(note);
   state.activeNotes.set(note, {
@@ -4047,7 +4046,7 @@ function renderAutoAccompanimentState() {
   }
 }
 
-function playAutoAccompanimentForBeat(beatStart = currentAutoFollowBeatStart()) {
+function playAutoAccompanimentForBeat(beatStart = currentAutoFollowBeatStart(), options = {}) {
   if (state.practiceHand === "both" || !state.autoAccompaniment.enabled || !state.practice.measures.length) return;
   const targets = accompanimentTargetsForBeat(beatStart);
   if (!targets.length) return;
@@ -4056,10 +4055,12 @@ function playAutoAccompanimentForBeat(beatStart = currentAutoFollowBeatStart()) 
   state.autoAccompaniment.playedKeys.add(key);
 
   const secondsPerTick = secondsPerPracticeTick();
+  const referenceTick = Number.isFinite(options.referenceTick) ? options.referenceTick : beatStart;
+  const baseDelayMs = Math.max(0, Number(options.baseDelayMs) || 0);
   ensureAutoAccompanimentAudioContext().then((audioContext) => {
     const audioReady = audioContext && audioContext.state !== "suspended";
     targets.forEach((target) => {
-      const delayMs = Math.max(0, (target.startTick - beatStart) * secondsPerTick * 1000);
+      const delayMs = baseDelayMs + Math.max(0, (target.startTick - referenceTick) * secondsPerTick * 1000);
       const durationSeconds = Math.max(0.08, (target.endTick - target.startTick) * secondsPerTick);
       if (audioReady) {
         schedulePracticeTone(
@@ -4160,6 +4161,7 @@ function evaluateAutoFollowBeat(options = {}) {
       return;
     }
     if (!isTargetGroupMatched(targets)) return;
+    playAutoAccompanimentForBeat(beatStart, { referenceTick: beatStart, baseDelayMs: 55 });
     const nextGroup = nextUnmatchedTargetGroupAfterTick(beatStart + practiceGridTicks());
     if (!nextGroup.length) {
       startPracticeRunTailFinish();
@@ -4182,6 +4184,8 @@ function evaluateAutoFollowBeat(options = {}) {
   if (!isTargetGroupMatched(currentGroup)) return;
 
   const groupEndTick = Math.max(...currentGroup.map((target) => target.startTick));
+  const groupStartTick = Math.min(...currentGroup.map((target) => target.startTick));
+  playAutoAccompanimentForBeat(currentAutoFollowBeatStart(), { referenceTick: groupStartTick, baseDelayMs: 55 });
   const nextGroup = nextUnmatchedTargetGroupAfterTick(groupEndTick + 1);
   if (!nextGroup.length) {
     startPracticeRunTailFinish();
@@ -4319,7 +4323,6 @@ function animatePracticeViewToTick(targetTick, options = {}) {
     state.practice.currentMeasure = measureIndexForTick(endTick);
     state.autoFollow.animating = false;
     resetAutoFollowBeat(currentAutoFollowBeatStart(), { clearPlayed: Boolean(options.clearPlayed) });
-    playAutoAccompanimentForBeat(currentAutoFollowBeatStart());
     if (options.finishPracticeRun) {
       finishPracticeRun();
       return;
