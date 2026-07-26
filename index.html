@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.png?v=244" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon.png?v=244">
-  <link rel="stylesheet" href="styles.css?v=283">
+  <link rel="stylesheet" href="styles.css?v=284">
 </head>
 <body>
   <main class="app-shell">
@@ -79,6 +79,13 @@
                   <button class="mode-option active" type="button" data-flow-display="off" aria-pressed="true">关</button>
                   <button class="mode-option" type="button" data-flow-display="on" aria-pressed="false">开</button>
                 </div>
+              </div>
+              <div class="field white-key-mode-field">
+                <span id="whiteKeyModeFieldLabel">白键演奏</span>
+                <label class="white-key-mode-toggle">
+                  <input id="whiteKeyModeToggle" type="checkbox">
+                  <span id="whiteKeyModeToggleLabel">调内音使用白键</span>
+                </label>
               </div>
             </div>
             <div class="settings-group practice-settings">
@@ -236,6 +243,6 @@
     </div>
   </div>
   <div id="pdfExportRoot" class="pdf-export-root" aria-hidden="true"></div>
-  <script src="app.js?v=283"></script>
+  <script src="app.js?v=284"></script>
 </body>
 </html>

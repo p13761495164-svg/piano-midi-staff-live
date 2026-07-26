@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v283";
+const APP_VERSION = "v284";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -54,6 +54,7 @@ const SETTINGS_FIELD_KEYS = {
   liveInputSound: "piano-midi-staff-live-input-sound",
   silentPlayback: "piano-midi-staff-silent-playback",
   robotPerformance: "piano-midi-staff-robot-performance",
+  whiteKeyMode: "piano-midi-staff-white-key-mode",
   flowDisplay: "piano-midi-staff-flow-display",
   waterfall: "piano-midi-staff-waterfall",
   fullUnlocked: "piano-midi-staff-full-unlocked"
@@ -186,6 +187,8 @@ const I18N = {
     "label.robotPerformance": "机器人演奏模式",
     "label.waterfallField": "瀑布流",
     "label.waterfall": "瀑布流播放",
+    "label.whiteKeyModeField": "白键演奏",
+    "label.whiteKeyMode": "调内音使用白键",
     "label.flowDisplay": "流动显示",
     "label.displaySettings": "显示",
     "label.practiceSettings": "练习",
@@ -290,6 +293,8 @@ const I18N = {
     "label.robotPerformance": "ロボット演奏モード",
     "label.waterfallField": "滝表示",
     "label.waterfall": "滝表示で再生",
+    "label.whiteKeyModeField": "白鍵演奏",
+    "label.whiteKeyMode": "調内音を白鍵で弾く",
     "label.flowDisplay": "フロー表示",
     "label.displaySettings": "表示",
     "label.practiceSettings": "練習",
@@ -394,6 +399,8 @@ const I18N = {
     "label.robotPerformance": "Robot Performance",
     "label.waterfallField": "Waterfall",
     "label.waterfall": "Waterfall Playback",
+    "label.whiteKeyModeField": "White Keys",
+    "label.whiteKeyMode": "Play In-Key Notes on White Keys",
     "label.flowDisplay": "Flow View",
     "label.displaySettings": "Display",
     "label.practiceSettings": "Practice",
@@ -561,6 +568,7 @@ const state = {
   liveInputSound: false,
   silentPlayback: false,
   robotPerformance: false,
+  whiteKeyMode: false,
   waterfall: false,
   flowDisplay: true,
   fullUnlocked: false,
@@ -724,6 +732,9 @@ const els = {
   robotPerformanceToggle: document.getElementById("robotPerformanceToggle"),
   robotPerformanceFieldLabel: document.getElementById("robotPerformanceFieldLabel"),
   robotPerformanceToggleLabel: document.getElementById("robotPerformanceToggleLabel"),
+  whiteKeyModeToggle: document.getElementById("whiteKeyModeToggle"),
+  whiteKeyModeFieldLabel: document.getElementById("whiteKeyModeFieldLabel"),
+  whiteKeyModeToggleLabel: document.getElementById("whiteKeyModeToggleLabel"),
   waterfallToggle: document.getElementById("waterfallToggle"),
   waterfallFieldLabel: document.getElementById("waterfallFieldLabel"),
   waterfallToggleLabel: document.getElementById("waterfallToggleLabel"),
@@ -969,6 +980,8 @@ function applyLanguage() {
   updateText(els.playbackInstrumentLabel, t("label.playbackInstrument"));
   updateText(els.robotPerformanceFieldLabel, t("label.robotPerformanceField"));
   updateText(els.robotPerformanceToggleLabel, t("label.robotPerformance"));
+  updateText(els.whiteKeyModeFieldLabel, t("label.whiteKeyModeField"));
+  updateText(els.whiteKeyModeToggleLabel, t("label.whiteKeyMode"));
   updateText(els.waterfallFieldLabel, t("label.waterfallField"));
   updateText(els.waterfallToggleLabel, t("label.waterfall"));
   updateText(els.flowDisplayLabel, t("label.flowDisplay"));
@@ -1065,6 +1078,57 @@ function isWhite(note) {
   return WHITE_PATTERN.has(note % 12);
 }
 
+function whiteKeyModeEnabled() {
+  return Boolean(state.whiteKeyMode);
+}
+
+function whiteKeyIndex(note) {
+  const octave = Math.floor(note / 12);
+  const pitchClass = ((note % 12) + 12) % 12;
+  const whiteIndexInOctave = { 0: 0, 2: 1, 4: 2, 5: 3, 7: 4, 9: 5, 11: 6 }[pitchClass];
+  return whiteIndexInOctave === undefined ? null : octave * 7 + whiteIndexInOctave;
+}
+
+function centerRealNoteForWhiteKeyMode(tick = state.practice.viewStartTick || 0) {
+  const key = MAJOR_KEY_SIGNATURES[keySignatureAtTick(tick)] || MAJOR_KEY_SIGNATURES.C;
+  const tonic = key.tones[0];
+  let best = tonic;
+  let bestDistance = Infinity;
+  for (let note = MIDI_MIN; note <= MIDI_MAX; note += 1) {
+    if (note % 12 !== tonic) continue;
+    const distance = Math.abs(note - 60);
+    if (distance < bestDistance || (distance === bestDistance && note < best)) {
+      best = note;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+function realNoteForWhiteKeyNote(whiteNote, tick = state.practice.viewStartTick || 0) {
+  if (!whiteKeyModeEnabled() || !isWhite(whiteNote)) return whiteNote;
+  const centerIndex = whiteKeyIndex(60);
+  const keyIndex = whiteKeyIndex(whiteNote);
+  if (centerIndex === null || keyIndex === null) return whiteNote;
+  const stepDelta = keyIndex - centerIndex;
+  const octaveDelta = Math.floor(stepDelta / MAJOR_SCALE_OFFSETS.length);
+  const degree = ((stepDelta % MAJOR_SCALE_OFFSETS.length) + MAJOR_SCALE_OFFSETS.length) % MAJOR_SCALE_OFFSETS.length;
+  const realNote = centerRealNoteForWhiteKeyMode(tick) + octaveDelta * 12 + MAJOR_SCALE_OFFSETS[degree];
+  return realNote >= MIDI_MIN && realNote <= MIDI_MAX ? realNote : whiteNote;
+}
+
+function whiteKeyNoteForRealNote(realNote, tick = state.practice.viewStartTick || 0) {
+  if (!whiteKeyModeEnabled()) return realNote;
+  for (let note = MIDI_MIN; note <= MIDI_MAX; note += 1) {
+    if (isWhite(note) && realNoteForWhiteKeyNote(note, tick) === realNote) return note;
+  }
+  return realNote;
+}
+
+function displayNoteForKeyboard(note, tick = state.practice.viewStartTick || 0) {
+  return whiteKeyNoteForRealNote(note, tick);
+}
+
 function staffPitchName(note, tick = state.practice.viewStartTick || 0) {
   const pitchClass = ((note % 12) + 12) % 12;
   const key = MAJOR_KEY_SIGNATURES[keySignatureAtTick(tick)] || MAJOR_KEY_SIGNATURES.C;
@@ -1145,6 +1209,7 @@ function readSettings() {
     const liveInputSound = window.localStorage.getItem(SETTINGS_FIELD_KEYS.liveInputSound);
     const silentPlayback = window.localStorage.getItem(SETTINGS_FIELD_KEYS.silentPlayback);
     const robotPerformance = window.localStorage.getItem(SETTINGS_FIELD_KEYS.robotPerformance);
+    const whiteKeyMode = window.localStorage.getItem(SETTINGS_FIELD_KEYS.whiteKeyMode);
     const flowDisplay = window.localStorage.getItem(SETTINGS_FIELD_KEYS.flowDisplay);
     const waterfall = window.localStorage.getItem(SETTINGS_FIELD_KEYS.waterfall);
     const fullUnlocked = window.localStorage.getItem(SETTINGS_FIELD_KEYS.fullUnlocked);
@@ -1165,6 +1230,7 @@ function readSettings() {
     if (liveInputSound === "true" || liveInputSound === "false") settings.liveInputSound = liveInputSound === "true";
     if (silentPlayback === "true" || silentPlayback === "false") settings.silentPlayback = silentPlayback === "true";
     if (robotPerformance === "true" || robotPerformance === "false") settings.robotPerformance = robotPerformance === "true";
+    if (whiteKeyMode === "true" || whiteKeyMode === "false") settings.whiteKeyMode = whiteKeyMode === "true";
     if (flowDisplay === "true" || flowDisplay === "false") settings.flowDisplay = flowDisplay === "true";
     if (waterfall === "true" || waterfall === "false") settings.waterfall = waterfall === "true";
     if (fullUnlocked === "true" || fullUnlocked === "false") settings.fullUnlocked = fullUnlocked === "true";
@@ -1191,6 +1257,7 @@ function saveSettings() {
     liveInputSound: state.liveInputSound,
     silentPlayback: state.silentPlayback,
     robotPerformance: state.robotPerformance,
+    whiteKeyMode: state.whiteKeyMode,
     flowDisplay: state.flowDisplay,
     waterfall: state.waterfall,
     fullUnlocked: state.fullUnlocked,
@@ -1214,6 +1281,7 @@ function saveSettings() {
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.liveInputSound, String(settings.liveInputSound));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.silentPlayback, String(settings.silentPlayback));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.robotPerformance, String(settings.robotPerformance));
+    window.localStorage.setItem(SETTINGS_FIELD_KEYS.whiteKeyMode, String(settings.whiteKeyMode));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.flowDisplay, String(settings.flowDisplay));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.waterfall, String(settings.waterfall));
     window.localStorage.setItem(SETTINGS_FIELD_KEYS.fullUnlocked, String(settings.fullUnlocked));
@@ -1300,6 +1368,11 @@ function syncControlsFromState() {
     els.robotPerformanceToggle.checked = state.robotPerformance;
     const wrapper = els.robotPerformanceToggle.closest(".robot-performance-toggle");
     if (wrapper) wrapper.classList.toggle("active", state.robotPerformance);
+  }
+  if (els.whiteKeyModeToggle) {
+    els.whiteKeyModeToggle.checked = state.whiteKeyMode;
+    const wrapper = els.whiteKeyModeToggle.closest(".white-key-mode-toggle");
+    if (wrapper) wrapper.classList.toggle("active", state.whiteKeyMode);
   }
   if (els.waterfallToggle) {
     els.waterfallToggle.checked = state.waterfall;
@@ -1477,6 +1550,9 @@ function applySavedSettings() {
   if (typeof settings.robotPerformance === "boolean") {
     state.robotPerformance = settings.robotPerformance;
   }
+  if (typeof settings.whiteKeyMode === "boolean") {
+    state.whiteKeyMode = settings.whiteKeyMode;
+  }
   if (typeof settings.waterfall === "boolean") {
     state.waterfall = settings.waterfall;
   }
@@ -1538,6 +1614,7 @@ function drawStaff() {
   svg.append(treble, bass);
   drawKeySignature(svg);
   drawTimeSignature(svg);
+  drawWhiteKeyModeCenterLabel(svg);
 
   const hasPracticeScore = state.practice.measures.length > 0;
   if (hasPracticeScore) {
@@ -1568,6 +1645,19 @@ function drawStaff() {
   });
 
   applyNoteCollisionOffsets(noteItems, 35).forEach((item) => drawNote(svg, item));
+}
+
+function drawWhiteKeyModeCenterLabel(svg) {
+  if (!whiteKeyModeEnabled()) return;
+  const x = 322;
+  const y = yForNote(60, "treble") + 28;
+  const label = createSvg("text", {
+    x,
+    y,
+    class: "white-key-center-label"
+  });
+  label.textContent = noteName(centerRealNoteForWhiteKeyMode());
+  svg.appendChild(label);
 }
 
 function drawPracticePlayhead(svg) {
@@ -2500,8 +2590,11 @@ function makeKey(note, className) {
   if (isC) key.classList.add("c-key-label");
   if (note === 60) key.classList.add("middle-c-key");
   key.dataset.note = String(note);
-  key.setAttribute("aria-label", noteName(note));
-  key.textContent = className === "black-key" ? "" : isC ? noteName(note) : "";
+  const keyLabel = note === 60 && whiteKeyModeEnabled()
+    ? noteName(centerRealNoteForWhiteKeyMode())
+    : noteName(note);
+  key.setAttribute("aria-label", keyLabel);
+  key.textContent = className === "black-key" ? "" : isC ? keyLabel : "";
   key.addEventListener("pointerdown", (event) => {
     if (state.playback.paused) return;
     event.preventDefault();
@@ -2574,7 +2667,7 @@ function renderWaterfall(playbackTick, options = {}) {
   const practiceWaterfall = state.practice.notes?.length > 0;
   const cueTargets = nextKeyboardCueTargets();
   const cueTargetIds = new Set(cueTargets.map((target) => target.id));
-  const cueNotes = new Set(cueTargets.map((target) => target.note));
+  const cueNotes = new Set(cueTargets.map((target) => displayNoteForKeyboard(target.note, target.startTick)));
   const notes = practiceWaterfall
     ? state.practice.notes
       .map((target) => ({
@@ -2600,7 +2693,8 @@ function renderWaterfall(playbackTick, options = {}) {
     const item = notes[index];
     if (item.startTick > endTick) break;
     if (item.endTick < startTick) continue;
-    const metric = state.waterfallState.keyMetrics.get(item.note);
+    const keyboardNote = displayNoteForKeyboard(item.note, item.startTick);
+    const metric = state.waterfallState.keyMetrics.get(keyboardNote);
     if (!metric) continue;
     const playbackActive = playbackTick >= item.startTick && playbackTick < item.endTick;
     const activeInput = item.targetId
@@ -2611,7 +2705,7 @@ function renderWaterfall(playbackTick, options = {}) {
         || state.autoAccompaniment.activeTargetIds.has(item.targetId)
       : playbackActive;
     const active = activeInput || activePlayback || Boolean(item.matched);
-    const cue = (item.targetId && cueTargetIds.has(item.targetId)) || (!item.targetId && cueNotes.has(item.note));
+    const cue = (item.targetId && cueTargetIds.has(item.targetId)) || (!item.targetId && cueNotes.has(keyboardNote));
     const matched = Boolean(item.matched);
     const untilStartSeconds = (item.startTick - playbackTick) * secondsPerTick;
     const progress = 1 - untilStartSeconds / WATERFALL_LOOKAHEAD_SECONDS;
@@ -2622,7 +2716,7 @@ function renderWaterfall(playbackTick, options = {}) {
     const keyEdgeSounding = keyEdgeVisible && (active || matched || playbackActive);
     if (keyEdgeSounding) keyEdgeNotes.add(item.note);
     const bar = document.createElement("span");
-    bar.className = `waterfall-note ${active ? "active" : ""} ${matched ? "matched" : ""} ${cue && !active && !matched ? "cue" : ""} ${isWhite(item.note) ? "white-note" : "black-note"}`;
+    bar.className = `waterfall-note ${active ? "active" : ""} ${matched ? "matched" : ""} ${cue && !active && !matched ? "cue" : ""} ${isWhite(keyboardNote) ? "white-note" : "black-note"}`;
     bar.style.left = `${metric.left + Math.max(2, metric.width * 0.12)}px`;
     bar.style.width = `${Math.max(8, metric.width * 0.76)}px`;
     bar.style.height = `${height}px`;
@@ -2638,7 +2732,7 @@ function renderWaterfall(playbackTick, options = {}) {
     if (keyEdgeSounding && label && !keyLabelNotes.has(item.note)) {
       keyLabelNotes.add(item.note);
       const keyLabel = document.createElement("span");
-      keyLabel.className = `waterfall-key-label ${isWhite(item.note) ? "white-note" : "black-note"}`;
+      keyLabel.className = `waterfall-key-label ${isWhite(keyboardNote) ? "white-note" : "black-note"}`;
       keyLabel.textContent = label;
       keyLabel.style.left = `${metric.left + metric.width / 2}px`;
       fragment.appendChild(keyLabel);
@@ -2650,14 +2744,15 @@ function renderWaterfall(playbackTick, options = {}) {
 
 function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   if (note < MIDI_MIN || note > MIDI_MAX) return;
+  const performanceNote = realNoteForWhiteKeyNote(note);
   if (state.selectingHandSplit) {
-    setHandSplitNote(note);
+    setHandSplitNote(performanceNote);
     return;
   }
-  const duplicateHeldNote = state.activeNotes.has(note) && !state.releasedWhileSustained.has(note);
+  const duplicateHeldNote = state.activeNotes.has(performanceNote) && !state.releasedWhileSustained.has(performanceNote);
   if (duplicateHeldNote) {
-    const active = state.activeNotes.get(note);
-    state.activeNotes.set(note, {
+    const active = state.activeNotes.get(performanceNote);
+    state.activeNotes.set(performanceNote, {
       ...active,
       velocity,
       source,
@@ -2666,15 +2761,15 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
     updateKeyboardActive();
     return;
   }
-  recordMidiEvent("noteon", { note, velocity, channel });
-  state.releasedWhileSustained.delete(note);
-  const wrong = isWrongPracticeInputNote(note);
+  recordMidiEvent("noteon", { note: performanceNote, velocity, channel });
+  state.releasedWhileSustained.delete(performanceNote);
+  const wrong = isWrongPracticeInputNote(performanceNote);
   state.autoFollow.pausedAfterManualNavigation = false;
   if (state.practiceHand !== "both") {
     state.autoAccompaniment.enabled = true;
   }
-  const matchedTarget = markAutoFollowNote(note);
-  state.activeNotes.set(note, {
+  const matchedTarget = markAutoFollowNote(performanceNote);
+  state.activeNotes.set(performanceNote, {
     velocity,
     source,
     channel,
@@ -2683,8 +2778,8 @@ function pressNote(note, velocity = 96, source = "midi", channel = 0) {
     chordPedalEpoch: state.chordPedalEpoch,
     targetId: matchedTarget?.id || null
   });
-  if (wrong) recordMistake(note);
-  startLiveInputTone(note, velocity);
+  if (wrong) recordMistake(performanceNote);
+  startLiveInputTone(performanceNote, velocity);
   evaluateAutoFollowBeat();
   updateAll();
 }
@@ -2698,16 +2793,17 @@ function isWrongPracticeInputNote(note) {
 }
 
 function releaseNote(note, source = "midi", channel = 0) {
-  if (state.activeNotes.has(note)) {
-    recordMidiEvent("noteoff", { note, velocity: 0, channel });
+  const performanceNote = realNoteForWhiteKeyNote(note);
+  if (state.activeNotes.has(performanceNote)) {
+    recordMidiEvent("noteoff", { note: performanceNote, velocity: 0, channel });
   }
   if (state.sustainDown) {
-    if (state.activeNotes.has(note)) state.releasedWhileSustained.add(note);
+    if (state.activeNotes.has(performanceNote)) state.releasedWhileSustained.add(performanceNote);
     return;
   }
-  stopLiveInputTone(note);
-  state.activeNotes.delete(note);
-  state.releasedWhileSustained.delete(note);
+  stopLiveInputTone(performanceNote);
+  state.activeNotes.delete(performanceNote);
+  state.releasedWhileSustained.delete(performanceNote);
   finishPracticeRunIfReleased();
   updateAll();
 }
@@ -3849,7 +3945,7 @@ function nextPracticeCueNotes() {
 }
 
 function keyboardCueNotes() {
-  return new Set(nextKeyboardCueTargets().map((target) => target.note));
+  return new Set(nextKeyboardCueTargets().map((target) => displayNoteForKeyboard(target.note, target.startTick)));
 }
 
 function nextKeyboardCueTargets() {
@@ -5629,15 +5725,29 @@ function updateAll() {
 
 function updateKeyboardActive() {
   const cueNoteSet = keyboardCueNotes();
+  const activeNoteSet = new Set([
+    ...currentInputVisualNotes(),
+    ...state.playback.activeNotes,
+    ...state.autoAccompaniment.activeNotes
+  ].map((note) => displayNoteForKeyboard(note)));
+  const wrongNoteSet = new Set([...state.activeNotes.entries()]
+    .filter(([, active]) => active?.wrong)
+    .map(([note]) => displayNoteForKeyboard(note)));
   els.keyboardBoard?.classList.toggle("paused-scroll", state.playback.paused);
   els.keyboard.querySelectorAll(".key").forEach((key) => {
     const note = Number(key.dataset.note);
-    const inputHeld = isInputNoteVisuallyHeld(note);
-    const active = inputHeld || state.playback.activeNotes.has(note) || state.autoAccompaniment.activeNotes.has(note);
+    if (isWhite(note) && note % 12 === 0) {
+      const keyLabel = note === 60 && whiteKeyModeEnabled()
+        ? noteName(centerRealNoteForWhiteKeyMode())
+        : noteName(note);
+      key.textContent = keyLabel;
+      key.setAttribute("aria-label", keyLabel);
+    }
+    const active = activeNoteSet.has(note);
     const cue = cueNoteSet.has(note);
-    const wrong = Boolean(state.activeNotes.get(note)?.wrong);
+    const wrong = wrongNoteSet.has(note);
     key.classList.toggle("active", active);
-    key.classList.toggle("input-active", inputHeld && !cueNoteSet.has(note));
+    key.classList.toggle("input-active", active && !cueNoteSet.has(note));
     key.classList.toggle("cue", cue);
     key.classList.toggle("wrong", wrong);
   });
@@ -6208,6 +6318,14 @@ function setupEvents() {
     syncControlsFromState();
     saveSettings();
   });
+  els.whiteKeyModeToggle?.addEventListener("change", () => {
+    state.whiteKeyMode = els.whiteKeyModeToggle.checked;
+    buildKeyboard({ preserveScroll: true });
+    syncControlsFromState();
+    syncWaterfallLayout();
+    updateAll();
+    saveSettings();
+  });
   els.waterfallToggle.addEventListener("change", () => {
     state.waterfall = els.waterfallToggle.checked;
     syncControlsFromState();
@@ -6251,10 +6369,12 @@ function setupEvents() {
     button.addEventListener("click", () => {
       state.keySignature = button.dataset.keySignature;
       state.practice.keySignatureEvents = [];
+      buildKeyboard({ preserveScroll: true });
       syncControlsFromState();
       syncPracticeControls();
       saveSettings();
       drawStaff();
+      renderWaterfall(state.playback.currentTick || state.practice.viewStartTick || 0, { force: true });
       syncCurrentChord();
     });
   });
@@ -6264,6 +6384,7 @@ function setupEvents() {
       syncControlsFromState();
       saveSettings();
       drawStaff();
+      renderWaterfall(state.playback.currentTick || state.practice.viewStartTick || 0, { force: true });
       syncCurrentChord();
     });
   });

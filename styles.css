@@ -704,6 +704,7 @@ select {
 .silent-playback-toggle,
 .live-sound-toggle,
 .robot-performance-toggle,
+.white-key-mode-toggle,
 .waterfall-toggle {
   border: 1px solid var(--soft-line);
   border-radius: 999px;
@@ -802,6 +803,7 @@ select {
 .silent-playback-toggle,
 .live-sound-toggle,
 .robot-performance-toggle,
+.white-key-mode-toggle,
 .waterfall-toggle {
   height: 32px;
   min-height: 32px;
@@ -817,6 +819,7 @@ select {
 .silent-playback-toggle input,
 .live-sound-toggle input,
 .robot-performance-toggle input,
+.white-key-mode-toggle input,
 .waterfall-toggle input {
   width: 15px;
   height: 15px;
@@ -830,6 +833,8 @@ select {
 .live-sound-toggle:has(input:checked),
 .robot-performance-toggle.active,
 .robot-performance-toggle:has(input:checked),
+.white-key-mode-toggle.active,
+.white-key-mode-toggle:has(input:checked),
 .waterfall-toggle.active,
 .waterfall-toggle:has(input:checked) {
   border-color: var(--accent);
@@ -839,6 +844,7 @@ select {
 .silent-playback-toggle span,
 .live-sound-toggle span,
 .robot-performance-toggle span,
+.white-key-mode-toggle span,
 .waterfall-toggle span {
   font-size: 12px;
   font-weight: 700;
@@ -1221,6 +1227,14 @@ select {
   font-family: "Times New Roman", Georgia, serif;
   font-size: 58px;
   font-weight: 800;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.white-key-center-label {
+  fill: var(--accent);
+  font-size: 20px;
+  font-weight: 850;
   text-anchor: middle;
   dominant-baseline: middle;
 }
