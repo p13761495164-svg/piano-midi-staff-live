@@ -9,6 +9,11 @@
   --accent-strong: #0d535b;
   --active: #f0b84e;
   --active-2: #e2563f;
+  --cue-blue: #68c8f0;
+  --cue-blue-strong: #2298d1;
+  --stage-night: #071126;
+  --stage-violet: #251047;
+  --stage-sunset: #c6585a;
   --soft-line: rgba(136, 126, 112, 0.24);
   --glass: rgba(255, 253, 248, 0.82);
   --shadow: 0 16px 46px rgba(56, 47, 37, 0.1);
@@ -59,6 +64,15 @@ select {
   min-height: calc(100dvh - 34px);
   display: flex;
   flex-direction: column;
+  width: min(1280px, 100%);
+  padding: 10px;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 76% 18%, rgba(255, 193, 92, 0.2), transparent 11%),
+    radial-gradient(circle at 36% 4%, rgba(102, 201, 255, 0.16), transparent 16%),
+    radial-gradient(circle at 92% 46%, rgba(255, 94, 106, 0.13), transparent 18%),
+    linear-gradient(180deg, rgba(7, 17, 38, 0.96), rgba(37, 16, 71, 0.82) 46%, rgba(198, 88, 90, 0.12) 100%);
+  box-shadow: 0 18px 60px rgba(7, 17, 38, 0.18);
 }
 
 .control-card {
@@ -68,6 +82,12 @@ select {
   border-radius: 8px;
   backdrop-filter: blur(14px);
   overflow: hidden;
+}
+
+.stage.waterfall-mode .control-card {
+  background: rgba(255, 253, 248, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 14px 44px rgba(7, 17, 38, 0.24);
 }
 
 .topbar {
@@ -621,6 +641,22 @@ select {
   touch-action: pan-y;
 }
 
+.score-board::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 72% 4%, rgba(240, 184, 78, 0.12), transparent 20%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34), transparent 34%);
+  z-index: 0;
+}
+
+.score-board > * {
+  position: relative;
+  z-index: 1;
+}
+
 .score-board.waterfall-playback {
   aspect-ratio: auto;
   min-height: 0;
@@ -659,9 +695,15 @@ select {
   padding: 7px 10px;
   border: 1px solid rgba(221, 212, 200, 0.7);
   border-radius: 8px;
-  background: rgba(255, 253, 248, 0.76);
-  box-shadow: 0 12px 30px rgba(56, 47, 37, 0.08);
-  backdrop-filter: blur(12px);
+  background: rgba(255, 253, 248, 0.88);
+  box-shadow: 0 14px 34px rgba(56, 47, 37, 0.12);
+  backdrop-filter: blur(16px) saturate(1.2);
+}
+
+.stage.waterfall-mode .measure-tools {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 253, 248, 0.82);
+  box-shadow: 0 18px 48px rgba(7, 17, 38, 0.3);
 }
 
 .measure-actions {
@@ -865,10 +907,36 @@ select {
   border: 1px solid var(--soft-line);
   border-bottom: 0;
   background:
-    linear-gradient(180deg, rgba(250, 253, 253, 0.82), rgba(255, 253, 248, 0.96)),
-    repeating-linear-gradient(90deg, rgba(39, 126, 133, 0.08) 0 1px, transparent 1px 38px);
+    radial-gradient(circle at 78% 12%, rgba(255, 191, 88, 0.15), transparent 12%),
+    radial-gradient(circle at 34% 8%, rgba(104, 200, 240, 0.18), transparent 18%),
+    linear-gradient(180deg, rgba(10, 22, 49, 0.96), rgba(20, 28, 58, 0.88) 48%, rgba(255, 253, 248, 0.96)),
+    repeating-linear-gradient(90deg, rgba(104, 200, 240, 0.11) 0 1px, transparent 1px 38px);
   overflow: hidden;
   pointer-events: auto;
+}
+
+.waterfall-board::before,
+.waterfall-board::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.waterfall-board::before {
+  background:
+    linear-gradient(90deg, transparent, rgba(104, 200, 240, 0.08), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 34%, rgba(255, 253, 248, 0.22));
+}
+
+.waterfall-board::after {
+  opacity: 0.55;
+  background:
+    radial-gradient(circle at 88% 18%, rgba(255, 221, 134, 0.55) 0 1px, transparent 2px),
+    radial-gradient(circle at 76% 28%, rgba(104, 200, 240, 0.45) 0 1px, transparent 2px),
+    radial-gradient(circle at 18% 62%, rgba(255, 161, 91, 0.35) 0 1px, transparent 2px);
+  background-size: 180px 180px, 240px 240px, 210px 210px;
 }
 
 .stage.waterfall-mode .waterfall-board {
@@ -882,6 +950,7 @@ select {
   position: relative;
   height: 100%;
   min-width: 900px;
+  z-index: 1;
 }
 
 .waterfall-note {
@@ -891,10 +960,10 @@ select {
   align-items: flex-end;
   justify-content: center;
   padding-bottom: 4px;
-  border-radius: 5px;
+  border-radius: 7px;
   background: linear-gradient(180deg, rgba(38, 36, 33, 0.92), rgba(25, 23, 21, 0.72));
   border: 1px solid rgba(25, 23, 21, 0.28);
-  box-shadow: 0 3px 10px rgba(25, 23, 21, 0.12);
+  box-shadow: 0 6px 16px rgba(25, 23, 21, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.18);
   will-change: transform;
   pointer-events: none;
 }
@@ -930,19 +999,21 @@ select {
 }
 
 .waterfall-note.black-note {
-  background: linear-gradient(180deg, rgba(38, 36, 33, 0.96), rgba(11, 10, 9, 0.78));
+  background: linear-gradient(180deg, rgba(45, 43, 42, 0.98), rgba(7, 7, 8, 0.86));
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28), 0 0 18px rgba(255, 255, 255, 0.05);
 }
 
 .waterfall-note.active,
 .waterfall-note.matched {
-  background: linear-gradient(180deg, rgba(246, 199, 82, 0.96), rgba(235, 174, 48, 0.78));
+  background: linear-gradient(180deg, rgba(255, 222, 117, 0.98), rgba(239, 177, 45, 0.88));
   border-color: rgba(154, 105, 18, 0.34);
+  box-shadow: 0 0 22px rgba(246, 199, 82, 0.48), 0 9px 20px rgba(154, 105, 18, 0.24);
 }
 
 .waterfall-note.cue {
-  background: linear-gradient(180deg, rgba(127, 199, 232, 0.98), rgba(72, 171, 211, 0.76));
+  background: linear-gradient(180deg, rgba(154, 224, 255, 0.98), rgba(72, 171, 211, 0.86));
   border-color: rgba(22, 118, 165, 0.38);
-  box-shadow: 0 3px 10px rgba(44, 148, 196, 0.16);
+  box-shadow: 0 0 24px rgba(104, 200, 240, 0.52), 0 9px 20px rgba(22, 118, 165, 0.22);
 }
 
 .waterfall-note.cue .waterfall-note-label,
@@ -1065,12 +1136,12 @@ select {
 
 .note-duration-line.active-duration-line {
   stroke: #f0b84e;
-  opacity: 0.4;
+  opacity: 0.48;
 }
 
 .note-duration-line.cue-duration-line {
-  stroke: #62c1ea;
-  opacity: 0.38;
+  stroke: var(--cue-blue);
+  opacity: 0.46;
 }
 
 .filled-note {
@@ -1107,6 +1178,7 @@ select {
 .practice-note-head.active-note {
   fill: var(--active);
   stroke: #80530d;
+  filter: drop-shadow(0 0 7px rgba(240, 184, 78, 0.48));
 }
 
 .active-input-note {
@@ -1126,8 +1198,9 @@ select {
 }
 
 .practice-note-head.cue-note {
-  fill: #7fc7e8;
-  stroke: #1676a5;
+  fill: var(--cue-blue);
+  stroke: var(--cue-blue-strong);
+  filter: drop-shadow(0 0 7px rgba(104, 200, 240, 0.46));
 }
 
 .arpeggio-mark {
@@ -1263,7 +1336,9 @@ select {
   border-radius: 8px;
   border: 1px solid #24211e;
   box-shadow: 0 18px 42px rgba(45, 38, 29, 0.14);
-  background: rgba(18, 16, 14, 0.04);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 24%),
+    rgba(18, 16, 14, 0.05);
   padding: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -1275,6 +1350,8 @@ select {
   margin-top: 0;
   border-radius: 0 0 8px 8px;
   flex: 0 0 auto;
+  border-top-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 -12px 30px rgba(104, 200, 240, 0.1), 0 22px 54px rgba(7, 17, 38, 0.36);
 }
 
 .keyboard-board::-webkit-scrollbar {
@@ -1330,10 +1407,10 @@ select {
 .white-key {
   height: 100%;
   background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.06), transparent 12%, transparent 88%, rgba(0, 0, 0, 0.06)),
-    linear-gradient(180deg, #fff 0%, #f4efe7 66%, #e7ded3 100%);
+    linear-gradient(90deg, rgba(0, 0, 0, 0.08), transparent 13%, transparent 87%, rgba(0, 0, 0, 0.08)),
+    linear-gradient(180deg, #fff 0%, #faf7f2 38%, #eee6dc 74%, #d7ccbf 100%);
   z-index: 1;
-  box-shadow: inset 0 -14px 20px rgba(45, 38, 29, 0.08);
+  box-shadow: inset 0 -18px 24px rgba(45, 38, 29, 0.12), inset 0 2px 0 rgba(255, 255, 255, 0.92);
 }
 
 .black-key {
@@ -1349,32 +1426,32 @@ select {
 }
 
 .key.active {
-  background: var(--active);
+  background: linear-gradient(180deg, #ffe28a 0%, var(--active) 56%, #d79529 100%);
   border-color: #80530d;
-  box-shadow: inset 0 -10px 18px rgba(255, 255, 255, 0.28), 0 0 0 2px rgba(240, 184, 78, 0.3);
+  box-shadow: inset 0 -10px 18px rgba(255, 255, 255, 0.32), 0 0 0 2px rgba(240, 184, 78, 0.3), 0 0 20px rgba(240, 184, 78, 0.46);
 }
 
 .black-key.active {
   background: linear-gradient(180deg, #f5c96a 0%, #c9851f 100%);
   border-color: #80530d;
-  box-shadow: inset 0 -8px 14px rgba(255, 244, 210, 0.24), 0 0 0 2px rgba(240, 184, 78, 0.28);
+  box-shadow: inset 0 -8px 14px rgba(255, 244, 210, 0.24), 0 0 0 2px rgba(240, 184, 78, 0.28), 0 0 18px rgba(240, 184, 78, 0.42);
 }
 
 .key.cue {
-  background: linear-gradient(180deg, #d8f0ff 0%, #7fc7e8 100%);
-  border-color: #1676a5;
-  box-shadow: inset 0 -8px 16px rgba(255, 255, 255, 0.24), 0 0 0 2px rgba(44, 148, 196, 0.24);
+  background: linear-gradient(180deg, #e7f8ff 0%, var(--cue-blue) 72%, #3daedb 100%);
+  border-color: var(--cue-blue-strong);
+  box-shadow: inset 0 -8px 16px rgba(255, 255, 255, 0.28), 0 0 0 2px rgba(44, 148, 196, 0.24), 0 0 20px rgba(104, 200, 240, 0.48);
 }
 
 .black-key.cue {
-  background: linear-gradient(180deg, #1f799d 0%, #0b3347 100%);
-  border-color: #4fb8e1;
+  background: linear-gradient(180deg, #8cddff 0%, #1f799d 52%, #0b3347 100%);
+  border-color: var(--cue-blue);
 }
 
 .key.input-active {
-  background: var(--active);
+  background: linear-gradient(180deg, #ffe28a 0%, var(--active) 56%, #d79529 100%);
   border-color: #80530d;
-  box-shadow: inset 0 -10px 18px rgba(255, 255, 255, 0.28), 0 0 0 2px rgba(240, 184, 78, 0.3);
+  box-shadow: inset 0 -10px 18px rgba(255, 255, 255, 0.32), 0 0 0 2px rgba(240, 184, 78, 0.3), 0 0 20px rgba(240, 184, 78, 0.46);
 }
 
 .black-key.input-active {
