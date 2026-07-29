@@ -342,15 +342,18 @@ button:disabled {
 }
 
 .settings-panel summary::after {
-  content: "v";
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1;
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg) translateY(-2px);
+  transform-origin: center;
   transition: transform 0.18s ease;
 }
 
 .settings-panel[open] summary::after {
-  transform: rotate(180deg);
+  transform: rotate(225deg) translate(-2px, -1px);
 }
 
 .panel-strip {
