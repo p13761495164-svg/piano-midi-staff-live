@@ -635,7 +635,8 @@ select {
   min-height: 0;
   height: 0;
   padding: 0;
-  margin-top: -1px;
+  margin-top: -9px;
+  margin-bottom: -9px;
   overflow: visible;
   background: transparent;
   border-color: transparent;
