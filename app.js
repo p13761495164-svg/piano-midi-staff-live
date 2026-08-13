@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v291";
+const APP_VERSION = "v292";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -1142,6 +1142,10 @@ function displayNoteForKeyboard(note, tick = state.practice.viewStartTick || 0) 
 
 function displayNoteForStaff(note, tick = state.practice.viewStartTick || 0) {
   return whiteKeyModeEnabled() ? whiteKeyNoteForRealNote(note, tick) : note;
+}
+
+function performanceNoteForInput(note, source = "midi") {
+  return source === "screen" ? realNoteForWhiteKeyNote(note) : note;
 }
 
 function keyboardLabelForNote(note, tick = state.practice.viewStartTick || 0) {
@@ -2767,7 +2771,7 @@ function renderWaterfall(playbackTick, options = {}) {
 
 function pressNote(note, velocity = 96, source = "midi", channel = 0) {
   if (note < MIDI_MIN || note > MIDI_MAX) return;
-  const performanceNote = realNoteForWhiteKeyNote(note);
+  const performanceNote = performanceNoteForInput(note, source);
   if (state.selectingHandSplit) {
     setHandSplitNote(performanceNote);
     return;
@@ -2816,7 +2820,7 @@ function isWrongPracticeInputNote(note) {
 }
 
 function releaseNote(note, source = "midi", channel = 0) {
-  const performanceNote = realNoteForWhiteKeyNote(note);
+  const performanceNote = performanceNoteForInput(note, source);
   if (state.activeNotes.has(performanceNote)) {
     recordMidiEvent("noteoff", { note: performanceNote, velocity: 0, channel });
   }
