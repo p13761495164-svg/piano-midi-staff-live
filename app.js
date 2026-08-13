@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "v290";
+const APP_VERSION = "v291";
 const MIDI_MIN = 21;
 const MIDI_MAX = 108;
 const FULL_KEYBOARD_WHITE_KEYS = 52;
@@ -1107,7 +1107,12 @@ function centerRealNoteForWhiteKeyMode(tick = state.practice.viewStartTick || 0)
 }
 
 function realNoteForWhiteKeyNoteUnclamped(whiteNote, tick = state.practice.viewStartTick || 0) {
-  if (!whiteKeyModeEnabled() || !isWhite(whiteNote)) return whiteNote;
+  if (!whiteKeyModeEnabled()) return whiteNote;
+  if (!isWhite(whiteNote)) {
+    const previousWhite = findPreviousWhite(whiteNote);
+    if (!Number.isFinite(previousWhite) || previousWhite < MIDI_MIN) return whiteNote;
+    return realNoteForWhiteKeyNoteUnclamped(previousWhite, tick) + (whiteNote - previousWhite);
+  }
   const centerIndex = whiteKeyIndex(60);
   const keyIndex = whiteKeyIndex(whiteNote);
   if (centerIndex === null || keyIndex === null) return whiteNote;
@@ -1125,7 +1130,8 @@ function realNoteForWhiteKeyNote(whiteNote, tick = state.practice.viewStartTick 
 function whiteKeyNoteForRealNote(realNote, tick = state.practice.viewStartTick || 0) {
   if (!whiteKeyModeEnabled()) return realNote;
   for (let note = MIDI_MIN; note <= MIDI_MAX; note += 1) {
-    if (isWhite(note) && realNoteForWhiteKeyNote(note, tick) === realNote) return note;
+    const mappedRealNote = realNoteForWhiteKeyNoteUnclamped(note, tick);
+    if (mappedRealNote >= MIDI_MIN && mappedRealNote <= MIDI_MAX && mappedRealNote === realNote) return note;
   }
   return realNote;
 }
@@ -1139,7 +1145,7 @@ function displayNoteForStaff(note, tick = state.practice.viewStartTick || 0) {
 }
 
 function keyboardLabelForNote(note, tick = state.practice.viewStartTick || 0) {
-  return whiteKeyModeEnabled() && isWhite(note) ? noteName(realNoteForWhiteKeyNoteUnclamped(note, tick)) : noteName(note);
+  return whiteKeyModeEnabled() ? noteName(realNoteForWhiteKeyNoteUnclamped(note, tick)) : noteName(note);
 }
 
 function staffPitchName(note, tick = state.practice.viewStartTick || 0) {
